@@ -1,4 +1,4 @@
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
+import { createZeroxzeroClient } from "@0x0-ai/sdk/v2/client"
 
 export type ServerHealth = { healthy: boolean; version?: string }
 
@@ -17,7 +17,7 @@ export async function checkServerHealth(
   opts?: CheckServerHealthOptions,
 ): Promise<ServerHealth> {
   const signal = opts?.signal ?? timeoutSignal(opts?.timeoutMs ?? 3000)
-  const sdk = createOpencodeClient({
+  const sdk = createZeroxzeroClient({
     baseUrl: url,
     fetch,
     signal,

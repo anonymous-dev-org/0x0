@@ -1,11 +1,11 @@
-import { Button } from "@opencode-ai/ui/button"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { Dialog } from "@opencode-ai/ui/dialog"
-import type { IconName } from "@opencode-ai/ui/icons/provider"
-import { List, type ListRef } from "@opencode-ai/ui/list"
-import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
-import { Tag } from "@opencode-ai/ui/tag"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Button } from "@0x0-ai/ui/button"
+import { useDialog } from "@0x0-ai/ui/context/dialog"
+import { Dialog } from "@0x0-ai/ui/dialog"
+import type { IconName } from "@0x0-ai/ui/icons/provider"
+import { List, type ListRef } from "@0x0-ai/ui/list"
+import { ProviderIcon } from "@0x0-ai/ui/provider-icon"
+import { Tag } from "@0x0-ai/ui/tag"
+import { Tooltip } from "@0x0-ai/ui/tooltip"
 import { type Component, onCleanup, onMount, Show } from "solid-js"
 import { useLocal } from "@/context/local"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
@@ -55,7 +55,7 @@ export const DialogSelectModelUnpaid: Component = () => {
                 <ModelTooltip
                   model={item}
                   latest={item.latest}
-                  free={item.provider.id === "opencode" && (!item.cost || item.cost.input === 0)}
+                  free={item.provider.id === "zeroxzero" && (!item.cost || item.cost.input === 0)}
                 />
               }
             >
@@ -104,7 +104,7 @@ export const DialogSelectModelUnpaid: Component = () => {
                   <div class="w-full flex items-center gap-x-3">
                     <ProviderIcon data-slot="list-item-extra-icon" id={i.id as IconName} />
                     <span>{i.name}</span>
-                    <Show when={i.id === "opencode"}>
+                    <Show when={i.id === "zeroxzero"}>
                       <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
                     </Show>
                     <Show when={i.id === "anthropic"}>

@@ -1,5 +1,5 @@
 import { defineConfig } from "vite"
-import appPlugin from "@opencode-ai/app/vite"
+import appPlugin from "@0x0-ai/app/vite"
 
 const host = process.env.TAURI_DEV_HOST
 

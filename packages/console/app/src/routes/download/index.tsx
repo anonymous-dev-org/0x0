@@ -5,7 +5,7 @@ import { Header } from "~/component/header"
 import { Footer } from "~/component/footer"
 import { IconCopy, IconCheck } from "~/component/icon"
 import { Faq } from "~/component/faq"
-import desktopAppIcon from "../../asset/lander/opencode-desktop-icon.png"
+import desktopAppIcon from "../../asset/lander/zeroxzero-desktop-icon.png"
 import { Legal } from "~/component/legal"
 import { config } from "~/config"
 import { createSignal, onMount, Show, JSX } from "solid-js"
@@ -118,34 +118,34 @@ export default function Download() {
             <div data-component="section-content">
               <button
                 data-component="cli-row"
-                onClick={handleCopyClick("curl -fsSL https://opencode.ai/install | bash")}
+                onClick={handleCopyClick("curl -fsSL https://zeroxzero.ai/install | bash")}
               >
                 <code>
-                  curl -fsSL https://<strong>opencode.ai/install</strong> | bash
+                  curl -fsSL https://<strong>zeroxzero.ai/install</strong> | bash
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("npm i -g opencode-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("npm i -g 0x0-ai")}>
                 <code>
-                  npm i -g <strong>opencode-ai</strong>
+                  npm i -g <strong>0x0-ai</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("bun add -g opencode-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("bun add -g 0x0-ai")}>
                 <code>
-                  bun add -g <strong>opencode-ai</strong>
+                  bun add -g <strong>0x0-ai</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("brew install anomalyco/tap/opencode")}>
+              <button data-component="cli-row" onClick={handleCopyClick("brew install anonymous-dev-org/tap/zeroxzero")}>
                 <code>
-                  brew install <strong>anomalyco/tap/opencode</strong>
+                  brew install <strong>anonymous-dev-org/tap/zeroxzero</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("paru -S opencode")}>
+              <button data-component="cli-row" onClick={handleCopyClick("paru -S zeroxzero")}>
                 <code>
-                  paru -S <strong>opencode</strong>
+                  paru -S <strong>zeroxzero</strong>
                 </code>
                 <CopyStatus />
               </button>
@@ -157,9 +157,9 @@ export default function Download() {
               <span>[2]</span> {i18n.t("download.section.desktop")}
             </div>
             <div data-component="section-content">
-              <button data-component="cli-row" onClick={handleCopyClick("brew install --cask opencode-desktop")}>
+              <button data-component="cli-row" onClick={handleCopyClick("brew install --cask zeroxzero-desktop")}>
                 <code>
-                  brew install --cask <strong>opencode-desktop</strong>
+                  brew install --cask <strong>zeroxzero-desktop</strong>
                 </code>
                 <CopyStatus />
               </button>
@@ -294,7 +294,7 @@ export default function Download() {
                   </span>
                   <span>VS Code</span>
                 </div>
-                <a href="https://opencode.ai/docs/ide/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/ide/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -318,7 +318,7 @@ export default function Download() {
                   </span>
                   <span>Cursor</span>
                 </div>
-                <a href="https://opencode.ai/docs/ide/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/ide/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -335,7 +335,7 @@ export default function Download() {
                   </span>
                   <span>Zed</span>
                 </div>
-                <a href="https://opencode.ai/docs/ide/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/ide/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -352,7 +352,7 @@ export default function Download() {
                   </span>
                   <span>Windsurf</span>
                 </div>
-                <a href="https://opencode.ai/docs/ide/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/ide/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -369,7 +369,7 @@ export default function Download() {
                   </span>
                   <span>VSCodium</span>
                 </div>
-                <a href="https://opencode.ai/docs/ide/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/ide/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -393,7 +393,7 @@ export default function Download() {
                   </span>
                   <span>GitHub</span>
                 </div>
-                <a href="https://opencode.ai/docs/github/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/github/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>
@@ -410,7 +410,7 @@ export default function Download() {
                   </span>
                   <span>GitLab</span>
                 </div>
-                <a href="https://opencode.ai/docs/gitlab/" data-component="action-button">
+                <a href="https://zeroxzero.ai/docs/gitlab/" data-component="action-button">
                   {i18n.t("download.action.install")}
                 </a>
               </div>

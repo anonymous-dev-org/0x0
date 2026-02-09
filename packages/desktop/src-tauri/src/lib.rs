@@ -225,7 +225,7 @@ pub fn run() {
 
     #[cfg(all(target_os = "macos", not(debug_assertions)))]
     let _ = std::process::Command::new("killall")
-        .arg("opencode-cli")
+        .arg("zeroxzero-cli")
         .output();
 
     let mut builder = tauri::Builder::default()
@@ -300,7 +300,7 @@ async fn initialize(app: AppHandle) {
 
     println!("Main and loading windows created");
 
-    let sqlite_enabled = option_env!("OPENCODE_SQLITE").is_some();
+    let sqlite_enabled = option_env!("ZEROXZERO_SQLITE").is_some();
 
     let loading_task = tokio::spawn({
         let init_tx = init_tx.clone();
@@ -327,7 +327,7 @@ async fn initialize(app: AppHandle) {
                             else {
                                 let _ = child.kill();
                                 return Err(format!(
-                                    "Failed to spawn OpenCode Server. Logs:\n{}",
+                                    "Failed to spawn zeroxzero Server. Logs:\n{}",
                                     get_logs(app.clone()).await.unwrap()
                                 ));
                             };
@@ -364,7 +364,7 @@ async fn initialize(app: AppHandle) {
                     if !sqlite_exists {
                         println!(
                             "Sqlite file not found at {}, waiting for it to be generated",
-                            opencode_db_path().expect("failed to get db path").display()
+                            0x0_db_path().expect("failed to get db path").display()
                         );
                         let _ = init_tx.send(InitStep::SqliteWaiting);
 
@@ -489,9 +489,9 @@ async fn setup_server_connection(app: AppHandle) -> ServerConnection {
 }
 
 fn get_sidecar_port() -> u32 {
-    option_env!("OPENCODE_PORT")
+    option_env!("ZEROXZERO_PORT")
         .map(|s| s.to_string())
-        .or_else(|| std::env::var("OPENCODE_PORT").ok())
+        .or_else(|| std::env::var("ZEROXZERO_PORT").ok())
         .and_then(|port_str| port_str.parse().ok())
         .unwrap_or_else(|| {
             TcpListener::bind("127.0.0.1:0")
@@ -503,14 +503,14 @@ fn get_sidecar_port() -> u32 {
 }
 
 fn sqlite_file_exists() -> bool {
-    let Ok(path) = opencode_db_path() else {
+    let Ok(path) = 0x0_db_path() else {
         return true;
     };
 
     path.exists()
 }
 
-fn opencode_db_path() -> Result<PathBuf, &'static str> {
+fn 0x0_db_path() -> Result<PathBuf, &'static str> {
     let xdg_data_home = env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty());
 
     let data_home = match xdg_data_home {
@@ -521,7 +521,7 @@ fn opencode_db_path() -> Result<PathBuf, &'static str> {
         }
     };
 
-    Ok(data_home.join("opencode").join("opencode.db"))
+    Ok(data_home.join("zeroxzero").join("zeroxzero.db"))
 }
 
 // Creates a `once` listener for the specified event and returns a future that resolves

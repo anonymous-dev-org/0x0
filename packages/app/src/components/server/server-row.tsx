@@ -1,4 +1,4 @@
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tooltip } from "@0x0-ai/ui/tooltip"
 import { JSXElement, ParentProps, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js"
 import { serverDisplayName } from "@/context/server"
 import type { ServerHealth } from "@/utils/server-health"

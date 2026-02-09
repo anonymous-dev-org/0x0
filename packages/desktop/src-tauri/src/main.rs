@@ -86,5 +86,5 @@ fn main() {
         }
     }
 
-    opencode_lib::run()
+    0x0_lib::run()
 }

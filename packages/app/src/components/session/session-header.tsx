@@ -9,20 +9,20 @@ import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
 import { useSync } from "@/context/sync"
 import { useGlobalSDK } from "@/context/global-sdk"
-import { getFilename } from "@opencode-ai/util/path"
+import { getFilename } from "@0x0-ai/util/path"
 import { decode64 } from "@/utils/base64"
 import { Persist, persisted } from "@/utils/persist"
 
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Button } from "@opencode-ai/ui/button"
-import { AppIcon } from "@opencode-ai/ui/app-icon"
-import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
-import { Popover } from "@opencode-ai/ui/popover"
-import { TextField } from "@opencode-ai/ui/text-field"
-import { Keybind } from "@opencode-ai/ui/keybind"
-import { showToast } from "@opencode-ai/ui/toast"
+import { Icon } from "@0x0-ai/ui/icon"
+import { IconButton } from "@0x0-ai/ui/icon-button"
+import { Button } from "@0x0-ai/ui/button"
+import { AppIcon } from "@0x0-ai/ui/app-icon"
+import { DropdownMenu } from "@0x0-ai/ui/dropdown-menu"
+import { Tooltip, TooltipKeybind } from "@0x0-ai/ui/tooltip"
+import { Popover } from "@0x0-ai/ui/popover"
+import { TextField } from "@0x0-ai/ui/text-field"
+import { Keybind } from "@0x0-ai/ui/keybind"
+import { showToast } from "@0x0-ai/ui/toast"
 import { StatusPopover } from "../status-popover"
 
 export function SessionHeader() {
@@ -273,8 +273,8 @@ export function SessionHeader() {
     platform.openLink(url)
   }
 
-  const centerMount = createMemo(() => document.getElementById("opencode-titlebar-center"))
-  const rightMount = createMemo(() => document.getElementById("opencode-titlebar-right"))
+  const centerMount = createMemo(() => document.getElementById("zeroxzero-titlebar-center"))
+  const rightMount = createMemo(() => document.getElementById("zeroxzero-titlebar-right"))
 
   return (
     <>

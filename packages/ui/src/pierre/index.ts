@@ -57,11 +57,11 @@ const unsafeCSS = `
   background-color: var(--diffs-bg-selection-text);
 }
 
-::highlight(opencode-find) {
+::highlight(zeroxzero-find) {
   background-color: rgb(from var(--surface-warning-base) r g b / 0.35);
 }
 
-::highlight(opencode-find-current) {
+::highlight(zeroxzero-find-current) {
   background-color: rgb(from var(--surface-warning-strong) r g b / 0.55);
 }
 
@@ -140,7 +140,7 @@ const unsafeCSS = `
 
 export function createDefaultOptions<T>(style: FileDiffOptions<T>["diffStyle"]) {
   return {
-    theme: "OpenCode",
+    theme: "zeroxzero",
     themeType: "system",
     disableLineNumbers: false,
     overflow: "wrap",

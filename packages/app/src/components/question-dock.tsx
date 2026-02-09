@@ -1,9 +1,9 @@
 import { For, Show, createMemo, type Component } from "solid-js"
 import { createStore } from "solid-js/store"
-import { Button } from "@opencode-ai/ui/button"
-import { Icon } from "@opencode-ai/ui/icon"
-import { showToast } from "@opencode-ai/ui/toast"
-import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
+import { Button } from "@0x0-ai/ui/button"
+import { Icon } from "@0x0-ai/ui/icon"
+import { showToast } from "@0x0-ai/ui/toast"
+import type { QuestionAnswer, QuestionRequest } from "@0x0-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 

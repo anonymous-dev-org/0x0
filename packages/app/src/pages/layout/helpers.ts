@@ -1,5 +1,5 @@
-import { getFilename } from "@opencode-ai/util/path"
-import { type Session } from "@opencode-ai/sdk/v2/client"
+import { getFilename } from "@0x0-ai/util/path"
+import { type Session } from "@0x0-ai/sdk/v2/client"
 
 export const workspaceKey = (directory: string) => directory.replace(/[\\/]+$/, "")
 

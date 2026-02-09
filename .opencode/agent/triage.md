@@ -1,7 +1,7 @@
 ---
 mode: primary
 hidden: true
-model: opencode/claude-haiku-4-5
+model: 0x0/claude-haiku-4-5
 color: "#44BA81"
 tools:
   "*": false
@@ -34,10 +34,10 @@ Performance-related issues:
 
 Desktop app issues:
 
-- `opencode web` command
+- `0x0 web` command
 - The desktop app itself
 
-**Only** add if it's specifically about the Desktop application or `opencode web` view. **Do not** add for terminal, TUI, or general opencode issues.
+**Only** add if it's specifically about the Desktop application or `0x0 web` view. **Do not** add for terminal, TUI, or general 0x0 issues.
 
 #### nix
 
@@ -45,9 +45,9 @@ Desktop app issues:
 
 #### zen
 
-**Only** add if the issue mentions "zen" or "opencode zen" or "opencode black".
+**Only** add if the issue mentions "zen" or "0x0 zen" or "0x0 black".
 
-If the issue doesn't have "zen" or "opencode black" in it then don't add zen label
+If the issue doesn't have "zen" or "0x0 black" in it then don't add zen label
 
 #### docs
 

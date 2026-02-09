@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# 0x0 Desktop
 
-Native OpenCode desktop app, built with Tauri v2.
+Native 0x0 desktop app, built with Tauri v2.
 
 ## Development
 

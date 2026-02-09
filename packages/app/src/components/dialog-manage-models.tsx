@@ -1,12 +1,12 @@
-import { Dialog } from "@opencode-ai/ui/dialog"
-import { List } from "@opencode-ai/ui/list"
-import { Switch } from "@opencode-ai/ui/switch"
-import { Button } from "@opencode-ai/ui/button"
+import { Dialog } from "@0x0-ai/ui/dialog"
+import { List } from "@0x0-ai/ui/list"
+import { Switch } from "@0x0-ai/ui/switch"
+import { Button } from "@0x0-ai/ui/button"
 import type { Component } from "solid-js"
 import { useLocal } from "@/context/local"
 import { popularProviders } from "@/hooks/use-providers"
 import { useLanguage } from "@/context/language"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { useDialog } from "@0x0-ai/ui/context/dialog"
 import { DialogSelectProvider } from "./dialog-select-provider"
 
 export const DialogManageModels: Component = () => {

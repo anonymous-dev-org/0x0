@@ -6,8 +6,8 @@ use tauri_plugin_shell::{
 
 use crate::{LogState, constants::MAX_LOG_ENTRIES};
 
-const CLI_INSTALL_DIR: &str = ".opencode/bin";
-const CLI_BINARY_NAME: &str = "opencode";
+const CLI_INSTALL_DIR: &str = ".zeroxzero/bin";
+const CLI_BINARY_NAME: &str = "zeroxzero";
 
 #[derive(serde::Deserialize)]
 pub struct ServerConfig {
@@ -44,7 +44,7 @@ pub fn get_sidecar_path(app: &tauri::AppHandle) -> std::path::PathBuf {
         .expect("Failed to get current binary")
         .parent()
         .expect("Failed to get parent dir")
-        .join("opencode-cli")
+        .join("zeroxzero-cli")
 }
 
 fn is_cli_installed() -> bool {
@@ -67,7 +67,7 @@ pub fn install_cli(app: tauri::AppHandle) -> Result<String, String> {
         return Err("Sidecar binary not found".to_string());
     }
 
-    let temp_script = std::env::temp_dir().join("opencode-install.sh");
+    let temp_script = std::env::temp_dir().join("zeroxzero-install.sh");
     std::fs::write(&temp_script, INSTALL_SCRIPT)
         .map_err(|e| format!("Failed to write install script: {}", e))?;
 
@@ -159,12 +159,12 @@ pub fn create_command(app: &tauri::AppHandle, args: &str) -> Command {
     #[cfg(target_os = "windows")]
     return app
         .shell()
-        .sidecar("opencode-cli")
+        .sidecar("zeroxzero-cli")
         .unwrap()
         .args(args.split_whitespace())
-        .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
-        .env("OPENCODE_EXPERIMENTAL_FILEWATCHER", "true")
-        .env("OPENCODE_CLIENT", "desktop")
+        .env("ZEROXZERO_EXPERIMENTAL_ICON_DISCOVERY", "true")
+        .env("ZEROXZERO_EXPERIMENTAL_FILEWATCHER", "true")
+        .env("ZEROXZERO_CLIENT", "desktop")
         .env("XDG_STATE_HOME", &state_dir);
 
     #[cfg(not(target_os = "windows"))]
@@ -180,9 +180,9 @@ pub fn create_command(app: &tauri::AppHandle, args: &str) -> Command {
 
         app.shell()
             .command(&shell)
-            .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
-            .env("OPENCODE_EXPERIMENTAL_FILEWATCHER", "true")
-            .env("OPENCODE_CLIENT", "desktop")
+            .env("ZEROXZERO_EXPERIMENTAL_ICON_DISCOVERY", "true")
+            .env("ZEROXZERO_EXPERIMENTAL_FILEWATCHER", "true")
+            .env("ZEROXZERO_CLIENT", "desktop")
             .env("XDG_STATE_HOME", &state_dir)
             .args(["-il", "-c", &cmd])
     };
@@ -198,10 +198,10 @@ pub fn serve(app: &AppHandle, hostname: &str, port: u32, password: &str) -> Comm
         app,
         format!("serve --hostname {hostname} --port {port}").as_str(),
     )
-    .env("OPENCODE_SERVER_USERNAME", "opencode")
-    .env("OPENCODE_SERVER_PASSWORD", password)
+    .env("ZEROXZERO_SERVER_USERNAME", "zeroxzero")
+    .env("ZEROXZERO_SERVER_PASSWORD", password)
     .spawn()
-    .expect("Failed to spawn opencode");
+    .expect("Failed to spawn zeroxzero");
 
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {

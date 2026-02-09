@@ -4,8 +4,8 @@ import {
   type Project,
   type ProviderAuthResponse,
   type ProviderListResponse,
-  createOpencodeClient,
-} from "@opencode-ai/sdk/v2/client"
+  createZeroxzeroClient,
+} from "@0x0-ai/sdk/v2/client"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useGlobalSDK } from "./global-sdk"
 import type { InitError } from "../pages/error"
@@ -21,8 +21,8 @@ import {
   Switch,
   Match,
 } from "solid-js"
-import { showToast } from "@opencode-ai/ui/toast"
-import { getFilename } from "@opencode-ai/util/path"
+import { showToast } from "@0x0-ai/ui/toast"
+import { getFilename } from "@0x0-ai/util/path"
 import { usePlatform } from "./platform"
 import { useLanguage } from "@/context/language"
 import { Persist, persisted } from "@/utils/persist"
@@ -59,7 +59,7 @@ function createGlobalSync() {
     loadSessionsFallback: 0,
   }
 
-  const sdkCache = new Map<string, ReturnType<typeof createOpencodeClient>>()
+  const sdkCache = new Map<string, ReturnType<typeof createZeroxzeroClient>>()
   const booting = new Map<string, Promise<void>>()
   const sessionLoads = new Map<string, Promise<void>>()
   const sessionMeta = new Map<string, { limit: number }>()
@@ -83,13 +83,13 @@ function createGlobalSync() {
     if (!import.meta.env.DEV) return
     ;(
       globalThis as {
-        __OPENCODE_GLOBAL_SYNC_STATS?: {
+        __ZEROXZERO_GLOBAL_SYNC_STATS?: {
           activeDirectoryStores: number
           evictions: number
           loadSessionsFullFetchFallback: number
         }
       }
-    ).__OPENCODE_GLOBAL_SYNC_STATS = {
+    ).__ZEROXZERO_GLOBAL_SYNC_STATS = {
       activeDirectoryStores,
       evictions: stats.evictions,
       loadSessionsFullFetchFallback: stats.loadSessionsFallback,
@@ -126,7 +126,7 @@ function createGlobalSync() {
   const sdkFor = (directory: string) => {
     const cached = sdkCache.get(directory)
     if (cached) return cached
-    const sdk = createOpencodeClient({
+    const sdk = createZeroxzeroClient({
       baseUrl: globalSDK.url,
       fetch: platform.fetch,
       directory,

@@ -3,21 +3,21 @@ import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout, type LocalProject, getAvatarColors } from "@/context/layout"
 import { useNotification } from "@/context/notification"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { Avatar } from "@opencode-ai/ui/avatar"
-import { DiffChanges } from "@opencode-ai/ui/diff-changes"
-import { HoverCard } from "@opencode-ai/ui/hover-card"
-import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { MessageNav } from "@opencode-ai/ui/message-nav"
-import { Spinner } from "@opencode-ai/ui/spinner"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { getFilename } from "@opencode-ai/util/path"
-import { type Message, type Session, type TextPart } from "@opencode-ai/sdk/v2/client"
+import { base64Encode } from "@0x0-ai/util/encode"
+import { Avatar } from "@0x0-ai/ui/avatar"
+import { DiffChanges } from "@0x0-ai/ui/diff-changes"
+import { HoverCard } from "@0x0-ai/ui/hover-card"
+import { Icon } from "@0x0-ai/ui/icon"
+import { IconButton } from "@0x0-ai/ui/icon-button"
+import { MessageNav } from "@0x0-ai/ui/message-nav"
+import { Spinner } from "@0x0-ai/ui/spinner"
+import { Tooltip } from "@0x0-ai/ui/tooltip"
+import { getFilename } from "@0x0-ai/util/path"
+import { type Message, type Session, type TextPart } from "@0x0-ai/sdk/v2/client"
 import { For, Match, Show, Switch, createMemo, onCleanup, type Accessor, type JSX } from "solid-js"
 import { agentColor } from "@/utils/agent"
 
-const OPENCODE_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
+const ZEROXZERO_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
 export const ProjectIcon = (props: { project: LocalProject; class?: string; notify?: boolean }): JSX.Element => {
   const notification = useNotification()
@@ -30,7 +30,7 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
         <Avatar
           fallback={name()}
           src={
-            props.project.id === OPENCODE_PROJECT_ID ? "https://opencode.ai/favicon.svg" : props.project.icon?.override
+            props.project.id === ZEROXZERO_PROJECT_ID ? "https://zeroxzero.ai/favicon.svg" : props.project.icon?.override
           }
           {...getAvatarColors(props.project.icon?.color)}
           class="size-full rounded"

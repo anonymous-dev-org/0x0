@@ -1,0 +1,16 @@
+{
+  "$schema": "https://0x0.ai/config.json",
+  // "enterprise": {
+  //   "url": "https://enterprise.dev.0x0.ai",
+  // },
+  "provider": {
+    "0x0": {
+      "options": {},
+    },
+  },
+  "mcp": {},
+  "tools": {
+    "github-triage": false,
+    "github-pr-search": false,
+  },
+}
