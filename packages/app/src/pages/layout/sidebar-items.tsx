@@ -30,7 +30,9 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
         <Avatar
           fallback={name()}
           src={
-            props.project.id === ZEROXZERO_PROJECT_ID ? "https://zeroxzero.ai/favicon.svg" : props.project.icon?.override
+            props.project.id === ZEROXZERO_PROJECT_ID
+              ? "https://zeroxzero.ai/favicon.svg"
+              : props.project.icon?.override
           }
           {...getAvatarColors(props.project.icon?.color)}
           class="size-full rounded"
@@ -139,6 +141,12 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
     return text?.text
   }
 
+  const messageColor = (message: Message) => {
+    if (!message.agent) return undefined
+    const item = sessionStore.agent.find((agent) => agent.name === message.agent)
+    return agentColor(message.agent, item?.color)
+  }
+
   const item = (
     <A
       href={`${props.slug}/session/${props.session.id}`}
@@ -222,6 +230,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
                 messages={hoverMessages() ?? []}
                 current={undefined}
                 getLabel={messageLabel}
+                getColor={messageColor}
                 onMessageSelect={(message) => {
                   if (!isActive()) {
                     layout.pendingMessage.set(

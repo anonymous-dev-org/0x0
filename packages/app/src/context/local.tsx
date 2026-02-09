@@ -42,6 +42,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }>({
         current: list()[0]?.name,
       })
+      const apply = (value: ReturnType<typeof list>[number] | undefined) => {
+        if (!value?.model) return
+        model.set({
+          providerID: value.model.providerID,
+          modelID: value.model.modelID,
+        })
+      }
       return {
         list,
         current() {
@@ -56,10 +63,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             return
           }
           if (name && available.some((x) => x.name === name)) {
+            const value = available.find((x) => x.name === name)
             setStore("current", name)
+            apply(value)
             return
           }
-          setStore("current", available[0].name)
+          const value = available[0]
+          setStore("current", value.name)
+          apply(value)
         },
         move(direction: 1 | -1) {
           const available = list()
@@ -73,11 +84,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const value = available[next]
           if (!value) return
           setStore("current", value.name)
-          if (value.model)
-            model.set({
-              providerID: value.model.providerID,
-              modelID: value.model.modelID,
-            })
+          apply(value)
         },
       }
     })()
@@ -187,7 +194,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           current() {
             const m = current()
             if (!m) return undefined
-            return models.variant.get({ providerID: m.provider.id, modelID: m.id })
+            const value = models.variant.get({ providerID: m.provider.id, modelID: m.id })
+            if (value !== undefined) return value
+            const a = agent.current()
+            if (!a?.variant || !a.model) return undefined
+            if (a.model.providerID !== m.provider.id || a.model.modelID !== m.id) return undefined
+            return a.variant
           },
           list() {
             const m = current()

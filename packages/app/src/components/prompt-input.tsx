@@ -1,5 +1,5 @@
 import { useFilteredList } from "@0x0-ai/ui/hooks"
-import { createEffect, on, Component, Show, For, onCleanup, Switch, Match, createMemo, createSignal } from "solid-js"
+import { createEffect, on, Component, Show, onCleanup, Switch, Match, createMemo, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
@@ -21,15 +21,9 @@ import { useSync } from "@/context/sync"
 import { useComments } from "@/context/comments"
 import { Button } from "@0x0-ai/ui/button"
 import { Icon } from "@0x0-ai/ui/icon"
-import { ProviderIcon } from "@0x0-ai/ui/provider-icon"
-import type { IconName } from "@0x0-ai/ui/icons/provider"
 import { Tooltip, TooltipKeybind } from "@0x0-ai/ui/tooltip"
 import { IconButton } from "@0x0-ai/ui/icon-button"
-import { Select } from "@0x0-ai/ui/select"
 import { useDialog } from "@0x0-ai/ui/context/dialog"
-import { ModelSelectorPopover } from "@/components/dialog-select-model"
-import { DialogSelectModelUnpaid } from "@/components/dialog-select-model-unpaid"
-import { useProviders } from "@/hooks/use-providers"
 import { useCommand } from "@/context/command"
 import { Persist, persisted } from "@/utils/persist"
 import { SessionContextUsage } from "@/components/session-context-usage"
@@ -39,7 +33,7 @@ import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge 
 import { createPromptAttachments, ACCEPTED_FILE_TYPES } from "./prompt-input/attachments"
 import { navigatePromptHistory, prependHistoryEntry, promptLength } from "./prompt-input/history"
 import { createPromptSubmit } from "./prompt-input/submit"
-import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
+import { PromptPopover, type AtOption, type SlashCommand, type SlashOption } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
@@ -93,7 +87,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const comments = useComments()
   const params = useParams()
   const dialog = useDialog()
-  const providers = useProviders()
   const command = useCommand()
   const permission = usePermission()
   const language = useLanguage()
@@ -205,7 +198,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     historyIndex: number
     savedPrompt: Prompt | null
     placeholder: number
-    draggingType: "image" | "@mention" | null
+    draggingType: "image" | "file" | null
     mode: "normal" | "shell"
     applyingHistory: boolean
   }>({
@@ -297,24 +290,111 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!isFocused()) setComposing(false)
   })
 
-  const agentList = createMemo(() =>
-    sync.data.agent
-      .filter((agent) => !agent.hidden && agent.mode !== "primary")
-      .map((agent): AtOption => ({ type: "agent", name: agent.name, display: agent.name })),
-  )
+  const atProperties = createMemo<AtOption[]>(() => [
+    {
+      type: "property",
+      id: "agent",
+      display: "agent",
+      label: "@agent:",
+      description: language.t("prompt.quick.agent"),
+    },
+    {
+      type: "property",
+      id: "model",
+      display: "model",
+      label: "@model:",
+      description: language.t("prompt.quick.model"),
+    },
+    {
+      type: "property",
+      id: "thinking",
+      display: "thinking",
+      label: "@thinking:",
+      description: language.t("prompt.quick.thinking"),
+    },
+  ])
+
+  const replaceAtToken = (next: string) => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return false
+
+    const cursorPosition = getCursorPosition(editorRef)
+    const text = prompt
+      .current()
+      .map((part) => ("content" in part ? part.content : ""))
+      .join("")
+    const textBeforeCursor = text.substring(0, cursorPosition)
+    const atMatch = textBeforeCursor.match(/@(\S*)$/)
+    if (!atMatch) return false
+
+    const range = selection.getRangeAt(0)
+    const start = atMatch.index ?? cursorPosition - atMatch[0].length
+    setRangeEdge(editorRef, range, "start", start)
+    setRangeEdge(editorRef, range, "end", cursorPosition)
+    range.deleteContents()
+
+    if (next) {
+      const fragment = createTextFragment(next)
+      const last = fragment.lastChild
+      range.insertNode(fragment)
+      if (last) {
+        if (last.nodeType === Node.TEXT_NODE) {
+          const value = last.textContent ?? ""
+          range.setStart(last, value.length)
+        }
+        if (last.nodeType !== Node.TEXT_NODE) {
+          range.setStartAfter(last)
+        }
+      }
+    }
+
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    handleInput()
+    return true
+  }
 
   const handleAtSelect = (option: AtOption | undefined) => {
     if (!option) return
-    if (option.type === "agent") {
-      addPart({ type: "agent", name: option.name, content: "@" + option.name, start: 0, end: 0 })
-    } else {
-      addPart({ type: "file", path: option.path, content: "@" + option.path, start: 0, end: 0 })
+
+    if (option.type === "property") {
+      replaceAtToken("@" + option.id + ":")
+      return
     }
+
+    if (option.type === "agent") {
+      local.agent.set(option.name)
+      replaceAtToken("")
+      setStore("popover", null)
+      return
+    }
+
+    if (option.type === "model") {
+      local.model.set(
+        {
+          providerID: option.providerID,
+          modelID: option.modelID,
+        },
+        { recent: true },
+      )
+      replaceAtToken("")
+      setStore("popover", null)
+      return
+    }
+
+    local.model.variant.set(option.value)
+    replaceAtToken("")
+    setStore("popover", null)
   }
 
   const atKey = (x: AtOption | undefined) => {
     if (!x) return ""
-    return x.type === "agent" ? `agent:${x.name}` : `file:${x.path}`
+    if (x.type === "property") return `property:${x.id}`
+    if (x.type === "agent") return `agent:${x.name}`
+    if (x.type === "model") return `model:${x.providerID}/${x.modelID}`
+    return `thinking:${x.value ?? "default"}`
   }
 
   const {
@@ -324,31 +404,64 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onInput: atOnInput,
     onKeyDown: atOnKeyDown,
   } = useFilteredList<AtOption>({
-    items: async (query) => {
-      const agents = agentList()
-      const open = recent()
-      const seen = new Set(open)
-      const pinned: AtOption[] = open.map((path) => ({ type: "file", path, display: path, recent: true }))
-      const paths = await files.searchFilesAndDirectories(query)
-      const fileOptions: AtOption[] = paths
-        .filter((path) => !seen.has(path))
-        .map((path) => ({ type: "file", path, display: path }))
-      return [...agents, ...pinned, ...fileOptions]
+    items: (query) => {
+      const index = query.indexOf(":")
+      if (index === -1) return atProperties()
+
+      const key = query.slice(0, index).toLowerCase()
+
+      if (key === "agent") {
+        return local.agent.list().map(
+          (agent): AtOption => ({
+            type: "agent",
+            name: agent.name,
+            display: `agent:${agent.name}`,
+            label: "@agent:" + agent.name,
+            description: agent.description,
+          }),
+        )
+      }
+
+      if (key === "model") {
+        return local.model
+          .list()
+          .filter((model) => local.model.visible({ providerID: model.provider.id, modelID: model.id }))
+          .map(
+            (model): AtOption => ({
+              type: "model",
+              providerID: model.provider.id,
+              modelID: model.id,
+              display: `model:${model.provider.id}/${model.id} ${model.name}`,
+              label: "@model:" + model.name,
+              description: model.provider.name,
+            }),
+          )
+      }
+
+      if (key === "thinking") {
+        return [undefined, ...local.model.variant.list()].map(
+          (value): AtOption => ({
+            type: "thinking",
+            value,
+            display: `thinking:${value ?? "default"}`,
+            label: "@thinking:" + (value ?? language.t("common.default")),
+            description: value ? undefined : language.t("prompt.quick.thinking.default"),
+          }),
+        )
+      }
+
+      return []
     },
     key: atKey,
-    filterKeys: ["display"],
+    filterKeys: ["display", "label", "description"],
     groupBy: (item) => {
-      if (item.type === "agent") return "agent"
-      if (item.recent) return "recent"
-      return "file"
+      if (item.type === "property") return "property"
+      return "value"
     },
     sortGroupsBy: (a, b) => {
-      const rank = (category: string) => {
-        if (category === "agent") return 0
-        if (category === "recent") return 1
-        return 2
-      }
-      return rank(a.category) - rank(b.category)
+      if (a.category === b.category) return 0
+      if (a.category === "property") return -1
+      return 1
     },
     onSelect: handleAtSelect,
   })
@@ -377,9 +490,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     return [...custom, ...builtin]
   })
 
-  const handleSlashSelect = (cmd: SlashCommand | undefined) => {
+  const handleSlashSelect = (cmd: SlashOption | undefined) => {
     if (!cmd) return
     setStore("popover", null)
+
+    if (cmd.type === "file") {
+      addPart({ type: "file", path: cmd.path, content: cmd.path, start: 0, end: 0 })
+      return
+    }
 
     if (cmd.type === "custom") {
       const text = `/${cmd.trigger} `
@@ -410,10 +528,50 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onInput: slashOnInput,
     onKeyDown: slashOnKeyDown,
     refetch: slashRefetch,
-  } = useFilteredList<SlashCommand>({
-    items: slashCommands,
+  } = useFilteredList<SlashOption>({
+    items: async (query) => {
+      const commands = slashCommands()
+      const open = recent()
+      const seen = new Set(open)
+      const pinned = open.map(
+        (path) =>
+          ({
+            id: `file:${path}`,
+            type: "file",
+            path,
+            display: path,
+            recent: true,
+          }) satisfies SlashOption,
+      )
+      const paths = await files.searchFilesAndDirectories(query)
+      const filesFound = paths
+        .filter((path) => !seen.has(path))
+        .map(
+          (path) =>
+            ({
+              id: `file:${path}`,
+              type: "file",
+              path,
+              display: path,
+            }) satisfies SlashOption,
+        )
+      return [...commands, ...pinned, ...filesFound]
+    },
     key: (x) => x?.id,
-    filterKeys: ["trigger", "title", "description"],
+    filterKeys: ["trigger", "title", "description", "display"],
+    groupBy: (item) => {
+      if (item.type === "file" && item.recent) return "recent"
+      if (item.type === "file") return "file"
+      return "command"
+    },
+    sortGroupsBy: (a, b) => {
+      const rank = (category: string) => {
+        if (category === "command") return 0
+        if (category === "recent") return 1
+        return 2
+      }
+      return rank(a.category) - rank(b.category)
+    },
     onSelect: handleSlashSelect,
   })
 
@@ -690,9 +848,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const pill = createPill(part)
       const gap = document.createTextNode(" ")
       const range = selection.getRangeAt(0)
+      const slashMatch = textBeforeCursor.match(/\/(\S*)$/)
 
-      if (atMatch) {
+      if (part.type === "agent" && atMatch) {
         const start = atMatch.index ?? cursorPosition - atMatch[0].length
+        setRangeEdge(editorRef, range, "start", start)
+        setRangeEdge(editorRef, range, "end", cursorPosition)
+      }
+
+      if (part.type === "file" && slashMatch) {
+        const start = slashMatch.index ?? cursorPosition - slashMatch[0].length
         setRangeEdge(editorRef, range, "start", start)
         setRangeEdge(editorRef, range, "end", cursorPosition)
       }
@@ -867,6 +1032,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       }
     }
 
+    if (
+      !store.popover &&
+      store.mode === "normal" &&
+      event.key === "Tab" &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      local.agent.move(event.shiftKey ? -1 : 1)
+      event.preventDefault()
+      return
+    }
+
     if (ctrl && event.code === "KeyG") {
       if (store.popover) {
         setStore("popover", null)
@@ -956,7 +1134,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       >
         <PromptDragOverlay
           type={store.draggingType}
-          label={language.t(store.draggingType === "@mention" ? "prompt.dropzone.file.label" : "prompt.dropzone.label")}
+          label={language.t(store.draggingType === "file" ? "prompt.dropzone.file.label" : "prompt.dropzone.label")}
         />
         <PromptContextItems
           items={prompt.context.items()}
@@ -1013,7 +1191,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           </Show>
         </div>
         <div class="relative p-3 flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 flex-1">
             <Switch>
               <Match when={store.mode === "shell"}>
                 <div class="flex items-center gap-2 px-2 h-6">
@@ -1023,84 +1201,32 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </div>
               </Match>
               <Match when={store.mode === "normal"}>
-                <TooltipKeybind
-                  placement="top"
-                  gutter={8}
-                  title={language.t("command.agent.cycle")}
-                  keybind={command.keybind("agent.cycle")}
-                >
-                  <Select
-                    options={local.agent.list().map((agent) => agent.name)}
-                    current={local.agent.current()?.name ?? ""}
-                    onSelect={local.agent.set}
-                    class={`capitalize ${local.model.variant.list().length > 0 ? "max-w-full" : "max-w-[120px]"}`}
-                    valueClass="truncate"
-                    variant="ghost"
-                  />
-                </TooltipKeybind>
-                <Show
-                  when={providers.paid().length > 0}
-                  fallback={
-                    <TooltipKeybind
-                      placement="top"
-                      gutter={8}
-                      title={language.t("command.model.choose")}
-                      keybind={command.keybind("model.choose")}
-                    >
-                      <Button
-                        as="div"
-                        variant="ghost"
-                        class="px-2 min-w-0 max-w-[240px]"
-                        onClick={() => dialog.show(() => <DialogSelectModelUnpaid />)}
+                <div class="flex items-center gap-2 min-w-0 px-1">
+                  <span data-slot="prompt-quick-agent" class="text-12-medium text-text-strong capitalize shrink-0">
+                    {local.agent.current()?.name}
+                  </span>
+                  <Show when={local.model.current()}>
+                    {(model) => (
+                      <span
+                        data-slot="prompt-quick-model"
+                        class="text-12-regular text-text-weak truncate max-w-[220px]"
                       >
-                        <Show when={local.model.current()?.provider?.id}>
-                          <ProviderIcon id={local.model.current()!.provider.id as IconName} class="size-4 shrink-0" />
-                        </Show>
-                        <span class="truncate">
-                          {local.model.current()?.name ?? language.t("dialog.model.select.title")}
-                        </span>
-                        <Icon name="chevron-down" size="small" class="shrink-0" />
-                      </Button>
-                    </TooltipKeybind>
-                  }
-                >
-                  <TooltipKeybind
-                    placement="top"
-                    gutter={8}
-                    title={language.t("command.model.choose")}
-                    keybind={command.keybind("model.choose")}
-                  >
-                    <ModelSelectorPopover
-                      triggerAs={Button}
-                      triggerProps={{ variant: "ghost", class: "min-w-0 max-w-[240px]" }}
-                    >
-                      <Show when={local.model.current()?.provider?.id}>
-                        <ProviderIcon id={local.model.current()!.provider.id as IconName} class="size-4 shrink-0" />
-                      </Show>
-                      <span class="truncate">
-                        {local.model.current()?.name ?? language.t("dialog.model.select.title")}
+                        {model().name}
                       </span>
-                      <Icon name="chevron-down" size="small" class="shrink-0" />
-                    </ModelSelectorPopover>
-                  </TooltipKeybind>
-                </Show>
-                <Show when={local.model.variant.list().length > 0}>
-                  <TooltipKeybind
-                    placement="top"
-                    gutter={8}
-                    title={language.t("command.model.variant.cycle")}
-                    keybind={command.keybind("model.variant.cycle")}
-                  >
-                    <Button
-                      data-action="model-variant-cycle"
-                      variant="ghost"
-                      class="text-text-base _hidden group-hover/prompt-input:inline-block capitalize text-12-regular"
-                      onClick={() => local.model.variant.cycle()}
-                    >
-                      {local.model.variant.current() ?? language.t("common.default")}
-                    </Button>
-                  </TooltipKeybind>
-                </Show>
+                    )}
+                  </Show>
+                  <Show when={local.model.variant.current()}>
+                    {(variant) => (
+                      <span
+                        data-slot="prompt-quick-thinking"
+                        class="text-12-regular text-text-weak capitalize shrink-0"
+                      >
+                        {variant()}
+                      </span>
+                    )}
+                  </Show>
+                </div>
+                <span class="text-11-regular text-text-weak whitespace-nowrap">{language.t("prompt.quick.hint")}</span>
                 <Show when={permission.permissionsEnabled() && params.id}>
                   <TooltipKeybind
                     placement="top"

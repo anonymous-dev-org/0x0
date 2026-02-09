@@ -91,7 +91,7 @@ export namespace Agent {
       },
       plan: {
         name: "plan",
-        description: "Plan mode. Disallows all edit tools.",
+        description: "Planning agent. Disallows all edit tools.",
         options: {},
         permission: PermissionNext.merge(
           defaults,

@@ -84,7 +84,7 @@ export const PlanEnterTool = Tool.define("plan_enter", {
       questions: [
         {
           question: `Would you like to switch to the plan agent and create a plan saved to ${plan}?`,
-          header: "Plan Mode",
+          header: "Plan Agent",
           custom: false,
           options: [
             { label: "Yes", description: "Switch to plan agent for research and planning" },
@@ -117,13 +117,13 @@ export const PlanEnterTool = Tool.define("plan_enter", {
       messageID: userMsg.id,
       sessionID: ctx.sessionID,
       type: "text",
-      text: "User has requested to enter plan mode. Switch to plan mode and begin planning.",
+      text: "User has requested to switch to the plan agent. Begin planning.",
       synthetic: true,
     } satisfies MessageV2.TextPart)
 
     return {
       title: "Switching to plan agent",
-      output: `User confirmed to switch to plan mode. A new message has been created to switch you to plan mode. The plan file will be at ${plan}. Begin planning.`,
+      output: `User confirmed switching to the plan agent. A new message has been created for the plan agent. The plan file will be at ${plan}. Begin planning.`,
       metadata: {},
     }
   },

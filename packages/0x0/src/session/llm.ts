@@ -43,6 +43,19 @@ export namespace LLM {
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
 
+  export async function composeSystemParts(input: {
+    model: Provider.Model
+    agent: Agent.Info
+    system: string[]
+    user: MessageV2.User
+  }) {
+    return [
+      ...(await SystemPrompt.compose({ model: input.model, agent: input.agent.prompt })),
+      ...input.system,
+      ...(input.user.system ? [input.user.system] : []),
+    ].filter((item): item is string => !!item)
+  }
+
   export async function stream(input: StreamInput) {
     const l = log
       .clone()
@@ -64,20 +77,7 @@ export namespace LLM {
     ])
     const isCodex = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = []
-    system.push(
-      [
-        // use agent prompt otherwise provider prompt
-        // For Codex sessions, skip SystemPrompt.provider() since it's sent via options.instructions
-        ...(input.agent.prompt ? [input.agent.prompt] : isCodex ? [] : await SystemPrompt.provider(input.model)),
-        // any custom prompt passed into this call
-        ...input.system,
-        // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
-      ]
-        .filter((x) => x)
-        .join("\n"),
-    )
+    const system = await composeSystemParts(input)
 
     const header = system[0]
     const original = clone(system)
@@ -112,7 +112,8 @@ export namespace LLM {
       mergeDeep(variant),
     )
     if (isCodex) {
-      options.instructions = await SystemPrompt.instructions()
+      options.instructions = system.join("\n")
+      system.length = 0
     }
 
     const params = await Plugin.trigger(

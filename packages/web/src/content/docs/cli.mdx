@@ -347,7 +347,7 @@ You can also attach to a running `0x0 serve` instance to avoid MCP server cold b
 | `--file`     | `-f`  | File(s) to attach to message                                            |
 | `--format`   |       | Format: default (formatted) or json (raw JSON events)                   |
 | `--title`    |       | Title for the session (uses truncated prompt if no value provided)      |
-| `--attach`   |       | Attach to a running 0x0 server (e.g., http://localhost:4096)       |
+| `--attach`   |       | Attach to a running 0x0 server (e.g., http://localhost:4096)            |
 | `--port`     |       | Port for the local server (defaults to random port)                     |
 
 ---
@@ -553,32 +553,32 @@ The 0x0 CLI takes the following global flags.
 
 Terminal Agent can be configured using environment variables.
 
-| Variable                              | Type    | Description                                       |
-| ------------------------------------- | ------- | ------------------------------------------------- |
-| `ZEROXZERO_AUTO_SHARE`                 | boolean | Automatically share sessions                      |
-| `ZEROXZERO_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows            |
-| `ZEROXZERO_CONFIG`                     | string  | Path to config file                               |
-| `ZEROXZERO_CONFIG_DIR`                 | string  | Path to config directory                          |
-| `ZEROXZERO_CONFIG_CONTENT`             | string  | Inline json config content                        |
-| `ZEROXZERO_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                   |
-| `ZEROXZERO_DISABLE_PRUNE`              | boolean | Disable pruning of old data                       |
-| `ZEROXZERO_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates          |
-| `ZEROXZERO_PERMISSION`                 | string  | Inlined json permissions config                   |
-| `ZEROXZERO_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                           |
-| `ZEROXZERO_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads            |
-| `ZEROXZERO_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                        |
-| `ZEROXZERO_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction              |
-| `ZEROXZERO_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills)  |
-| `ZEROXZERO_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`             |
-| `ZEROXZERO_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                  |
-| `ZEROXZERO_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources       |
-| `ZEROXZERO_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes            |
-| `ZEROXZERO_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization       |
-| `ZEROXZERO_CLIENT`                     | string  | Client identifier (defaults to `cli`)             |
-| `ZEROXZERO_ENABLE_EXA`                 | boolean | Enable Exa web search tools                       |
-| `ZEROXZERO_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`               |
-| `ZEROXZERO_SERVER_USERNAME`            | string  | Override basic auth username (default `0x0`) |
-| `ZEROXZERO_MODELS_URL`                 | string  | Custom URL for fetching models configuration      |
+| Variable                               | Type    | Description                                      |
+| -------------------------------------- | ------- | ------------------------------------------------ |
+| `ZEROXZERO_AUTO_SHARE`                 | boolean | Automatically share sessions                     |
+| `ZEROXZERO_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows           |
+| `ZEROXZERO_CONFIG`                     | string  | Path to config file                              |
+| `ZEROXZERO_CONFIG_DIR`                 | string  | Path to config directory                         |
+| `ZEROXZERO_CONFIG_CONTENT`             | string  | Inline json config content                       |
+| `ZEROXZERO_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                  |
+| `ZEROXZERO_DISABLE_PRUNE`              | boolean | Disable pruning of old data                      |
+| `ZEROXZERO_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates         |
+| `ZEROXZERO_PERMISSION`                 | string  | Inlined json permissions config                  |
+| `ZEROXZERO_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                          |
+| `ZEROXZERO_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads           |
+| `ZEROXZERO_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                       |
+| `ZEROXZERO_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction             |
+| `ZEROXZERO_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills) |
+| `ZEROXZERO_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`            |
+| `ZEROXZERO_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                 |
+| `ZEROXZERO_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources      |
+| `ZEROXZERO_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes           |
+| `ZEROXZERO_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization      |
+| `ZEROXZERO_CLIENT`                     | string  | Client identifier (defaults to `cli`)            |
+| `ZEROXZERO_ENABLE_EXA`                 | boolean | Enable Exa web search tools                      |
+| `ZEROXZERO_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`              |
+| `ZEROXZERO_SERVER_USERNAME`            | string  | Override basic auth username (default `0x0`)     |
+| `ZEROXZERO_MODELS_URL`                 | string  | Custom URL for fetching models configuration     |
 
 ---
 
@@ -586,8 +586,8 @@ Terminal Agent can be configured using environment variables.
 
 These environment variables enable experimental features that may change or be removed.
 
-| Variable                                        | Type    | Description                             |
-| ----------------------------------------------- | ------- | --------------------------------------- |
+| Variable                                         | Type    | Description                             |
+| ------------------------------------------------ | ------- | --------------------------------------- |
 | `ZEROXZERO_EXPERIMENTAL`                         | boolean | Enable all experimental features        |
 | `ZEROXZERO_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Enable icon discovery                   |
 | `ZEROXZERO_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disable copy on select in TUI           |
@@ -600,4 +600,4 @@ These environment variables enable experimental features that may change or be r
 | `ZEROXZERO_EXPERIMENTAL_EXA`                     | boolean | Enable experimental Exa features        |
 | `ZEROXZERO_EXPERIMENTAL_LSP_TY`                  | boolean | Enable experimental LSP type checking   |
 | `ZEROXZERO_EXPERIMENTAL_MARKDOWN`                | boolean | Enable experimental markdown features   |
-| `ZEROXZERO_EXPERIMENTAL_PLAN_MODE`               | boolean | Enable plan mode                        |
+| `ZEROXZERO_EXPERIMENTAL_PLAN_MODE`               | boolean | Enable plan-agent workflow              |

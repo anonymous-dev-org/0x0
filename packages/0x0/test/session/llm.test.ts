@@ -7,6 +7,7 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ProviderTransform } from "../../src/provider/transform"
 import { ModelsDev } from "../../src/provider/models"
+import { SystemPrompt } from "../../src/session/system"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
 import type { MessageV2 } from "../../src/session/message-v2"
@@ -95,6 +96,48 @@ describe("session.llm.hasToolCalls", () => {
       },
     ] as ModelMessage[]
     expect(LLM.hasToolCalls(messages)).toBe(true)
+  })
+})
+
+describe("session.llm.composeSystemParts", () => {
+  test("composes base, agent, model, and custom layers in order", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = { api: { id: "claude-3-5-sonnet-20241022" } } as Provider.Model
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          prompt: "AGENT_LAYER",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: "user-layer-test",
+          sessionID: "session-layer-test",
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: "anthropic", modelID: "claude-3-5-sonnet-20241022" },
+          system: "USER_LAYER",
+        } satisfies MessageV2.User
+
+        const parts = await LLM.composeSystemParts({
+          model,
+          agent,
+          system: ["CALL_LAYER"],
+          user,
+        })
+
+        expect(parts[0]).toBe(await SystemPrompt.instructions())
+        expect(parts[1]).toBe("AGENT_LAYER")
+        expect(parts[2]).toBe((await SystemPrompt.model(model))[0])
+        expect(parts[3]).toBe("CALL_LAYER")
+        expect(parts[4]).toBe("USER_LAYER")
+      },
+    })
   })
 })
 

@@ -11,10 +11,11 @@ export function MessageNav(
     size: "normal" | "compact"
     onMessageSelect: (message: UserMessage) => void
     getLabel?: (message: UserMessage) => string | undefined
+    getColor?: (message: UserMessage) => string | undefined
   },
 ) {
   const i18n = useI18n()
-  const [local, others] = splitProps(props, ["messages", "current", "size", "onMessageSelect", "getLabel"])
+  const [local, others] = splitProps(props, ["messages", "current", "size", "onMessageSelect", "getLabel", "getColor"])
 
   const content = () => (
     <ul role="list" data-component="message-nav" data-size={local.size} {...others}>
@@ -37,6 +38,7 @@ export function MessageNav(
                     data-active={message.id === local.current?.id || undefined}
                     role="button"
                     tabindex={0}
+                    style={{ "--message-nav-color": local.getColor?.(message) }}
                     onClick={handleClick}
                     onKeyDown={handleKeyPress}
                   >

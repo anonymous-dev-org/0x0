@@ -4,8 +4,35 @@ import { Icon } from "@0x0-ai/ui/icon"
 import { getDirectory, getFilename } from "@0x0-ai/util/path"
 
 export type AtOption =
-  | { type: "agent"; name: string; display: string }
-  | { type: "file"; path: string; display: string; recent?: boolean }
+  | {
+      type: "property"
+      id: "agent" | "model" | "thinking"
+      display: string
+      label: string
+      description?: string
+    }
+  | {
+      type: "agent"
+      name: string
+      display: string
+      label: string
+      description?: string
+    }
+  | {
+      type: "model"
+      providerID: string
+      modelID: string
+      display: string
+      label: string
+      description?: string
+    }
+  | {
+      type: "thinking"
+      value: string | undefined
+      display: string
+      label: string
+      description?: string
+    }
 
 export interface SlashCommand {
   id: string
@@ -17,6 +44,16 @@ export interface SlashCommand {
   source?: "command" | "mcp" | "skill"
 }
 
+export type SlashOption =
+  | SlashCommand
+  | {
+      id: string
+      type: "file"
+      path: string
+      display: string
+      recent?: boolean
+    }
+
 type PromptPopoverProps = {
   popover: "at" | "slash" | null
   setSlashPopoverRef: (el: HTMLDivElement) => void
@@ -25,15 +62,22 @@ type PromptPopoverProps = {
   atKey: (item: AtOption) => string
   setAtActive: (id: string) => void
   onAtSelect: (item: AtOption) => void
-  slashFlat: SlashCommand[]
+  slashFlat: SlashOption[]
   slashActive?: string
   setSlashActive: (id: string) => void
-  onSlashSelect: (item: SlashCommand) => void
+  onSlashSelect: (item: SlashOption) => void
   commandKeybind: (id: string) => string | undefined
   t: (key: string) => string
 }
 
 export const PromptPopover: Component<PromptPopoverProps> = (props) => {
+  const atIcon = (item: AtOption) => {
+    if (item.type === "property") return "sliders"
+    if (item.type === "model") return "models"
+    if (item.type === "thinking") return "brain"
+    return "mcp"
+  }
+
   return (
     <Show when={props.popover}>
       <div
@@ -61,36 +105,13 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     onClick={() => props.onAtSelect(item)}
                     onMouseEnter={() => props.setAtActive(props.atKey(item))}
                   >
-                    <Show
-                      when={item.type === "agent"}
-                      fallback={
-                        <>
-                          <FileIcon
-                            node={{ path: item.type === "file" ? item.path : "", type: "file" }}
-                            class="shrink-0 size-4"
-                          />
-                          <div class="flex items-center text-14-regular min-w-0">
-                            <span class="text-text-weak whitespace-nowrap truncate min-w-0">
-                              {item.type === "file"
-                                ? item.path.endsWith("/")
-                                  ? item.path
-                                  : getDirectory(item.path)
-                                : ""}
-                            </span>
-                            <Show when={item.type === "file" && !item.path.endsWith("/")}>
-                              <span class="text-text-strong whitespace-nowrap">
-                                {item.type === "file" ? getFilename(item.path) : ""}
-                              </span>
-                            </Show>
-                          </div>
-                        </>
-                      }
-                    >
-                      <Icon name="brain" size="small" class="text-icon-info-active shrink-0" />
-                      <span class="text-14-regular text-text-strong whitespace-nowrap">
-                        @{item.type === "agent" ? item.name : ""}
-                      </span>
-                    </Show>
+                    <Icon name={atIcon(item)} size="small" class="text-icon-info-active shrink-0" />
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-14-regular text-text-strong whitespace-nowrap">{item.label}</span>
+                      <Show when={item.description}>
+                        <span class="text-14-regular text-text-weak truncate">{item.description}</span>
+                      </Show>
+                    </div>
                   </button>
                 )}
               </For>
@@ -112,26 +133,59 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                     onClick={() => props.onSlashSelect(cmd)}
                     onMouseEnter={() => props.setSlashActive(cmd.id)}
                   >
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="text-14-regular text-text-strong whitespace-nowrap">/{cmd.trigger}</span>
-                      <Show when={cmd.description}>
-                        <span class="text-14-regular text-text-weak truncate">{cmd.description}</span>
-                      </Show>
-                    </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                      <Show when={cmd.type === "custom" && cmd.source !== "command"}>
-                        <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
-                          {cmd.source === "skill"
-                            ? props.t("prompt.slash.badge.skill")
-                            : cmd.source === "mcp"
-                              ? props.t("prompt.slash.badge.mcp")
-                              : props.t("prompt.slash.badge.custom")}
+                    <Show
+                      when={cmd.type === "file"}
+                      fallback={
+                        <>
+                          <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-14-regular text-text-strong whitespace-nowrap">
+                              /{cmd.type !== "file" ? cmd.trigger : ""}
+                            </span>
+                            <Show when={cmd.type !== "file" && cmd.description}>
+                              <span class="text-14-regular text-text-weak truncate">
+                                {cmd.type !== "file" ? cmd.description : ""}
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="flex items-center gap-2 shrink-0">
+                            <Show when={cmd.type !== "file" && cmd.type === "custom" && cmd.source !== "command"}>
+                              <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
+                                {cmd.type !== "file" && cmd.source === "skill"
+                                  ? props.t("prompt.slash.badge.skill")
+                                  : cmd.type !== "file" && cmd.source === "mcp"
+                                    ? props.t("prompt.slash.badge.mcp")
+                                    : props.t("prompt.slash.badge.custom")}
+                              </span>
+                            </Show>
+                            <Show when={cmd.type !== "file" && props.commandKeybind(cmd.id)}>
+                              <span class="text-12-regular text-text-subtle">
+                                {cmd.type !== "file" ? props.commandKeybind(cmd.id) : ""}
+                              </span>
+                            </Show>
+                          </div>
+                        </>
+                      }
+                    >
+                      <FileIcon
+                        node={{ path: cmd.type === "file" ? cmd.path : "", type: "file" }}
+                        class="shrink-0 size-4"
+                      />
+                      <div class="flex items-center text-14-regular min-w-0">
+                        <span class="text-text-weak whitespace-nowrap truncate min-w-0">
+                          {cmd.type === "file" ? (cmd.path.endsWith("/") ? cmd.path : getDirectory(cmd.path)) : ""}
+                        </span>
+                        <Show when={cmd.type === "file" && !cmd.path.endsWith("/")}>
+                          <span class="text-text-strong whitespace-nowrap">
+                            {cmd.type === "file" ? getFilename(cmd.path) : ""}
+                          </span>
+                        </Show>
+                      </div>
+                      <Show when={cmd.type === "file" && cmd.recent}>
+                        <span class="ml-auto text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
+                          recent
                         </span>
                       </Show>
-                      <Show when={props.commandKeybind(cmd.id)}>
-                        <span class="text-12-regular text-text-subtle">{props.commandKeybind(cmd.id)}</span>
-                      </Show>
-                    </div>
+                    </Show>
                   </button>
                 )}
               </For>

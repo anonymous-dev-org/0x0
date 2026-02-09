@@ -18,7 +18,7 @@ export namespace SystemPrompt {
     return (config.prompt?.system?.codex_instructions ?? PROMPT_CODEX).trim()
   }
 
-  export async function provider(model: Provider.Model) {
+  export async function model(model: Provider.Model) {
     const config = await Config.get()
     const system = config.prompt?.system
     if (model.api.id.includes("gpt-5")) return [system?.gpt5 ?? PROMPT_CODEX]
@@ -29,6 +29,19 @@ export namespace SystemPrompt {
     if (model.api.id.toLowerCase().includes("trinity")) return [system?.trinity ?? PROMPT_TRINITY]
     return [system?.fallback ?? PROMPT_ANTHROPIC_WITHOUT_TODO]
   }
+
+  export async function compose(input: { model: Provider.Model; agent?: string }) {
+    const seen = new Set<string>()
+    return [await instructions(), input.agent, ...(await model(input.model))].filter((item): item is string => {
+      if (!item) return false
+      const key = item.trim()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+
+  export const provider = model
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project

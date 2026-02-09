@@ -951,8 +951,8 @@ export namespace Config {
             .optional()
             .describe("Override queued-user reminder. Use {{message}} placeholder for the user text."),
           max_steps: z.string().optional().describe("Override max-steps reminder when step limit is reached"),
-          plan: z.string().optional().describe("Override plan-mode reminder added when plan agent is active"),
-          build_switch: z.string().optional().describe("Override build-switch reminder when returning from plan mode"),
+          plan: z.string().optional().describe("Override reminder added when plan agent is active"),
+          build_switch: z.string().optional().describe("Override build-switch reminder when returning from plan agent"),
           build_switch_with_plan: z
             .string()
             .optional()
@@ -960,7 +960,7 @@ export namespace Config {
           plan_mode: z
             .string()
             .optional()
-            .describe("Override plan-mode system reminder. Use {{plan_path}} and {{plan_file_state}} placeholders."),
+            .describe("Override plan-agent reminder. Use {{plan_path}} and {{plan_file_state}} placeholders."),
         })
         .optional(),
     })

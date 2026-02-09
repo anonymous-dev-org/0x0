@@ -354,10 +354,10 @@ You can override built-in system prompts and runtime reminders through the `prom
       "fallback": "You are a helpful coding assistant.",
     },
     "reminder": {
-      "build_switch": "<system-reminder>\nYour operational mode has changed from plan to build.\nYou are no longer in read-only mode.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.\n</system-reminder>",
-      "build_switch_with_plan": "<system-reminder>\nMode changed from plan to build.\nUse plan file: {{plan_path}}\n</system-reminder>",
-      "queued_user": "<system-reminder>\nNew user message:\n{{message}}\n</system-reminder>",
-      "plan_mode": "<system-reminder>\nPlan file: {{plan_path}}\n{{plan_file_state}}\n</system-reminder>",
+      "build_switch": "Your active agent has changed from plan to build.\nYou are no longer under plan-agent read-only constraints.\nYou are permitted to make file changes, run shell commands, and utilize your arsenal of tools as needed.",
+      "build_switch_with_plan": "Active agent changed from plan to build.\nUse plan file: {{plan_path}}",
+      "queued_user": "New user message:\n{{message}}",
+      "plan_mode": "Plan file: {{plan_path}}\n{{plan_file_state}}",
       "max_steps": "You reached the maximum number of steps. Provide a final answer now.",
     },
   },
@@ -379,9 +379,9 @@ Available `prompt.reminder` keys:
 - `queued_user` - reminder inserted for queued user messages.
 - `max_steps` - reminder used when max steps is reached.
 - `plan` - reminder inserted when plan agent is active.
-- `build_switch` - reminder inserted when switching from plan to build.
-- `build_switch_with_plan` - reminder inserted when a plan file exists during plan->build switch.
-- `plan_mode` - full system reminder for plan mode.
+- `build_switch` - reminder inserted when switching from plan agent to build agent.
+- `build_switch_with_plan` - reminder inserted when a plan file exists during plan->build agent switch.
+- `plan_mode` - full reminder for plan agent.
 
 Placeholders supported in reminder templates:
 

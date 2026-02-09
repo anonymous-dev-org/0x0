@@ -227,6 +227,11 @@ export const dict = {
   "prompt.placeholder.summarizeComment": "Summarize comment…",
   "prompt.mode.shell": "Shell",
   "prompt.mode.shell.exit": "esc to exit",
+  "prompt.quick.agent": "Choose agent",
+  "prompt.quick.model": "Choose model",
+  "prompt.quick.thinking": "Choose thinking effort",
+  "prompt.quick.thinking.default": "Use agent default",
+  "prompt.quick.hint": "tab switches agent · @ changes params",
 
   "prompt.example.1": "Fix a TODO in the codebase",
   "prompt.example.2": "What is the tech stack of this project?",
@@ -255,9 +260,9 @@ export const dict = {
   "prompt.example.25": "How do environment variables work here?",
 
   "prompt.popover.emptyResults": "No matching results",
-  "prompt.popover.emptyCommands": "No matching commands",
+  "prompt.popover.emptyCommands": "No matching commands or files",
   "prompt.dropzone.label": "Drop images or PDFs here",
-  "prompt.dropzone.file.label": "Drop to @mention file",
+  "prompt.dropzone.file.label": "Drop to insert file",
   "prompt.slash.badge.custom": "custom",
   "prompt.slash.badge.skill": "skill",
   "prompt.slash.badge.mcp": "mcp",

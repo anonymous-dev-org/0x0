@@ -9,6 +9,8 @@
     "dev": "bun run --cwd packages/0x0 --conditions=browser src/index.ts",
     "dev:desktop": "bun --cwd packages/desktop tauri dev",
     "dev:web": "bun --cwd packages/app dev",
+    "pre-release:checks": "bun run --cwd packages/0x0 typecheck && bun --cwd packages/0x0 test test/session/llm.test.ts && bun --cwd packages/0x0 test test/session/system.test.ts && bun run --cwd packages/app typecheck",
+    "pre-release:tui": "ZEROXZERO_CONFIG_CONTENT='{}' bun run --cwd packages/0x0 --conditions=browser src/index.ts",
     "typecheck": "bun turbo typecheck",
     "prepare": "husky",
     "random": "echo 'Random script'",

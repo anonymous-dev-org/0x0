@@ -55,17 +55,14 @@ export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   export const OUTPUT_TOKEN_MAX = Flag.ZEROXZERO_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
   const QUEUED_USER_REMINDER = [
-    "<system-reminder>",
     "The user sent the following message:",
     "{{message}}",
     "",
     "Please address this message and continue with your tasks.",
-    "</system-reminder>",
   ].join("\n")
   const BUILD_SWITCH_WITH_PLAN_REMINDER =
     BUILD_SWITCH + "\n\n" + "A plan file exists at {{plan_path}}. You should execute on the plan defined within it"
-  const PLAN_MODE_REMINDER = `<system-reminder>
-Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
+  const PLAN_AGENT_REMINDER = `Plan agent is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
 
 ## Plan File Info:
 {{plan_file_state}}
@@ -132,8 +129,7 @@ This is critical - your turn should only end with either asking the user a quest
 
 **Important:** Use question tool to clarify requirements/approach, use plan_exit to request plan approval. Do NOT use question tool to ask "Is this plan okay?" - that's what plan_exit does.
 
-NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
-</system-reminder>`
+NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.`
 
   function render(template: string, vars: Record<string, string>) {
     return Object.entries(vars).reduce((acc, [key, value]) => acc.replaceAll(`{{${key}}}`, value), template)
@@ -1313,7 +1309,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
     if (!userMessage) return input.messages
 
-    // Original logic when experimental plan mode is disabled
+    // Original logic when experimental plan-agent flow is disabled
     if (!Flag.ZEROXZERO_EXPERIMENTAL_PLAN_MODE) {
       if (input.agent.name === "plan") {
         userMessage.parts.push({
@@ -1339,10 +1335,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       return input.messages
     }
 
-    // New plan mode logic when flag is enabled
+    // New plan-agent flow when flag is enabled
     const assistantMessage = input.messages.findLast((msg) => msg.info.role === "assistant")
 
-    // Switching from plan mode to build mode
+    // Switching from plan agent to build agent
     if (input.agent.name !== "plan" && assistantMessage?.info.agent === "plan") {
       const plan = Session.plan(input.session)
       const exists = await Bun.file(plan).exists()
@@ -1362,7 +1358,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       return input.messages
     }
 
-    // Entering plan mode
+    // Entering plan agent
     if (input.agent.name === "plan" && assistantMessage?.info.agent !== "plan") {
       const plan = Session.plan(input.session)
       const exists = await Bun.file(plan).exists()
@@ -1372,7 +1368,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         messageID: userMessage.info.id,
         sessionID: userMessage.info.sessionID,
         type: "text",
-        text: render(reminder?.plan_mode ?? PLAN_MODE_REMINDER, {
+        text: render(reminder?.plan_mode ?? PLAN_AGENT_REMINDER, {
           plan_path: plan,
           plan_file_state: exists
             ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.`

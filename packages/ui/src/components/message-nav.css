@@ -38,7 +38,7 @@
   padding: 0;
 
   &[data-active] [data-slot="message-nav-tick-line"] {
-    background-color: var(--icon-strong-base);
+    background-color: var(--message-nav-color, var(--icon-strong-base));
     width: 100%;
   }
 }
@@ -46,7 +46,7 @@
 [data-slot="message-nav-tick-line"] {
   height: 1px;
   width: 16px;
-  background-color: var(--icon-base);
+  background-color: var(--message-nav-color, var(--icon-base));
   transition:
     width 0.2s,
     background-color 0.2s;
@@ -54,7 +54,7 @@
 
 [data-slot="message-nav-tick-button"]:hover [data-slot="message-nav-tick-line"] {
   width: 100%;
-  background-color: var(--icon-strong-base);
+  background-color: var(--message-nav-color, var(--icon-strong-base));
 }
 
 [data-slot="message-nav-message-button"] {

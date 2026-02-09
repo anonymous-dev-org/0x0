@@ -31,7 +31,7 @@ Build is the **default** mode with all tools enabled. This is the standard mode 
 
 ### Plan
 
-A restricted mode designed for planning and analysis. In plan mode, the following tools are disabled by default:
+A restricted profile designed for planning and analysis. In the plan agent, the following tools are disabled by default:
 
 - `write` - Cannot create new files
 - `edit` - Cannot modify existing files, except for files located at `.0x0/plans/*.md` to detail the plan itself
@@ -322,8 +322,8 @@ Priorities:
 
 Here are some common use cases for different modes.
 
-- **Build mode**: Full development work with all tools enabled
-- **Plan mode**: Analysis and planning without making changes
+- **Build agent**: Full development work with all tools enabled
+- **Plan agent**: Analysis and planning without making changes
 - **Review mode**: Code review with read-only access plus documentation tools
 - **Debug mode**: Focused on investigation with bash and read tools enabled
 - **Docs mode**: Documentation writing with file operations but no system commands
