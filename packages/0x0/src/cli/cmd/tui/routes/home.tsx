@@ -12,7 +12,6 @@ let once = false
 export function Home() {
   const route = useRouteData("home")
   const promptRef = usePromptRef()
-  const [hasInput, setHasInput] = createSignal(false)
 
   let prompt: PromptRef
   const args = useArgs()
@@ -30,11 +29,7 @@ export function Home() {
 
   return (
     <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexGrow={1} justifyContent="center" alignItems="center">
-        <Show when={!hasInput()}>
-          <Logo />
-        </Show>
-      </box>
+      <box flexGrow={1} justifyContent="center" alignItems="center"></box>
       <box flexShrink={0}>
         <box width="100%" zIndex={1000}>
           <Prompt
@@ -42,7 +37,6 @@ export function Home() {
               prompt = r
               promptRef.set(r)
             }}
-            onInputChange={(value) => setHasInput(value.length > 0)}
           />
         </box>
       </box>

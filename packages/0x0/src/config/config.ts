@@ -683,11 +683,8 @@ export namespace Config {
       tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
-      mode: z.enum(["subagent", "primary", "all"]).optional(),
-      hidden: z
-        .boolean()
-        .optional()
-        .describe("Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)"),
+      mode: z.enum(["primary", "all"]).optional(),
+      hidden: z.boolean().optional().describe("Hide this agent from the @ autocomplete menu (default: false)"),
       options: z.record(z.string(), z.any()).optional(),
       color: z
         .union([
@@ -951,16 +948,6 @@ export namespace Config {
             .optional()
             .describe("Override queued-user reminder. Use {{message}} placeholder for the user text."),
           max_steps: z.string().optional().describe("Override max-steps reminder when step limit is reached"),
-          plan: z.string().optional().describe("Override reminder added when plan agent is active"),
-          build_switch: z.string().optional().describe("Override build-switch reminder when returning from plan agent"),
-          build_switch_with_plan: z
-            .string()
-            .optional()
-            .describe("Override build-switch reminder when a plan file exists. Use {{plan_path}} placeholder."),
-          plan_mode: z
-            .string()
-            .optional()
-            .describe("Override plan-agent reminder. Use {{plan_path}} and {{plan_file_state}} placeholders."),
         })
         .optional(),
     })
@@ -1090,7 +1077,7 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Falls back to 'build' if not set or if the specified agent is invalid.",
         ),
       username: z
         .string()
@@ -1106,10 +1093,8 @@ export namespace Config {
         .describe("@deprecated Use `agent` field instead."),
       agent: z
         .object({
-          // primary
           plan: Agent.optional(),
           build: Agent.optional(),
-          // subagent
           general: Agent.optional(),
           explore: Agent.optional(),
           // specialized

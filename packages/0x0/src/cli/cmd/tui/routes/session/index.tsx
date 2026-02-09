@@ -200,23 +200,6 @@ export function Session() {
     }
   })
 
-  let lastSwitch: string | undefined = undefined
-  sdk.event.on("message.part.updated", (evt) => {
-    const part = evt.properties.part
-    if (part.type !== "tool") return
-    if (part.sessionID !== route.sessionID) return
-    if (part.state.status !== "completed") return
-    if (part.id === lastSwitch) return
-
-    if (part.tool === "plan_exit") {
-      local.agent.set("build")
-      lastSwitch = part.id
-    } else if (part.tool === "plan_enter") {
-      local.agent.set("plan")
-      lastSwitch = part.id
-    }
-  })
-
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
   const keybind = useKeybind()
@@ -1241,6 +1224,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const { theme } = useTheme()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
+  const color = createMemo(() => {
+    if (props.message.error?.name === "MessageAbortedError") return theme.textMuted
+    return local.agent.color(props.message.agent)
+  })
 
   const final = createMemo(() => {
     return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
@@ -1289,17 +1276,8 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
         <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
           <box paddingLeft={3}>
             <text marginTop={1}>
-              <span
-                style={{
-                  fg:
-                    props.message.error?.name === "MessageAbortedError"
-                      ? theme.textMuted
-                      : local.agent.color(props.message.agent),
-                }}
-              >
-                ▣{" "}
-              </span>{" "}
-              <span style={{ fg: theme.text }}>{Locale.titlecase(props.message.mode)}</span>
+              <span style={{ fg: color() }}>▣ </span>{" "}
+              <span style={{ fg: color() }}>{local.agent.label(props.message.agent)}</span>
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
@@ -1851,9 +1829,9 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
   return (
     <Switch>
-      <Match when={props.input.description || props.input.subagent_type}>
+      <Match when={props.input.description || props.input.agent}>
         <BlockTool
-          title={"# " + Locale.titlecase(props.input.subagent_type ?? "unknown") + " Task"}
+          title={"# " + Locale.titlecase(props.input.agent ?? "unknown") + " Task"}
           onClick={
             props.metadata.sessionId
               ? () => navigate({ type: "session", sessionID: props.metadata.sessionId! })
@@ -1880,14 +1858,14 @@ function Task(props: ToolProps<typeof TaskTool>) {
           <Show when={props.metadata.sessionId}>
             <text fg={theme.text}>
               {keybind.print("session_child_cycle")}
-              <span style={{ fg: theme.textMuted }}> view subagents</span>
+              <span style={{ fg: theme.textMuted }}> view child sessions</span>
             </text>
           </Show>
         </BlockTool>
       </Match>
       <Match when={true}>
-        <InlineTool icon="#" pending="Delegating..." complete={props.input.subagent_type} part={props.part}>
-          {props.input.subagent_type} Task {props.input.description}
+        <InlineTool icon="#" pending="Delegating..." complete={props.input.agent} part={props.part}>
+          {props.input.agent} Task {props.input.description}
         </InlineTool>
       </Match>
     </Switch>

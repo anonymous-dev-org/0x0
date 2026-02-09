@@ -9065,10 +9065,10 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["subagent", "primary", "all"]
+            "enum": ["primary", "all"]
           },
           "hidden": {
-            "description": "Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)",
+            "description": "Hide this agent from the @ autocomplete menu (default: false)",
             "type": "boolean"
           },
           "options": {
@@ -10845,7 +10845,7 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["subagent", "primary", "all"]
+            "enum": ["primary", "all"]
           },
           "native": {
             "type": "boolean"

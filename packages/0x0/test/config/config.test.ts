@@ -432,7 +432,7 @@ test("loads agents from .zeroxzero/agents (plural)", async () => {
         path.join(agentsDir, "helper.md"),
         `---
 model: test/model
-mode: subagent
+mode: all
 ---
 Helper agent prompt`,
       )
@@ -441,7 +441,7 @@ Helper agent prompt`,
         path.join(agentsDir, "nested", "child.md"),
         `---
 model: test/model
-mode: subagent
+mode: all
 ---
 Nested agent prompt`,
       )
@@ -456,14 +456,14 @@ Nested agent prompt`,
       expect(config.agent?.["helper"]).toMatchObject({
         name: "helper",
         model: "test/model",
-        mode: "subagent",
+        mode: "all",
         prompt: "Helper agent prompt",
       })
 
       expect(config.agent?.["nested/child"]).toMatchObject({
         name: "nested/child",
         model: "test/model",
-        mode: "subagent",
+        mode: "all",
         prompt: "Nested agent prompt",
       })
     },
@@ -745,7 +745,7 @@ test("merges plugin arrays from global and local configs", async () => {
   })
 })
 
-test("does not error when only custom agent is a subagent", async () => {
+test("loads custom agent with mode all", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       const zeroxzero = path.join(dir, ".zeroxzero")
@@ -757,9 +757,9 @@ test("does not error when only custom agent is a subagent", async () => {
         path.join(agentDir, "helper.md"),
         `---
 model: test/model
-mode: subagent
+mode: all
 ---
-Helper subagent prompt`,
+Helper agent prompt`,
       )
     },
   })
@@ -770,8 +770,8 @@ Helper subagent prompt`,
       expect(config.agent?.["helper"]).toMatchObject({
         name: "helper",
         model: "test/model",
-        mode: "subagent",
-        prompt: "Helper subagent prompt",
+        mode: "all",
+        prompt: "Helper agent prompt",
       })
     },
   })

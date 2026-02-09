@@ -11,7 +11,7 @@ import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 
-type AgentMode = "all" | "primary" | "subagent"
+type AgentMode = "all" | "primary"
 
 const AVAILABLE_TOOLS = [
   "bash",
@@ -43,7 +43,7 @@ const AgentCreateCommand = cmd({
       .option("mode", {
         type: "string",
         describe: "agent mode",
-        choices: ["all", "primary", "subagent"] as const,
+        choices: ["all", "primary"] as const,
       })
       .option("tools", {
         type: "string",
@@ -156,17 +156,12 @@ const AgentCreateCommand = cmd({
               {
                 label: "All",
                 value: "all" as const,
-                hint: "Can function in both primary and subagent roles",
+                hint: "Can be used in any agent context",
               },
               {
                 label: "Primary",
                 value: "primary" as const,
-                hint: "Acts as a primary/main agent",
-              },
-              {
-                label: "Subagent",
-                value: "subagent" as const,
-                hint: "Can be used as a subagent by other agents",
+                hint: "Acts as a top-level selectable agent",
               },
             ],
             initialValue: "all" as const,

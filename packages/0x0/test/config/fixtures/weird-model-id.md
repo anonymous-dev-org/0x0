@@ -1,6 +1,6 @@
 ---
 description: General coding and planning agent
-mode: subagent
+mode: all
 model: synthetic/hf:zai-org/GLM-4.7
 tools:
   write: true

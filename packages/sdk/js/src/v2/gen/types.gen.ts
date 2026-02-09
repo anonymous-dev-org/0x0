@@ -1399,9 +1399,9 @@ export type AgentConfig = {
    * Description of when to use the agent
    */
   description?: string
-  mode?: "subagent" | "primary" | "all"
+  mode?: "primary" | "all"
   /**
-   * Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)
+   * Hide this agent from the @ autocomplete menu (default: false)
    */
   hidden?: boolean
   options?: {
@@ -1428,7 +1428,6 @@ export type AgentConfig = {
         [key: string]: boolean
       }
     | boolean
-    | "subagent"
     | "primary"
     | "all"
     | {
@@ -2150,7 +2149,7 @@ export type Command = {
 export type Agent = {
   name: string
   description?: string
-  mode: "subagent" | "primary" | "all"
+  mode: "primary" | "all"
   native?: boolean
   hidden?: boolean
   topP?: number

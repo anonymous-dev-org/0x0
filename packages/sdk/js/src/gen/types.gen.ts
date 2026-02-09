@@ -985,7 +985,7 @@ export type AgentConfig = {
    * Description of when to use the agent
    */
   description?: string
-  mode?: "subagent" | "primary" | "all"
+  mode?: "primary" | "all"
   /**
    * Hex color code for the agent (e.g., #FF5733)
    */
@@ -1013,7 +1013,7 @@ export type AgentConfig = {
         [key: string]: boolean
       }
     | boolean
-    | ("subagent" | "primary" | "all")
+    | ("primary" | "all")
     | number
     | {
         edit?: "ask" | "allow" | "deny"
@@ -1585,7 +1585,7 @@ export type File = {
 export type Agent = {
   name: string
   description?: string
-  mode: "subagent" | "primary" | "all"
+  mode: "primary" | "all"
   builtIn: boolean
   topP?: number
   temperature?: number

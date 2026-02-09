@@ -70,7 +70,7 @@ describe("PermissionNext.evaluate for permission.task", () => {
 describe("PermissionNext.disabled for task tool", () => {
   // Note: The `disabled` function checks if a TOOL should be completely removed from the tool list.
   // It only disables a tool when there's a rule with `pattern: "*"` and `action: "deny"`.
-  // It does NOT evaluate complex subagent patterns - those are handled at runtime by `evaluate`.
+  // It does NOT evaluate complex agent patterns - those are handled at runtime by `evaluate`.
   const createRuleset = (rules: Record<string, "allow" | "deny" | "ask">): PermissionNext.Ruleset =>
     Object.entries(rules).map(([pattern, action]) => ({
       permission: "task",
@@ -80,7 +80,7 @@ describe("PermissionNext.disabled for task tool", () => {
 
   test("task tool is disabled when global deny pattern exists (even with specific allows)", () => {
     // When "*": "deny" exists, the task tool is disabled because the disabled() function
-    // only checks for wildcard deny patterns - it doesn't consider that specific subagents might be allowed
+    // only checks for wildcard deny patterns - it doesn't consider that specific agents might be allowed
     const ruleset = createRuleset({
       "orchestrator-*": "allow",
       "*": "deny",
@@ -108,7 +108,7 @@ describe("PermissionNext.disabled for task tool", () => {
 
   test("task tool is NOT disabled when only specific patterns are denied (no wildcard)", () => {
     // The disabled() function only disables tools when pattern: "*" && action: "deny"
-    // Specific subagent denies don't disable the task tool - those are handled at runtime
+    // Specific agent denies don't disable the task tool - those are handled at runtime
     const ruleset = createRuleset({
       "orchestrator-*": "deny",
       general: "deny",
@@ -310,7 +310,7 @@ describe("permission.task with real config files", () => {
 
         // disabled() uses findLast and checks if the last rule has pattern: "*" with action: "deny"
         // In this case, the last rule is {pattern: "general", action: "allow"}, not pattern: "*"
-        // So the task tool is NOT disabled (even though most subagents are denied)
+        // So the task tool is NOT disabled (even though most agents are denied)
         const disabled = PermissionNext.disabled(["task"], ruleset)
         expect(disabled.has("task")).toBe(false)
       },

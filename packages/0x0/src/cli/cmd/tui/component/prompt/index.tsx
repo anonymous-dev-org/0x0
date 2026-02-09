@@ -146,9 +146,8 @@ export function Prompt(props: PromptProps) {
 
       syncedSessionID = sessionID
 
-      // Only set agent if it's a primary agent (not a subagent)
-      const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
-      if (msg.agent && isPrimaryAgent) {
+      const hasAgent = local.agent.list().some((x) => x.name === msg.agent)
+      if (msg.agent && hasAgent) {
         local.agent.set(msg.agent)
         if (msg.model) local.model.set(msg.model)
         if (msg.variant) local.model.variant.set(msg.variant)
@@ -866,6 +865,18 @@ export function Prompt(props: PromptProps) {
                     return
                   }
                 }
+                if (store.mode === "normal" && autocomplete.visible) {
+                  if (keybind.match("agent_cycle", e)) {
+                    local.agent.move(1)
+                    e.preventDefault()
+                    return
+                  }
+                  if (keybind.match("agent_cycle_reverse", e)) {
+                    local.agent.move(-1)
+                    e.preventDefault()
+                    return
+                  }
+                }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
                 if (!autocomplete.visible) {
                   if (
@@ -980,7 +991,7 @@ export function Prompt(props: PromptProps) {
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
+                {store.mode === "shell" ? "Shell" : local.agent.label(local.agent.current().name)}{" "}
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>

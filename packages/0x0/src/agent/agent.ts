@@ -25,7 +25,7 @@ export namespace Agent {
     .object({
       name: z.string(),
       description: z.string().optional(),
-      mode: z.enum(["subagent", "primary", "all"]),
+      mode: z.enum(["primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
       topP: z.number().optional(),
@@ -61,8 +61,6 @@ export namespace Agent {
         ...Object.fromEntries(skillDirs.map((dir) => [path.join(dir, "*"), "allow"])),
       },
       question: "deny",
-      plan_enter: "deny",
-      plan_exit: "deny",
       // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
       read: {
         "*": "allow",
@@ -82,7 +80,6 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
-            plan_enter: "allow",
           }),
           user,
         ),
@@ -97,7 +94,6 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
-            plan_exit: "allow",
             external_directory: {
               [path.join(Global.Path.data, "plans", "*")]: "allow",
             },
@@ -124,7 +120,7 @@ export namespace Agent {
           user,
         ),
         options: {},
-        mode: "subagent",
+        mode: "primary",
         native: true,
       },
       explore: {
@@ -150,7 +146,7 @@ export namespace Agent {
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
         prompt: PROMPT_EXPLORE,
         options: {},
-        mode: "subagent",
+        mode: "primary",
         native: true,
       },
       compaction: {
@@ -269,14 +265,13 @@ export namespace Agent {
     if (cfg.default_agent) {
       const agent = agents[cfg.default_agent]
       if (!agent) throw new Error(`default agent "${cfg.default_agent}" not found`)
-      if (agent.mode === "subagent") throw new Error(`default agent "${cfg.default_agent}" is a subagent`)
       if (agent.hidden === true) throw new Error(`default agent "${cfg.default_agent}" is hidden`)
       return agent.name
     }
 
-    const primaryVisible = Object.values(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
-    if (!primaryVisible) throw new Error("no primary visible agent found")
-    return primaryVisible.name
+    const visible = Object.values(agents).find((a) => a.hidden !== true)
+    if (!visible) throw new Error("no visible agent found")
+    return visible.name
   }
 
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {

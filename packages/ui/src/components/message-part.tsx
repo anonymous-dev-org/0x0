@@ -217,7 +217,7 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
     case "task":
       return {
         icon: "task",
-        title: i18n.t("ui.tool.agent", { type: input.subagent_type || "task" }),
+        title: i18n.t("ui.tool.agent", { type: input.agent || "task" }),
         subtitle: input.description,
       }
     case "bash":
@@ -965,7 +965,7 @@ ToolRegistry.register({
                     icon="task"
                     defaultOpen={true}
                     trigger={{
-                      title: i18n.t("ui.tool.agent", { type: props.input.subagent_type || props.tool }),
+                      title: i18n.t("ui.tool.agent", { type: props.input.agent || props.tool }),
                       titleClass: "capitalize",
                       subtitle: props.input.description,
                     }}
@@ -995,7 +995,7 @@ ToolRegistry.register({
               icon="task"
               defaultOpen={true}
               trigger={{
-                title: i18n.t("ui.tool.agent", { type: props.input.subagent_type || props.tool }),
+                title: i18n.t("ui.tool.agent", { type: props.input.agent || props.tool }),
                 titleClass: "capitalize",
                 subtitle: props.input.description,
               }}

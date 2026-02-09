@@ -589,17 +589,12 @@ async function resolveAgent(): Promise<string | undefined> {
   const envAgent = useEnvAgent()
   if (!envAgent) return undefined
 
-  // Validate the agent exists and is a primary agent
+  // Validate the agent exists
   const agents = await client.agent.list<true>()
   const agent = agents.data?.find((a) => a.name === envAgent)
 
   if (!agent) {
     console.warn(`agent "${envAgent}" not found. Falling back to default agent`)
-    return undefined
-  }
-
-  if (agent.mode === "subagent") {
-    console.warn(`agent "${envAgent}" is a subagent, not a primary agent. Falling back to default agent`)
     return undefined
   }
 

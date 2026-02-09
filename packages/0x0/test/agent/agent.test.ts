@@ -66,7 +66,7 @@ test("explore agent denies edit and write", async () => {
     fn: async () => {
       const explore = await Agent.get("explore")
       expect(explore).toBeDefined()
-      expect(explore?.mode).toBe("subagent")
+      expect(explore?.mode).toBe("primary")
       expect(evalPerm(explore, "edit")).toBe("deny")
       expect(evalPerm(explore, "write")).toBe("deny")
       expect(evalPerm(explore, "todoread")).toBe("deny")
@@ -82,7 +82,7 @@ test("general agent denies todo tools", async () => {
     fn: async () => {
       const general = await Agent.get("general")
       expect(general).toBeDefined()
-      expect(general?.mode).toBe("subagent")
+      expect(general?.mode).toBe("primary")
       expect(general?.hidden).toBeUndefined()
       expect(evalPerm(general, "todoread")).toBe("deny")
       expect(evalPerm(general, "todowrite")).toBe("deny")
@@ -348,7 +348,7 @@ test("multiple custom agents can be defined", async () => {
       agent: {
         agent_a: {
           description: "Agent A",
-          mode: "subagent",
+          mode: "all",
         },
         agent_b: {
           description: "Agent B",
@@ -363,7 +363,7 @@ test("multiple custom agents can be defined", async () => {
       const agentA = await Agent.get("agent_a")
       const agentB = await Agent.get("agent_b")
       expect(agentA?.description).toBe("Agent A")
-      expect(agentA?.mode).toBe("subagent")
+      expect(agentA?.mode).toBe("all")
       expect(agentB?.description).toBe("Agent B")
       expect(agentB?.mode).toBe("primary")
     },
@@ -596,7 +596,7 @@ test("defaultAgent respects default_agent config set to custom agent with mode a
   })
 })
 
-test("defaultAgent throws when default_agent points to subagent", async () => {
+test("defaultAgent allows default_agent explore", async () => {
   await using tmp = await tmpdir({
     config: {
       default_agent: "explore",
@@ -605,7 +605,7 @@ test("defaultAgent throws when default_agent points to subagent", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(Agent.defaultAgent()).rejects.toThrow('default agent "explore" is a subagent')
+      await expect(Agent.defaultAgent()).resolves.toBe("explore")
     },
   })
 })
@@ -650,13 +650,13 @@ test("defaultAgent returns plan when build is disabled and default_agent not set
     directory: tmp.path,
     fn: async () => {
       const agent = await Agent.defaultAgent()
-      // build is disabled, so it should return plan (next primary agent)
+      // build is disabled, so it should return plan (next visible agent)
       expect(agent).toBe("plan")
     },
   })
 })
 
-test("defaultAgent throws when all primary agents are disabled", async () => {
+test("defaultAgent falls back to first visible agent when build and plan are disabled", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
@@ -668,8 +668,8 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build and plan are disabled, no primary-capable agents remain
-      await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
+      // build and plan are disabled, so the first remaining visible agent is used
+      await expect(Agent.defaultAgent()).resolves.toBe("general")
     },
   })
 })

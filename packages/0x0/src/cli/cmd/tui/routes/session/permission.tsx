@@ -147,11 +147,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           body={
             <Switch>
               <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
-                <TextBody title={"This will allow " + props.request.permission + " until Terminal Agent is restarted."} />
+                <TextBody
+                  title={"This will allow " + props.request.permission + " until Terminal Agent is restarted."}
+                />
               </Match>
               <Match when={true}>
                 <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>This will allow the following patterns until Terminal Agent is restarted</text>
+                  <text fg={theme.textMuted}>
+                    This will allow the following patterns until Terminal Agent is restarted
+                  </text>
                   <box>
                     <For each={props.request.always}>
                       {(pattern) => (
@@ -224,7 +228,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   <Match when={props.request.permission === "task"}>
                     <TextBody
                       icon="#"
-                      title={`${Locale.titlecase((input().subagent_type as string) ?? "Unknown")} Task`}
+                      title={`${Locale.titlecase((input().agent as string) ?? "Unknown")} Task`}
                       description={"◉ " + input().description}
                     />
                   </Match>

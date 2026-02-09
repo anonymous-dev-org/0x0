@@ -12,6 +12,7 @@ import { Provider } from "@/provider/provider"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
+import { Locale } from "@/util/locale"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -34,7 +35,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const agent = iife(() => {
-      const agents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden))
+      const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
       const visibleAgents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
       const [agentStore, setAgentStore] = createStore<{
         current: string
@@ -75,6 +76,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             const value = agents()[next]
             setAgentStore("current", value.name)
           })
+        },
+        label(name: string) {
+          if (name === "build") return "Builder"
+          if (name === "plan") return "Planner"
+          return Locale.titlecase(name)
         },
         color(name: string) {
           const index = visibleAgents().findIndex((x) => x.name === name)

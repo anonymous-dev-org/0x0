@@ -167,7 +167,7 @@ function websearch(info: ToolProps<typeof WebSearchTool>) {
 }
 
 function task(info: ToolProps<typeof TaskTool>) {
-  const agent = Locale.titlecase(info.input.subagent_type)
+  const agent = Locale.titlecase(info.input.agent)
   const desc = info.input.description
   const started = info.part.state.status === "running"
   const name = desc ?? `${agent} Task`
@@ -337,16 +337,6 @@ export const RunCommand = cmd({
     const rules: PermissionNext.Ruleset = [
       {
         permission: "question",
-        action: "deny",
-        pattern: "*",
-      },
-      {
-        permission: "plan_enter",
-        action: "deny",
-        pattern: "*",
-      },
-      {
-        permission: "plan_exit",
         action: "deny",
         pattern: "*",
       },
@@ -534,14 +524,6 @@ export const RunCommand = cmd({
             UI.Style.TEXT_WARNING_BOLD + "!",
             UI.Style.TEXT_NORMAL,
             `agent "${args.agent}" not found. Falling back to default agent`,
-          )
-          return undefined
-        }
-        if (entry.mode === "subagent") {
-          UI.println(
-            UI.Style.TEXT_WARNING_BOLD + "!",
-            UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
           )
           return undefined
         }

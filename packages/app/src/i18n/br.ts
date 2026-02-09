@@ -669,7 +669,7 @@ export const dict = {
   "settings.permissions.tool.bash.title": "Bash",
   "settings.permissions.tool.bash.description": "Executar comandos shell",
   "settings.permissions.tool.task.title": "Tarefa",
-  "settings.permissions.tool.task.description": "Lançar sub-agentes",
+  "settings.permissions.tool.task.description": "Lançar agentes",
   "settings.permissions.tool.skill.title": "Habilidade",
   "settings.permissions.tool.skill.description": "Carregar uma habilidade por nome",
   "settings.permissions.tool.lsp.title": "LSP",
