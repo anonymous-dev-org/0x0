@@ -941,13 +941,24 @@ export namespace Config {
     .object({
       system: z
         .object({
+          base: z.string().optional().describe("Override shared base system prompt"),
           codex_instructions: z.string().optional().describe("Override Codex instructions header"),
-          gpt5: z.string().optional().describe("Override default system prompt for gpt-5 models"),
-          openai: z.string().optional().describe("Override default system prompt for gpt/o1/o3 models"),
-          gemini: z.string().optional().describe("Override default system prompt for Gemini models"),
-          claude: z.string().optional().describe("Override default system prompt for Claude models"),
-          trinity: z.string().optional().describe("Override default system prompt for Trinity models"),
-          fallback: z.string().optional().describe("Override fallback system prompt for other models"),
+          gpt5: z.string().optional().describe("@deprecated Use prompt.models.gpt5"),
+          openai: z.string().optional().describe("@deprecated Use prompt.models.openai"),
+          gemini: z.string().optional().describe("@deprecated Use prompt.models.gemini"),
+          claude: z.string().optional().describe("@deprecated Use prompt.models.claude"),
+          trinity: z.string().optional().describe("@deprecated Use prompt.models.trinity"),
+          fallback: z.string().optional().describe("@deprecated Use prompt.models.fallback"),
+        })
+        .optional(),
+      models: z
+        .object({
+          gpt5: z.string().optional().describe("Override model prompt for gpt-5 models"),
+          openai: z.string().optional().describe("Override model prompt for gpt/o1/o3 models"),
+          gemini: z.string().optional().describe("Override model prompt for Gemini models"),
+          claude: z.string().optional().describe("Override model prompt for Claude models"),
+          trinity: z.string().optional().describe("Override model prompt for Trinity models"),
+          fallback: z.string().optional().describe("Override fallback model prompt for other models"),
         })
         .optional(),
       reminder: z

@@ -22,4 +22,47 @@ describe("session.system", () => {
       },
     })
   })
+
+  test("supports distinct base and model overrides", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        prompt: {
+          system: {
+            base: "BASE_PROMPT",
+          },
+          models: {
+            claude: "CLAUDE_MODEL",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = { api: { id: "claude-3-5-sonnet-20241022" } } as Provider.Model
+        const parts = await SystemPrompt.compose({ model, agent: "AGENT_LAYER" })
+        expect(parts[0]).toBe("BASE_PROMPT")
+        expect(parts[1]).toBe("AGENT_LAYER")
+        expect(parts[2]).toBe("CLAUDE_MODEL")
+      },
+    })
+  })
+
+  test("does not append model prompt for gpt-5 by default", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = { api: { id: "gpt-5" } } as Provider.Model
+        const parts = await SystemPrompt.compose({ model, agent: "AGENT_LAYER" })
+
+        expect(parts[0]).toBe(await SystemPrompt.instructions())
+        expect(parts[1]).toBe("AGENT_LAYER")
+        expect(parts[2]).toBeUndefined()
+      },
+    })
+  })
 })

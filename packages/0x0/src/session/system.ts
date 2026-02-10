@@ -15,24 +15,26 @@ import { Config } from "@/config/config"
 export namespace SystemPrompt {
   export async function instructions() {
     const config = await Config.get()
-    return (config.prompt?.system?.codex_instructions ?? PROMPT_CODEX).trim()
+    const system = config.prompt?.system
+    return (system?.base ?? system?.codex_instructions ?? PROMPT_CODEX).trim()
   }
 
-  export async function model(model: Provider.Model) {
+  export async function models(model: Provider.Model) {
     const config = await Config.get()
     const system = config.prompt?.system
-    if (model.api.id.includes("gpt-5")) return [system?.gpt5 ?? PROMPT_CODEX]
+    const models = config.prompt?.models
+    if (model.api.id.includes("gpt-5")) return [models?.gpt5 ?? system?.gpt5 ?? ""]
     if (model.api.id.includes("gpt-") || model.api.id.includes("o1") || model.api.id.includes("o3"))
-      return [system?.openai ?? PROMPT_BEAST]
-    if (model.api.id.includes("gemini-")) return [system?.gemini ?? PROMPT_GEMINI]
-    if (model.api.id.includes("claude")) return [system?.claude ?? PROMPT_ANTHROPIC]
-    if (model.api.id.toLowerCase().includes("trinity")) return [system?.trinity ?? PROMPT_TRINITY]
-    return [system?.fallback ?? PROMPT_ANTHROPIC_WITHOUT_TODO]
+      return [models?.openai ?? system?.openai ?? PROMPT_BEAST]
+    if (model.api.id.includes("gemini-")) return [models?.gemini ?? system?.gemini ?? PROMPT_GEMINI]
+    if (model.api.id.includes("claude")) return [models?.claude ?? system?.claude ?? PROMPT_ANTHROPIC]
+    if (model.api.id.toLowerCase().includes("trinity")) return [models?.trinity ?? system?.trinity ?? PROMPT_TRINITY]
+    return [models?.fallback ?? system?.fallback ?? PROMPT_ANTHROPIC_WITHOUT_TODO]
   }
 
   export async function compose(input: { model: Provider.Model; agent?: string }) {
     const seen = new Set<string>()
-    return [await instructions(), input.agent, ...(await model(input.model))].filter((item): item is string => {
+    return [await instructions(), input.agent, ...(await models(input.model))].filter((item): item is string => {
       if (!item) return false
       const key = item.trim()
       if (seen.has(key)) return false
@@ -41,7 +43,8 @@ export namespace SystemPrompt {
     })
   }
 
-  export const provider = model
+  export const model = models
+  export const provider = models
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project
