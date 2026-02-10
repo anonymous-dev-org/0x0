@@ -1,4 +1,4 @@
-import { createEffect, createMemo, Show, type ParentProps } from "solid-js"
+import { createEffect, Show, type ParentProps } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { SyncProvider, useSync } from "@/context/sync"
@@ -15,9 +15,7 @@ export default function Layout(props: ParentProps) {
   const params = useParams()
   const navigate = useNavigate()
   const language = useLanguage()
-  const directory = createMemo(() => {
-    return decode64(params.dir) ?? ""
-  })
+  const directory = () => decode64(params.dir) ?? ""
 
   createEffect(() => {
     if (!params.dir) return

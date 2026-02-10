@@ -55,7 +55,7 @@ export function DialogConnectProvider(props: { provider: string }) {
     error: undefined as string | undefined,
   })
 
-  const method = createMemo(() => (store.methodIndex !== undefined ? methods().at(store.methodIndex!) : undefined))
+  const method = () => (store.methodIndex !== undefined ? methods().at(store.methodIndex!) : undefined)
 
   const methodLabel = (value?: { type?: string; label?: string }) => {
     if (!value) return ""
@@ -385,13 +385,13 @@ export function DialogConnectProvider(props: { provider: string }) {
                 </Match>
                 <Match when={store.authorization?.method === "auto"}>
                   {iife(() => {
-                    const code = createMemo(() => {
+                    const code = () => {
                       const instructions = store.authorization?.instructions
                       if (instructions?.includes(":")) {
                         return instructions?.split(":")[1]?.trim()
                       }
                       return instructions
-                    })
+                    }
 
                     onMount(() => {
                       void (async () => {

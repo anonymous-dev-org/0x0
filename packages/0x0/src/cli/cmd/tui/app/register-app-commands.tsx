@@ -1,12 +1,6 @@
 import { useRenderer } from "@opentui/solid"
-import { DialogProvider as DialogProviderList } from "@tui/component/dialog-provider"
 import { useCommandDialog } from "@tui/component/dialog-command"
-import { DialogAgent } from "@tui/component/dialog-agent"
-import { DialogModel, useConnected } from "@tui/component/dialog-model"
-import { DialogMcp } from "@tui/component/dialog-mcp"
-import { DialogStatus } from "@tui/component/dialog-status"
-import { DialogThemeList } from "@tui/component/dialog-theme-list"
-import { DialogSessionList } from "@tui/component/dialog-session-list"
+import { useConnected } from "@tui/component/dialog-model"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "@tui/ui/dialog"
@@ -15,11 +9,10 @@ import type { RouteContext } from "../context/route"
 import { usePromptRef } from "../context/prompt"
 import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
-import { DialogHelp } from "../ui/dialog-help"
 import { useExit } from "../context/exit"
-import type { Accessor, Setter } from "solid-js"
-import open from "open"
-import { writeHeapSnapshot } from "v8"
+import type { Accessor, Component, Setter } from "solid-js"
+
+type Loader<T> = () => Promise<T>
 
 export function registerAppCommands(props: {
   command: ReturnType<typeof useCommandDialog>
@@ -39,6 +32,34 @@ export function registerAppCommands(props: {
   terminalTitleEnabled: Accessor<boolean>
   toast: ReturnType<typeof useToast>
 }) {
+  const load = {
+    session: () => import("@tui/component/dialog-session-list").then((x) => x.DialogSessionList),
+    model: () => import("@tui/component/dialog-model").then((x) => x.DialogModel),
+    agent: () => import("@tui/component/dialog-agent").then((x) => x.DialogAgent),
+    mcp: () => import("@tui/component/dialog-mcp").then((x) => x.DialogMcp),
+    provider: () => import("@tui/component/dialog-provider").then((x) => x.DialogProvider),
+    status: () => import("@tui/component/dialog-status").then((x) => x.DialogStatus),
+    theme: () => import("@tui/component/dialog-theme-list").then((x) => x.DialogThemeList),
+    help: () => import("../ui/dialog-help").then((x) => x.DialogHelp),
+    open: () => import("open").then((x) => x.default),
+    heap: () => import("v8").then((x) => x.writeHeapSnapshot),
+  }
+
+  const show = (name: string, input: Loader<Component>) => async () => {
+    const Dialog = await input().catch((error) => {
+      console.error(`failed to load ${name} dialog`, error)
+      return undefined
+    })
+    if (!Dialog) {
+      props.toast.show({
+        variant: "error",
+        message: `Failed to open ${name}`,
+      })
+      return
+    }
+    props.dialog.replace(() => <Dialog />)
+  }
+
   props.command.register(() => [
     {
       title: "Switch session",
@@ -50,9 +71,7 @@ export function registerAppCommands(props: {
         name: "sessions",
         aliases: ["resume", "continue"],
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogSessionList />)
-      },
+      onSelect: show("sessions", load.session),
     },
     {
       title: "New session",
@@ -92,9 +111,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "models",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogModel />)
-      },
+      onSelect: show("models", load.model),
     },
     {
       title: "Model cycle",
@@ -144,9 +161,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "agents",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogAgent />)
-      },
+      onSelect: show("agents", load.agent),
     },
     {
       title: "Toggle MCPs",
@@ -155,9 +170,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "mcps",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogMcp />)
-      },
+      onSelect: show("MCP servers", load.mcp),
     },
     {
       title: "Agent cycle",
@@ -196,9 +209,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "connect",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogProviderList />)
-      },
+      onSelect: show("provider connection", load.provider),
       category: "Provider",
     },
     {
@@ -208,9 +219,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "status",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogStatus />)
-      },
+      onSelect: show("status", load.status),
       category: "System",
     },
     {
@@ -220,9 +229,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "themes",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogThemeList />)
-      },
+      onSelect: show("themes", load.theme),
       category: "System",
     },
     {
@@ -240,16 +247,32 @@ export function registerAppCommands(props: {
       slash: {
         name: "help",
       },
-      onSelect: () => {
-        props.dialog.replace(() => <DialogHelp />)
-      },
+      onSelect: show("help", load.help),
       category: "System",
     },
     {
       title: "Open docs",
       value: "docs.open",
-      onSelect: () => {
-        open("https://zeroxzero.ai/docs").catch(() => {})
+      onSelect: async () => {
+        const open = await load.open().catch((error) => {
+          console.error("failed to load open module", error)
+          return undefined
+        })
+        if (!open) {
+          props.toast.show({
+            variant: "error",
+            message: "Failed to open docs",
+          })
+          props.dialog.clear()
+          return
+        }
+        await open("https://zeroxzero.ai/docs").catch((error) => {
+          console.error("failed to open docs", error)
+          props.toast.show({
+            variant: "error",
+            message: "Failed to open docs",
+          })
+        })
         props.dialog.clear()
       },
       category: "System",
@@ -286,7 +309,19 @@ export function registerAppCommands(props: {
       title: "Write heap snapshot",
       category: "System",
       value: "app.heap_snapshot",
-      onSelect: (dialog) => {
+      onSelect: async (dialog) => {
+        const writeHeapSnapshot = await load.heap().catch((error) => {
+          console.error("failed to load heap snapshot module", error)
+          return undefined
+        })
+        if (!writeHeapSnapshot) {
+          props.toast.show({
+            variant: "error",
+            message: "Failed to write heap snapshot",
+          })
+          dialog.clear()
+          return
+        }
         const path = writeHeapSnapshot()
         props.toast.show({
           variant: "info",

@@ -47,7 +47,7 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const filesOnly = () => props.mode === "files"
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const sessionKey = () => `${params.dir}${params.id ? "/" + params.id : ""}`
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
   const state = { cleanup: undefined as (() => void) | void, committed: false }
@@ -62,12 +62,12 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
   ]
   const limit = 5
 
-  const allowed = createMemo(() => {
+  const allowed = () => {
     if (filesOnly()) return []
     return command.options.filter(
       (option) => !option.disabled && !option.id.startsWith("suggested.") && option.id !== "file.open",
     )
-  })
+  }
 
   const commandItem = (option: CommandOption): Entry => ({
     id: "command:" + option.id,
@@ -87,13 +87,13 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
     path,
   })
 
-  const projectDirectory = createMemo(() => decode64(params.dir) ?? "")
-  const project = createMemo(() => {
+  const projectDirectory = () => decode64(params.dir) ?? ""
+  const project = () => {
     const directory = projectDirectory()
     if (!directory) return
     return layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory))
-  })
-  const workspaces = createMemo(() => {
+  }
+  const workspaces = () => {
     const directory = projectDirectory()
     const current = project()
     if (!current) return directory ? [directory] : []
@@ -101,8 +101,8 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
     const dirs = [current.worktree, ...(current.sandboxes ?? [])]
     if (directory && !dirs.includes(directory)) return [...dirs, directory]
     return dirs
-  })
-  const homedir = createMemo(() => globalSync.data.path.home)
+  }
+  const homedir = () => globalSync.data.path.home
   const label = (directory: string) => {
     const current = project()
     const kind =
@@ -135,18 +135,18 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
     updated: input.updated,
   })
 
-  const list = createMemo(() => allowed().map(commandItem))
+  const list = () => allowed().map(commandItem)
 
-  const picks = createMemo(() => {
+  const picks = () => {
     const all = allowed()
     const order = new Map(common.map((id, index) => [id, index]))
     const picked = all.filter((option) => order.has(option.id))
     const base = picked.length ? picked : all.slice(0, limit)
     const sorted = picked.length ? [...base].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)) : base
     return sorted.map(commandItem)
-  })
+  }
 
-  const recent = createMemo(() => {
+  const recent = () => {
     const all = tabs().all()
     const active = tabs().active()
     const order = active ? [active, ...all.filter((item) => item !== active)] : all
@@ -162,16 +162,16 @@ export function DialogSelectFile(props: { mode?: DialogSelectFileMode; onOpenFil
     }
 
     return items.slice(0, limit)
-  })
+  }
 
-  const root = createMemo(() => {
+  const root = () => {
     const nodes = file.tree.children("")
     const paths = nodes
       .filter((node) => node.type === "file")
       .map((node) => node.path)
       .sort((a, b) => a.localeCompare(b))
     return paths.slice(0, limit).map(fileItem)
-  })
+  }
 
   const unique = (items: Entry[]) => {
     const seen = new Set<string>()

@@ -1,4 +1,4 @@
-import { createMemo, For, Show, type Accessor, type JSX } from "solid-js"
+import { For, Show, type Accessor, type JSX } from "solid-js"
 import {
   DragDropProvider,
   DragDropSensors,
@@ -33,7 +33,7 @@ export const SidebarContent = (props: {
   onOpenHelp: () => void
   renderPanel: () => JSX.Element
 }): JSX.Element => {
-  const expanded = createMemo(() => sidebarExpanded(props.mobile, props.opened()))
+  const expanded = () => sidebarExpanded(props.mobile, props.opened())
 
   return (
     <div class="flex h-full w-full overflow-hidden">

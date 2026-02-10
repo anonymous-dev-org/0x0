@@ -1,4 +1,4 @@
-import { Component, createMemo, type JSX } from "solid-js"
+import { Component, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@0x0-ai/ui/button"
 import { Select } from "@0x0-ai/ui/select"
@@ -94,22 +94,19 @@ export const SettingsGeneral: Component = () => {
       .finally(() => setStore("checking", false))
   }
 
-  const themeOptions = createMemo(() =>
-    Object.entries(theme.themes()).map(([id, def]) => ({ id, name: def.name ?? id })),
-  )
+  const themeOptions = () => Object.entries(theme.themes()).map(([id, def]) => ({ id, name: def.name ?? id }))
 
-  const colorSchemeOptions = createMemo((): { value: ColorScheme; label: string }[] => [
+  const colorSchemeOptions = (): { value: ColorScheme; label: string }[] => [
     { value: "system", label: language.t("theme.scheme.system") },
     { value: "light", label: language.t("theme.scheme.light") },
     { value: "dark", label: language.t("theme.scheme.dark") },
-  ])
+  ]
 
-  const languageOptions = createMemo(() =>
+  const languageOptions = () =>
     language.locales.map((locale) => ({
       value: locale,
       label: language.label(locale),
-    })),
-  )
+    }))
 
   const fontOptions = [
     { value: "ibm-plex-mono", label: "font.option.ibmPlexMono" },

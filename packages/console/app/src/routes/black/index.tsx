@@ -1,6 +1,6 @@
 import { A, useSearchParams } from "@solidjs/router"
 import { Title } from "@solidjs/meta"
-import { createMemo, createSignal, For, Match, onMount, Show, Switch } from "solid-js"
+import { createSignal, For, Match, onMount, Show, Switch } from "solid-js"
 import { PlanIcon, plans } from "./common"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
@@ -11,7 +11,7 @@ export default function Black() {
   const language = useLanguage()
   const [selected, setSelected] = createSignal<string | null>((params.plan as string) || null)
   const [mounted, setMounted] = createSignal(false)
-  const selectedPlan = createMemo(() => plans.find((p) => p.id === selected()))
+  const selectedPlan = () => plans.find((p) => p.id === selected())
 
   onMount(() => {
     requestAnimationFrame(() => setMounted(true))

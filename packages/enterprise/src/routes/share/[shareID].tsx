@@ -184,7 +184,7 @@ export default function () {
         {(data) => {
           const match = createMemo(() => Binary.search(data().session, data().sessionID, (s) => s.id))
           if (!match().found) throw new Error(`Session ${data().sessionID} not found`)
-          const info = createMemo(() => data().session[match().index])
+          const info = () => data().session[match().index]
           const ogImage = createMemo(() => {
             const models = new Set<string>()
             const messages = data().message[data().sessionID] ?? []
@@ -233,10 +233,9 @@ export default function () {
                               )
                             : [],
                         )
-                        const firstUserMessage = createMemo(() => messages().at(0))
-                        const activeMessage = createMemo(
-                          () => messages().find((m) => m.id === store.messageId) ?? firstUserMessage(),
-                        )
+                        const firstUserMessage = () => messages().at(0)
+                        const activeMessage = () =>
+                          messages().find((m) => m.id === store.messageId) ?? firstUserMessage()
                         function setActiveMessage(message: UserMessage | undefined) {
                           if (message) {
                             setStore("messageId", message.id)
@@ -244,9 +243,9 @@ export default function () {
                             setStore("messageId", undefined)
                           }
                         }
-                        const provider = createMemo(() => activeMessage()?.model?.providerID)
-                        const modelID = createMemo(() => activeMessage()?.model?.modelID)
-                        const model = createMemo(() => data().model[data().sessionID]?.find((m) => m.id === modelID()))
+                        const provider = () => activeMessage()?.model?.providerID
+                        const modelID = () => activeMessage()?.model?.modelID
+                        const model = () => data().model[data().sessionID]?.find((m) => m.id === modelID())
                         const diffs = createMemo(() => {
                           const diffs = data().session_diff[data().sessionID] ?? []
                           const preloaded = data().session_diff_preload[data().sessionID] ?? []
@@ -315,7 +314,7 @@ export default function () {
                           </div>
                         )
 
-                        const wide = createMemo(() => diffs().length === 0)
+                        const wide = () => diffs().length === 0
 
                         return (
                           <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">

@@ -1,4 +1,4 @@
-import { type ComponentProps, createMemo, splitProps } from "solid-js"
+import { type ComponentProps, splitProps } from "solid-js"
 
 export interface ProgressCircleProps extends Pick<ComponentProps<"svg">, "class" | "classList"> {
   percentage: number
@@ -15,13 +15,13 @@ export function ProgressCircle(props: ProgressCircleProps) {
   const viewBoxSize = 16
   const center = viewBoxSize / 2
   const radius = () => center - strokeWidth() / 2
-  const circumference = createMemo(() => 2 * Math.PI * radius())
+  const circumference = () => 2 * Math.PI * radius()
 
-  const offset = createMemo(() => {
+  const offset = () => {
     const clampedPercentage = Math.max(0, Math.min(100, split.percentage || 0))
     const progress = clampedPercentage / 100
     return circumference() * (1 - progress)
-  })
+  }
 
   return (
     <svg

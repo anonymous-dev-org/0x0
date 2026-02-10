@@ -10,39 +10,12 @@ import { SplitBorder } from "../../component/border"
 import { useSync } from "../../context/sync"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import path from "path"
-import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
-import { Global } from "@/global"
 import { useDialog } from "../../ui/dialog"
+import { filetype, normalizePath } from "./session-tool-format"
 
 type PermissionStage = "permission" | "always" | "reject"
-
-function normalizePath(input?: string) {
-  if (!input) return ""
-
-  const cwd = process.cwd()
-  const home = Global.Path.home
-  const absolute = path.isAbsolute(input) ? input : path.resolve(cwd, input)
-  const relative = path.relative(cwd, absolute)
-
-  if (!relative) return "."
-  if (!relative.startsWith("..")) return relative
-
-  // outside cwd - use ~ or absolute
-  if (home && (absolute === home || absolute.startsWith(home + path.sep))) {
-    return absolute.replace(home, "~")
-  }
-  return absolute
-}
-
-function filetype(input?: string) {
-  if (!input) return "none"
-  const ext = path.extname(input)
-  const language = LANGUAGE_EXTENSIONS[ext]
-  if (["typescriptreact", "javascriptreact", "javascript"].includes(language)) return "typescript"
-  return language
-}
 
 function EditBody(props: { request: PermissionRequest }) {
   const themeState = useTheme()
@@ -51,16 +24,16 @@ function EditBody(props: { request: PermissionRequest }) {
   const sync = useSync()
   const dimensions = useTerminalDimensions()
 
-  const filepath = createMemo(() => (props.request.metadata?.filepath as string) ?? "")
-  const diff = createMemo(() => (props.request.metadata?.diff as string) ?? "")
+  const filepath = () => (props.request.metadata?.filepath as string) ?? ""
+  const diff = () => (props.request.metadata?.diff as string) ?? ""
 
-  const view = createMemo(() => {
+  const view = () => {
     const diffStyle = sync.data.config.tui?.diff_style
     if (diffStyle === "stacked") return "unified"
     return dimensions().width > 120 ? "split" : "unified"
-  })
+  }
 
-  const ft = createMemo(() => filetype(filepath()))
+  const ft = () => filetype(filepath())
 
   return (
     <box flexDirection="column" gap={1}>
@@ -123,7 +96,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     stage: "permission" as PermissionStage,
   })
 
-  const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
+  const session = () => sync.data.session.find((s) => s.id === props.request.sessionID)
 
   const input = createMemo(() => {
     const tool = props.request.tool
@@ -308,7 +281,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const keybind = useKeybind()
   const textareaKeybindings = useTextareaKeybindings()
   const dimensions = useTerminalDimensions()
-  const narrow = createMemo(() => dimensions().width < 80)
+  const narrow = () => dimensions().width < 80
   const dialog = useDialog()
 
   useKeyboard((evt) => {
@@ -391,7 +364,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     expanded: false,
   })
   const diffKey = Keybind.parse("ctrl+f")[0]
-  const narrow = createMemo(() => dimensions().width < 80)
+  const narrow = () => dimensions().width < 80
   const dialog = useDialog()
 
   useKeyboard((evt) => {
@@ -428,7 +401,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     }
   })
 
-  const hint = createMemo(() => (store.expanded ? "minimize" : "fullscreen"))
+  const hint = () => (store.expanded ? "minimize" : "fullscreen")
   const renderer = useRenderer()
 
   const content = () => (

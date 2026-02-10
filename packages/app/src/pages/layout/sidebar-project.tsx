@@ -39,7 +39,7 @@ export const ProjectDragOverlay = (props: {
   projects: Accessor<LocalProject[]>
   activeProject: Accessor<string | undefined>
 }): JSX.Element => {
-  const project = createMemo(() => props.projects().find((p) => p.worktree === props.activeProject()))
+  const project = () => props.projects().find((p) => p.worktree === props.activeProject())
   return (
     <Show when={project()}>
       {(p) => (
@@ -59,17 +59,15 @@ export const SortableProject = (props: {
   const globalSync = useGlobalSync()
   const language = useLanguage()
   const sortable = createSortable(props.project.worktree)
-  const selected = createMemo(() =>
-    projectSelected(props.ctx.currentDir(), props.project.worktree, props.project.sandboxes),
-  )
-  const workspaces = createMemo(() => props.ctx.workspaceIds(props.project).slice(0, 2))
-  const workspaceEnabled = createMemo(() => props.ctx.workspacesEnabled(props.project))
+  const selected = () => projectSelected(props.ctx.currentDir(), props.project.worktree, props.project.sandboxes)
+  const workspaces = () => props.ctx.workspaceIds(props.project).slice(0, 2)
+  const workspaceEnabled = () => props.ctx.workspacesEnabled(props.project)
   const [open, setOpen] = createSignal(false)
   const [menu, setMenu] = createSignal(false)
 
-  const preview = createMemo(() => !props.mobile && props.ctx.sidebarOpened())
-  const overlay = createMemo(() => !props.mobile && !props.ctx.sidebarOpened())
-  const active = createMemo(() =>
+  const preview = () => !props.mobile && props.ctx.sidebarOpened()
+  const overlay = () => !props.mobile && !props.ctx.sidebarOpened()
+  const active = () =>
     projectTileActive({
       menu: menu(),
       preview: preview(),
@@ -77,8 +75,7 @@ export const SortableProject = (props: {
       overlay: overlay(),
       hoverProject: props.ctx.hoverProject(),
       worktree: props.project.worktree,
-    }),
-  )
+    })
 
   createEffect(() => {
     if (preview()) return
@@ -232,8 +229,8 @@ export const SortableProject = (props: {
               >
                 <For each={workspaces()}>
                   {(directory) => {
-                    const sessions = createMemo(() => workspaceSessions(directory))
-                    const children = createMemo(() => workspaceChildren(directory))
+                    const sessions = () => workspaceSessions(directory)
+                    const children = () => workspaceChildren(directory)
                     return (
                       <div class="flex flex-col gap-1">
                         <div class="px-2 py-0.5 flex items-center gap-1 min-w-0">

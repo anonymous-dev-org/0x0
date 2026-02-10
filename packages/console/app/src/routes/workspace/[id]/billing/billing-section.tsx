@@ -1,5 +1,5 @@
 import { action, useParams, useAction, createAsync, useSubmission, json } from "@solidjs/router"
-import { createMemo, Match, Show, Switch, createEffect } from "solid-js"
+import { Match, Show, Switch, createEffect } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Billing } from "@0x0-ai/console-core/billing.js"
 import { withActor } from "~/context/auth.withActor"
@@ -48,7 +48,7 @@ export function BillingSection() {
       setStore("addBalanceAmount", info.reloadAmount.toString())
     }
   })
-  const balance = createMemo(() => formatBalance(billingInfo()?.balance ?? 0))
+  const balance = () => formatBalance(billingInfo()?.balance ?? 0)
 
   async function onClickCheckout() {
     const amount = parseInt(store.addBalanceAmount)

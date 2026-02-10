@@ -14,7 +14,7 @@ import copyLogoSvgDark from "../asset/lander/zeroxzero-logo-dark.svg"
 import copyWordmarkSvgLight from "../asset/lander/zeroxzero-wordmark-light.svg"
 import copyWordmarkSvgDark from "../asset/lander/zeroxzero-wordmark-dark.svg"
 import { A, createAsync, useNavigate } from "@solidjs/router"
-import { createMemo, Match, Show, Switch } from "solid-js"
+import { Match, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { github } from "~/lib/github"
 import { createEffect, onCleanup } from "solid-js"
@@ -41,15 +41,14 @@ export function Header(props: { zen?: boolean; hideGetStarted?: boolean }) {
   const i18n = useI18n()
   const language = useLanguage()
   const githubData = createAsync(() => github())
-  const starCount = createMemo(() =>
+  const starCount = () =>
     githubData()?.stars
       ? new Intl.NumberFormat("en-US", {
           notation: "compact",
           compactDisplay: "short",
           maximumFractionDigits: 0,
         }).format(githubData()?.stars!)
-      : config.github.starsFormatted.compact,
-  )
+      : config.github.starsFormatted.compact
 
   const [store, setStore] = createStore({
     mobileMenuOpen: false,

@@ -1,5 +1,4 @@
 import { createAsync } from "@solidjs/router"
-import { createMemo } from "solid-js"
 import { github } from "~/lib/github"
 import { config } from "~/config"
 import { useLanguage } from "~/context/language"
@@ -9,14 +8,13 @@ export function Footer() {
   const language = useLanguage()
   const i18n = useI18n()
   const githubData = createAsync(() => github())
-  const starCount = createMemo(() =>
+  const starCount = () =>
     githubData()?.stars
       ? new Intl.NumberFormat(language.tag(language.locale()), {
           notation: "compact",
           compactDisplay: "short",
         }).format(githubData()!.stars!)
-      : config.github.starsFormatted.compact,
-  )
+      : config.github.starsFormatted.compact
 
   return (
     <footer data-component="footer">

@@ -9,8 +9,8 @@ import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { useKV } from "../context/kv"
-import { createDebouncedSignal } from "../util/signal"
 import { Spinner } from "./spinner"
+import { debounce } from "@solid-primitives/scheduled"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -22,7 +22,8 @@ export function DialogSessionList() {
   const kv = useKV()
 
   const [toDelete, setToDelete] = createSignal<string>()
-  const [search, setSearch] = createDebouncedSignal("", 150)
+  const [search, setSearchValue] = createSignal("")
+  const setSearch = debounce((value: string) => setSearchValue(value), 150)
 
   const [searchResults] = createResource(search, async (query) => {
     if (!query) return undefined
@@ -30,9 +31,9 @@ export function DialogSessionList() {
     return result.data ?? []
   })
 
-  const currentSessionID = createMemo(() => route.data.sessionID || undefined)
+  const currentSessionID = () => route.data.sessionID || undefined
 
-  const sessions = createMemo(() => searchResults() ?? sync.data.session)
+  const sessions = () => searchResults() ?? sync.data.session
 
   const options = createMemo(() => {
     const today = new Date().toDateString()

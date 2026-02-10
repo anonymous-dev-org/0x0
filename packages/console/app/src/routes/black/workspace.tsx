@@ -2,7 +2,7 @@ import { A, createAsync, useNavigate } from "@solidjs/router"
 import "./workspace.css"
 import { Title } from "@solidjs/meta"
 import { github } from "~/lib/github"
-import { createEffect, createMemo, For, onMount } from "solid-js"
+import { createEffect, For, onMount } from "solid-js"
 import { config } from "~/config"
 import { createList } from "solid-list"
 import { useLanguage } from "~/context/language"
@@ -14,14 +14,13 @@ export default function BlackWorkspace() {
   const language = useLanguage()
   const i18n = useI18n()
   const githubData = createAsync(() => github())
-  const starCount = createMemo(() =>
+  const starCount = () =>
     githubData()?.stars
       ? new Intl.NumberFormat(language.tag(language.locale()), {
           notation: "compact",
           compactDisplay: "short",
         }).format(githubData()!.stars!)
-      : config.github.starsFormatted.compact,
-  )
+      : config.github.starsFormatted.compact
 
   // TODO: Frank, replace with real workspaces
   const workspaces = [

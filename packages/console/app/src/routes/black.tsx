@@ -14,14 +14,13 @@ export default function BlackLayout(props: RouteSectionProps) {
   const language = useLanguage()
   const i18n = useI18n()
   const githubData = createAsync(() => github())
-  const starCount = createMemo(() =>
+  const starCount = () =>
     githubData()?.stars
       ? new Intl.NumberFormat(language.tag(language.locale()), {
           notation: "compact",
           compactDisplay: "short",
         }).format(githubData()!.stars!)
-      : config.github.starsFormatted.compact,
-  )
+      : config.github.starsFormatted.compact
 
   const [spotlightAnimationState, setSpotlightAnimationState] = createSignal<SpotlightAnimationState>({
     time: 0,
@@ -53,13 +52,13 @@ export default function BlackLayout(props: RouteSectionProps) {
     }
   })
 
-  const svgLightingStyle = createMemo(() => {
+  const svgLightingStyle = () => {
     const values = svgLightingValues()
     return {
       "--hero-black-glow-intensity": values.glowIntensity.toFixed(3),
       "--hero-black-stroke-brightness": `${values.strokeBrightness.toFixed(0)}%`,
     } as Record<string, string>
-  })
+  }
 
   const handleAnimationFrame = (state: SpotlightAnimationState) => {
     setSpotlightAnimationState(state)

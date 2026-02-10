@@ -1,5 +1,5 @@
 import { Select as Kobalte } from "@kobalte/core/select"
-import { createMemo, onCleanup, splitProps, type ComponentProps, type JSX } from "solid-js"
+import { onCleanup, splitProps, type ComponentProps, type JSX } from "solid-js"
 import { pipe, groupBy, entries, map } from "remeda"
 import { Button, ButtonProps } from "./button"
 import { Icon } from "./icon"
@@ -69,7 +69,7 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
 
   onCleanup(stop)
 
-  const grouped = createMemo(() => {
+  const grouped = () => {
     const result = pipe(
       local.options,
       groupBy((x) => (local.groupBy ? local.groupBy(x) : "")),
@@ -78,7 +78,7 @@ export function Select<T>(props: SelectProps<T> & Omit<ButtonProps, "children">)
       map(([k, v]) => ({ category: k, options: v })),
     )
     return result
-  })
+  }
 
   return (
     // @ts-ignore

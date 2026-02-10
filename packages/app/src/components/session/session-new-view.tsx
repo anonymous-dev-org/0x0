@@ -1,4 +1,4 @@
-import { Show, createMemo } from "solid-js"
+import { Show } from "solid-js"
 import { DateTime } from "luxon"
 import { useSync } from "@/context/sync"
 import { useLanguage } from "@/context/language"
@@ -17,19 +17,19 @@ export function NewSessionView(props: NewSessionViewProps) {
   const sync = useSync()
   const language = useLanguage()
 
-  const sandboxes = createMemo(() => sync.project?.sandboxes ?? [])
-  const options = createMemo(() => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE])
-  const current = createMemo(() => {
+  const sandboxes = () => sync.project?.sandboxes ?? []
+  const options = () => [MAIN_WORKTREE, ...sandboxes(), CREATE_WORKTREE]
+  const current = () => {
     const selection = props.worktree
     if (options().includes(selection)) return selection
     return MAIN_WORKTREE
-  })
-  const projectRoot = createMemo(() => sync.project?.worktree ?? sync.data.path.directory)
-  const isWorktree = createMemo(() => {
+  }
+  const projectRoot = () => sync.project?.worktree ?? sync.data.path.directory
+  const isWorktree = () => {
     const project = sync.project
     if (!project) return false
     return sync.data.path.directory !== project.worktree
-  })
+  }
 
   const label = (value: string) => {
     if (value === MAIN_WORKTREE) {

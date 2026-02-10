@@ -125,26 +125,24 @@ function InlineTool(props: {
   const { theme } = useTheme()
   const sync = useSync()
 
-  const permission = createMemo(() => {
+  const permission = () => {
     const callID = sync.data.permission[props.ctx.sessionID]?.at(0)?.tool?.callID
     if (!callID) return false
     return callID === props.part.callID
-  })
+  }
 
-  const fg = createMemo(() => {
+  const fg = () => {
     if (permission()) return theme.warning
     if (props.complete) return theme.textMuted
     return theme.text
-  })
+  }
 
-  const error = createMemo(() => (props.part.state.status === "error" ? props.part.state.error : undefined))
+  const error = () => (props.part.state.status === "error" ? props.part.state.error : undefined)
 
-  const denied = createMemo(
-    () =>
-      error()?.includes("rejected permission") ||
-      error()?.includes("specified a rule") ||
-      error()?.includes("user dismissed"),
-  )
+  const denied = () =>
+    error()?.includes("rejected permission") ||
+    error()?.includes("specified a rule") ||
+    error()?.includes("user dismissed")
 
   return (
     <box
@@ -195,7 +193,7 @@ function BlockTool(props: {
   const { theme } = useTheme()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
-  const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  const error = () => (props.part?.state.status === "error" ? props.part.state.error : undefined)
   return (
     <box
       border={["left"]}
@@ -235,17 +233,17 @@ function BlockTool(props: {
 function Bash(props: ToolProps<typeof BashTool>) {
   const { theme } = useTheme()
   const sync = useSync()
-  const isRunning = createMemo(() => props.part.state.status === "running")
-  const output = createMemo(() => stripAnsi(props.metadata.output?.trim() ?? ""))
+  const isRunning = () => props.part.state.status === "running"
+  const output = () => stripAnsi(props.metadata.output?.trim() ?? "")
   const [expanded, setExpanded] = createSignal(false)
-  const lines = createMemo(() => output().split("\n"))
-  const overflow = createMemo(() => lines().length > 10)
-  const limited = createMemo(() => {
+  const lines = () => output().split("\n")
+  const overflow = () => lines().length > 10
+  const limited = () => {
     if (expanded() || !overflow()) return output()
     return [...lines().slice(0, 10), "…"].join("\n")
-  })
+  }
 
-  const workdirDisplay = createMemo(() => {
+  const workdirDisplay = () => {
     const workdir = props.input.workdir
     if (!workdir || workdir === ".") return undefined
 
@@ -260,15 +258,15 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
     const match = absolute === home || absolute.startsWith(home + path.sep)
     return match ? absolute.replace(home, "~") : absolute
-  })
+  }
 
-  const title = createMemo(() => {
+  const title = () => {
     const desc = props.input.description ?? "Shell"
     const wd = workdirDisplay()
     if (!wd) return `# ${desc}`
     if (desc.includes(wd)) return `# ${desc}`
     return `# ${desc} in ${wd}`
-  })
+  }
 
   return (
     <Switch>
@@ -307,10 +305,10 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
 function Write(props: ToolProps<typeof WriteTool>) {
   const { theme, syntax } = useTheme()
-  const code = createMemo(() => {
+  const code = () => {
     if (!props.input.content) return ""
     return props.input.content
-  })
+  }
 
   const diagnostics = createMemo(() => {
     const filePath = Filesystem.normalizePath(props.input.filePath ?? "")
@@ -412,12 +410,12 @@ function Grep(props: ToolProps<typeof GrepTool>) {
 }
 
 function List(props: ToolProps<typeof ListTool>) {
-  const dir = createMemo(() => {
+  const dir = () => {
     if (props.input.path) {
       return normalizePath(props.input.path)
     }
     return ""
-  })
+  }
   return (
     <InlineTool
       icon="→"
@@ -477,7 +475,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 
   const current = createMemo(() => tools().findLast((x) => x.state.status !== "pending"))
 
-  const isRunning = createMemo(() => props.part.state.status === "running")
+  const isRunning = () => props.part.state.status === "running"
 
   return (
     <Switch>
@@ -525,15 +523,15 @@ function Task(props: ToolProps<typeof TaskTool>) {
 function Edit(props: ToolProps<typeof EditTool>) {
   const { theme, syntax } = useTheme()
 
-  const view = createMemo(() => {
+  const view = () => {
     const diffStyle = props.ctx.sync.data.config.tui?.diff_style
     if (diffStyle === "stacked") return "unified"
     return props.ctx.width > 120 ? "split" : "unified"
-  })
+  }
 
-  const ft = createMemo(() => filetype(props.input.filePath))
+  const ft = () => filetype(props.input.filePath)
 
-  const diffContent = createMemo(() => props.metadata.diff)
+  const diffContent = () => props.metadata.diff
 
   const diagnostics = createMemo(() => {
     const filePath = Filesystem.normalizePath(props.input.filePath ?? "")
@@ -600,11 +598,11 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
 
   const files = createMemo(() => props.metadata.files ?? [])
 
-  const view = createMemo(() => {
+  const view = () => {
     const diffStyle = props.ctx.sync.data.config.tui?.diff_style
     if (diffStyle === "stacked") return "unified"
     return props.ctx.width > 120 ? "split" : "unified"
-  })
+  }
 
   function Diff(p: { diff: string; filePath: string }) {
     return (
@@ -691,7 +689,7 @@ function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
 
 function Question(props: ToolProps<typeof QuestionTool>) {
   const { theme } = useTheme()
-  const count = createMemo(() => props.input.questions?.length ?? 0)
+  const count = () => props.input.questions?.length ?? 0
 
   function format(answer?: string[]) {
     if (!answer?.length) return "(no answer)"

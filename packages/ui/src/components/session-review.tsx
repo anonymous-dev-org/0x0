@@ -347,17 +347,17 @@ export const SessionReview = (props: SessionReviewProps) => {
                 const [audioStatus, setAudioStatus] = createSignal<"idle" | "loading" | "error">("idle")
                 const [audioMime, setAudioMime] = createSignal<string | undefined>(undefined)
 
-                const selectedLines = createMemo(() => {
+                const selectedLines = () => {
                   const current = selection()
                   if (!current || current.file !== diff.file) return null
                   return current.range
-                })
+                }
 
-                const draftRange = createMemo(() => {
+                const draftRange = () => {
                   const current = commenting()
                   if (!current || current.file !== diff.file) return null
                   return current.range
-                })
+                }
 
                 const [draft, setDraft] = createSignal("")
                 const [positions, setPositions] = createSignal<Record<string, number>>({})

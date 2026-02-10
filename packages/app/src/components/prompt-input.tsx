@@ -82,7 +82,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const local = useLocal()
   const files = useFile()
   const prompt = usePrompt()
-  const commentCount = createMemo(() => prompt.context.items().filter((item) => !!item.comment?.trim()).length)
+  const commentCount = () => prompt.context.items().filter((item) => !!item.comment?.trim()).length
   const layout = useLayout()
   const comments = useComments()
   const params = useParams()
@@ -127,7 +127,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     requestAnimationFrame(scrollCursorIntoView)
   }
 
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const sessionKey = () => `${params.dir}${params.id ? "/" + params.id : ""}`
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
 
@@ -181,14 +181,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     return paths
   })
-  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
-  const status = createMemo(
-    () =>
-      sync.data.session_status[params.id ?? ""] ?? {
-        type: "idle",
-      },
-  )
-  const working = createMemo(() => status()?.type !== "idle")
+  const info = () => (params.id ? sync.session.get(params.id) : undefined)
+  const status = () =>
+    sync.data.session_status[params.id ?? ""] ?? {
+      type: "idle",
+    }
+  const working = () => status()?.type !== "idle"
   const imageAttachments = createMemo(() =>
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
   )
@@ -210,14 +208,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     mode: "normal",
     applyingHistory: false,
   })
-  const placeholder = createMemo(() =>
+  const placeholder = () =>
     promptPlaceholder({
       mode: store.mode,
       commentCount: commentCount(),
       example: language.t(EXAMPLES[store.placeholder]),
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
-    }),
-  )
+    })
 
   const MAX_HISTORY = 100
   const [history, setHistory] = persisted(

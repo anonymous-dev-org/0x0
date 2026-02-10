@@ -1,4 +1,4 @@
-import { createMemo, Show } from "solid-js"
+import { Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { FileIcon } from "@0x0-ai/ui/file-icon"
@@ -30,7 +30,7 @@ export function SortableTab(props: { tab: string; onTabClose: (tab: string) => v
   const language = useLanguage()
   const command = useCommand()
   const sortable = createSortable(props.tab)
-  const path = createMemo(() => file.pathFromTab(props.tab))
+  const path = () => file.pathFromTab(props.tab)
   return (
     // @ts-ignore
     <div use:sortable classList={{ "h-full": true, "opacity-0": sortable.isActiveDraggable }}>

@@ -5,7 +5,7 @@ import { Tag } from "@0x0-ai/ui/tag"
 import { showToast } from "@0x0-ai/ui/toast"
 import { iconNames, type IconName } from "@0x0-ai/ui/icons/provider"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, type Component, For, Show } from "solid-js"
+import { type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
@@ -28,13 +28,13 @@ export const SettingsProviders: Component = () => {
     return "synthetic"
   }
 
-  const connected = createMemo(() => {
+  const connected = () => {
     return providers
       .connected()
       .filter((p) => p.id !== "zeroxzero" || Object.values(p.models).find((m) => m.cost?.input))
-  })
+  }
 
-  const popular = createMemo(() => {
+  const popular = () => {
     const connectedIDs = new Set(connected().map((p) => p.id))
     const items = providers
       .popular()
@@ -42,7 +42,7 @@ export const SettingsProviders: Component = () => {
       .slice()
     items.sort((a, b) => popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id))
     return items
-  })
+  }
 
   const source = (item: unknown) => (item as ProviderMeta).source
 

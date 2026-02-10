@@ -129,9 +129,7 @@ function AutoMethod(props: AutoMethodProps) {
   useKeyboard((evt) => {
     if (evt.name === "c" && !evt.ctrl && !evt.meta) {
       const code = props.authorization.instructions.match(/[A-Z0-9]{4}-[A-Z0-9]{4,5}/)?.[0] ?? props.authorization.url
-      Clipboard.copy(code)
-        .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
-        .catch(toast.error)
+      Clipboard.copyWithToast(code, toast)
     }
   })
 
@@ -240,7 +238,8 @@ function ApiMethod(props: ApiMethodProps) {
         props.providerID === "zeroxzero" ? (
           <box gap={1}>
             <text fg={theme.textMuted}>
-              Terminal Agent Zen gives you access to all the best coding models at the cheapest prices with a single API key.
+              Terminal Agent Zen gives you access to all the best coding models at the cheapest prices with a single API
+              key.
             </text>
             <text fg={theme.text}>
               Go to <span style={{ fg: theme.primary }}>https://zeroxzero.ai/zen</span> to get a key

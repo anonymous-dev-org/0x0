@@ -135,11 +135,11 @@ export const SettingsKeybinds: Component = () => {
     command.keybinds(false)
   }
 
-  const hasOverrides = createMemo(() => {
+  const hasOverrides = () => {
     const keybinds = settings.current.keybinds as Record<string, string | undefined> | undefined
     if (!keybinds) return false
     return Object.values(keybinds).some((x) => typeof x === "string")
-  })
+  }
 
   const resetAll = () => {
     stop()
@@ -236,13 +236,13 @@ export const SettingsKeybinds: Component = () => {
     return out
   })
 
-  const hasResults = createMemo(() => {
+  const hasResults = () => {
     for (const group of GROUPS) {
       const ids = filtered().get(group) ?? []
       if (ids.length > 0) return true
     }
     return false
-  })
+  }
 
   const used = createMemo(() => {
     const map = new Map<string, { id: string; title: string }[]>()

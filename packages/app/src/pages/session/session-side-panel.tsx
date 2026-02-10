@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createMemo, onCleanup, type JSX, type ValidComponent } from "solid-js"
+import { For, Match, Show, Switch, onCleanup, type JSX, type ValidComponent } from "solid-js"
 import { Tabs } from "@0x0-ai/ui/tabs"
 import { IconButton } from "@0x0-ai/ui/icon-button"
 import { Tooltip, TooltipKeybind } from "@0x0-ai/ui/tooltip"
@@ -217,7 +217,7 @@ export function SessionSidePanel(props: {
                   <DragOverlay>
                     <Show when={props.activeDraggable()}>
                       {(tab) => {
-                        const path = createMemo(() => props.file.pathFromTab(tab()))
+                        const path = () => props.file.pathFromTab(tab())
                         return (
                           <div class="relative px-6 h-12 flex items-center bg-background-stronger border-x border-border-weak-base border-b border-b-transparent">
                             <Show when={path()}>{(p) => <FileVisual active path={p()} />}</Show>

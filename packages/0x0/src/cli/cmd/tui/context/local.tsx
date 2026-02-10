@@ -5,7 +5,6 @@ import { useTheme } from "@tui/context/theme"
 import { uniqueBy } from "remeda"
 import path from "path"
 import { Global } from "@/global"
-import { iife } from "@/util/iife"
 import { createSimpleContext } from "./helper"
 import { useToast } from "../ui/toast"
 import { Provider } from "@/provider/provider"
@@ -34,7 +33,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const agent = iife(() => {
+    function createAgent() {
       const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
       const [agentStore, setAgentStore] = createStore<{
         current: string
@@ -95,9 +94,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return colors()[index % colors().length]
         },
       }
-    })
+    }
 
-    const model = iife(() => {
+    function createModel(agent: ReturnType<typeof createAgent>) {
       const [modelStore, setModelStore] = createStore<{
         ready: boolean
         model: Record<
@@ -390,7 +389,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           },
         },
       }
-    })
+    }
+
+    const agent = createAgent()
+    const model = createModel(agent)
 
     const mcp = {
       isEnabled(name: string) {

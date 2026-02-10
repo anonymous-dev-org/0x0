@@ -48,6 +48,10 @@
     "zod-to-json-schema": "3.24.5"
   },
   "dependencies": {
+    "@0x0-ai/plugin": "workspace:*",
+    "@0x0-ai/script": "workspace:*",
+    "@0x0-ai/sdk": "workspace:*",
+    "@0x0-ai/util": "workspace:*",
     "@actions/core": "1.11.1",
     "@actions/github": "6.0.1",
     "@agentclientprotocol/sdk": "0.14.1",
@@ -79,10 +83,6 @@
     "@octokit/graphql": "9.0.2",
     "@octokit/rest": "catalog:",
     "@openauthjs/openauth": "catalog:",
-    "@0x0-ai/plugin": "workspace:*",
-    "@0x0-ai/script": "workspace:*",
-    "@0x0-ai/sdk": "workspace:*",
-    "@0x0-ai/util": "workspace:*",
     "@openrouter/ai-sdk-provider": "1.5.4",
     "@opentui/core": "0.1.77",
     "@opentui/solid": "0.1.77",

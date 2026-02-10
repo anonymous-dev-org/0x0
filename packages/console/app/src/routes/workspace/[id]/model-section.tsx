@@ -116,7 +116,7 @@ export function ModelSection() {
               <tbody>
                 <For each={modelsWithLab()}>
                   {({ id, name, lab }) => {
-                    const isEnabled = createMemo(() => !modelsInfo()!.disabled.includes(id))
+                    const isEnabled = () => !modelsInfo()!.disabled.includes(id)
                     return (
                       <tr data-slot="model-row" data-disabled={!isEnabled()}>
                         <td data-slot="model-name">

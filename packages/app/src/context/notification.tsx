@@ -56,11 +56,9 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
 
     const empty: Notification[] = []
 
-    const currentDirectory = createMemo(() => {
-      return decode64(params.dir)
-    })
+    const currentDirectory = () => decode64(params.dir)
 
-    const currentSession = createMemo(() => params.id)
+    const currentSession = () => params.id
 
     const [store, setStore, _, ready] = persisted(
       Persist.global("notification", ["notification.v1"]),

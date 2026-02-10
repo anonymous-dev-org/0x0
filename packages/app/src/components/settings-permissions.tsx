@@ -1,6 +1,6 @@
 import { Select } from "@0x0-ai/ui/select"
 import { showToast } from "@0x0-ai/ui/toast"
-import { Component, For, createMemo, type JSX } from "solid-js"
+import { Component, For, type JSX } from "solid-js"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 
@@ -134,17 +134,13 @@ export const SettingsPermissions: Component = () => {
   const globalSync = useGlobalSync()
   const language = useLanguage()
 
-  const actions = createMemo(
-    (): Array<{ value: PermissionAction; label: string }> =>
-      ACTIONS.map((action) => ({
-        value: action.value,
-        label: language.t(action.label),
-      })),
-  )
+  const actions = (): Array<{ value: PermissionAction; label: string }> =>
+    ACTIONS.map((action) => ({
+      value: action.value,
+      label: language.t(action.label),
+    }))
 
-  const permission = createMemo(() => {
-    return toMap(globalSync.data.config.permission)
-  })
+  const permission = () => toMap(globalSync.data.config.permission)
 
   const actionFor = (id: string): PermissionAction => {
     const value = permission()[id]

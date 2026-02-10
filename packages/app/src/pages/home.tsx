@@ -1,4 +1,4 @@
-import { createMemo, For, Match, Switch } from "solid-js"
+import { For, Match, Switch } from "solid-js"
 import { Button } from "@0x0-ai/ui/button"
 import { Logo } from "@0x0-ai/ui/logo"
 import { useLayout } from "@/context/layout"
@@ -22,12 +22,12 @@ export default function Home() {
   const navigate = useNavigate()
   const server = useServer()
   const language = useLanguage()
-  const homedir = createMemo(() => sync.data.path.home)
-  const recent = createMemo(() => {
+  const homedir = () => sync.data.path.home
+  const recent = () => {
     return sync.data.project
       .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
       .slice(0, 5)
-  })
+  }
 
   function openProject(directory: string) {
     layout.projects.open(directory)

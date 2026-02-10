@@ -1,6 +1,6 @@
 import { Billing } from "@0x0-ai/console-core/billing.js"
 import { createAsync, query, useParams } from "@solidjs/router"
-import { createMemo, For, Show, createEffect, createSignal } from "solid-js"
+import { For, Show, createEffect, createSignal } from "solid-js"
 import { formatDateUTC, formatDateForTable } from "../common"
 import { withActor } from "~/context/auth.withActor"
 import { IconChevronLeft, IconChevronRight, IconBreakdown } from "~/component/icon"
@@ -44,9 +44,9 @@ export function UsageSection() {
     return () => document.removeEventListener("click", handleClickOutside)
   })
 
-  const hasResults = createMemo(() => store.usage && store.usage.length > 0)
-  const canGoPrev = createMemo(() => store.page > 0)
-  const canGoNext = createMemo(() => store.usage && store.usage.length === PAGE_SIZE)
+  const hasResults = () => store.usage && store.usage.length > 0
+  const canGoPrev = () => store.page > 0
+  const canGoNext = () => store.usage && store.usage.length === PAGE_SIZE
 
   const calculateTotalInputTokens = (u: Awaited<ReturnType<typeof getUsageInfo>>[0]) => {
     return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWrite5mTokens ?? 0) + (u.cacheWrite1hTokens ?? 0)
@@ -99,13 +99,13 @@ export function UsageSection() {
             <tbody>
               <For each={store.usage}>
                 {(usage, index) => {
-                  const date = createMemo(() => new Date(usage.timeCreated))
-                  const totalInputTokens = createMemo(() => calculateTotalInputTokens(usage))
-                  const totalOutputTokens = createMemo(() => calculateTotalOutputTokens(usage))
+                  const date = () => new Date(usage.timeCreated)
+                  const totalInputTokens = () => calculateTotalInputTokens(usage)
+                  const totalOutputTokens = () => calculateTotalOutputTokens(usage)
                   const inputBreakdownId = `input-breakdown-${index()}`
                   const outputBreakdownId = `output-breakdown-${index()}`
-                  const isInputOpen = createMemo(() => openBreakdownId() === inputBreakdownId)
-                  const isOutputOpen = createMemo(() => openBreakdownId() === outputBreakdownId)
+                  const isInputOpen = () => openBreakdownId() === inputBreakdownId
+                  const isOutputOpen = () => openBreakdownId() === outputBreakdownId
                   const isClaude = usage.model.toLowerCase().includes("claude")
                   return (
                     <tr>

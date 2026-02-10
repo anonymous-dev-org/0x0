@@ -15,7 +15,7 @@ import { TodoItem } from "../../component/todo-item"
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
   const { theme } = useTheme()
-  const session = createMemo(() => sync.session.get(props.sessionID)!)
+  const session = () => sync.session.get(props.sessionID)!
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
@@ -31,22 +31,20 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
 
   // Count connected and error MCP servers for collapsed header display
-  const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
-  const errorMcpCount = createMemo(
-    () =>
-      mcpEntries().filter(
-        ([_, item]) =>
-          item.status === "failed" || item.status === "needs_auth" || item.status === "needs_client_registration",
-      ).length,
-  )
+  const connectedMcpCount = () => mcpEntries().filter(([_, item]) => item.status === "connected").length
+  const errorMcpCount = () =>
+    mcpEntries().filter(
+      ([_, item]) =>
+        item.status === "failed" || item.status === "needs_auth" || item.status === "needs_client_registration",
+    ).length
 
-  const cost = createMemo(() => {
+  const cost = () => {
     const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
     }).format(total)
-  })
+  }
 
   const context = createMemo(() => {
     const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
@@ -63,10 +61,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const directory = useDirectory()
   const kv = useKV()
 
-  const hasProviders = createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
-  const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
+  const hasProviders = () =>
+    sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0))
+  const gettingStartedDismissed = () => kv.get("dismissed_getting_started", false)
 
   return (
     <Show when={session()}>

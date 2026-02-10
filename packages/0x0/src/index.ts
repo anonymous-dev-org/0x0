@@ -1,31 +1,216 @@
-import yargs from "yargs"
+import yargs, { type Argv, type ArgumentsCamelCase, type CommandModule } from "yargs"
 import { hideBin } from "yargs/helpers"
-import { RunCommand } from "./cli/cmd/run"
-import { GenerateCommand } from "./cli/cmd/generate"
 import { Log } from "./util/log"
-import { AuthCommand } from "./cli/cmd/auth"
-import { AgentCommand } from "./cli/cmd/agent"
-import { UpgradeCommand } from "./cli/cmd/upgrade"
-import { UninstallCommand } from "./cli/cmd/uninstall"
-import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { Installation } from "./installation"
 import { NamedError } from "@0x0-ai/util/error"
-import { FormatError } from "./cli/error"
-import { ServeCommand } from "./cli/cmd/serve"
-import { DebugCommand } from "./cli/cmd/debug"
-import { StatsCommand } from "./cli/cmd/stats"
-import { McpCommand } from "./cli/cmd/mcp"
-import { GithubCommand } from "./cli/cmd/github"
-import { ExportCommand } from "./cli/cmd/export"
-import { ImportCommand } from "./cli/cmd/import"
-import { AttachCommand } from "./cli/cmd/tui/attach"
-import { TuiThreadCommand } from "./cli/cmd/tui/thread"
-import { AcpCommand } from "./cli/cmd/acp"
 import { EOL } from "os"
-import { WebCommand } from "./cli/cmd/web"
-import { PrCommand } from "./cli/cmd/pr"
-import { SessionCommand } from "./cli/cmd/session"
+
+type BaseArgs = Record<string, unknown>
+type LazyCommand = CommandModule<BaseArgs, BaseArgs>
+const started = performance.now()
+const args = hideBin(process.argv)
+const shouldForceExit = !args.some((x) => x === "--help" || x === "-h" || x === "--version" || x === "-v")
+
+function timing(stage: string, extra?: Record<string, unknown>) {
+  Log.Default.debug("startup", {
+    stage,
+    elapsed_ms: Math.round(performance.now() - started),
+    ...extra,
+  })
+}
+
+function lazy(
+  config: {
+    command: string | readonly string[]
+    describe?: string
+    aliases?: string | readonly string[]
+  },
+  load: () => Promise<LazyCommand>,
+): LazyCommand {
+  let command: Promise<LazyCommand> | undefined
+  const get = () => {
+    if (command) return command
+    const now = performance.now()
+    command = load().then((value) => {
+      timing("command.loaded", {
+        command: Array.isArray(config.command) ? config.command.join(" ") : config.command,
+        duration_ms: Math.round(performance.now() - now),
+      })
+      return value
+    })
+    return command
+  }
+
+  return {
+    command: config.command,
+    describe: config.describe,
+    aliases: config.aliases,
+    builder: async (argv: Argv<BaseArgs>) => {
+      const loaded = await get()
+      if (!loaded.builder) return argv
+      if (typeof loaded.builder !== "function") return argv.options(loaded.builder)
+      const built = await loaded.builder(argv as never)
+      if (!built) return argv
+      return built as Argv<BaseArgs>
+    },
+    handler: async (argv: ArgumentsCamelCase<BaseArgs>) => {
+      const loaded = await get()
+      await loaded.handler(argv as never)
+    },
+  }
+}
+
+function command(input: () => Promise<Record<string, unknown>>, key: string) {
+  return async () => {
+    const mod = await input()
+    const loaded = mod[key]
+    if (!loaded) throw new Error(`Failed to load command ${key}`)
+    return loaded as LazyCommand
+  }
+}
+
+const commands = [
+  lazy(
+    {
+      command: "acp",
+      describe: "start ACP (Agent Client Protocol) server",
+    },
+    command(() => import("./cli/cmd/acp"), "AcpCommand"),
+  ),
+  lazy(
+    {
+      command: "mcp",
+      describe: "manage MCP (Model Context Protocol) servers",
+    },
+    command(() => import("./cli/cmd/mcp"), "McpCommand"),
+  ),
+  lazy(
+    {
+      command: "$0 [project]",
+      describe: "start zeroxzero tui",
+    },
+    command(() => import("./cli/cmd/tui/thread"), "TuiThreadCommand"),
+  ),
+  lazy(
+    {
+      command: "attach <url>",
+      describe: "attach to a running zeroxzero server",
+    },
+    command(() => import("./cli/cmd/tui/attach"), "AttachCommand"),
+  ),
+  lazy(
+    {
+      command: "run [message..]",
+      describe: "run zeroxzero with a message",
+    },
+    command(() => import("./cli/cmd/run"), "RunCommand"),
+  ),
+  lazy(
+    {
+      command: "generate",
+    },
+    command(() => import("./cli/cmd/generate"), "GenerateCommand"),
+  ),
+  lazy(
+    {
+      command: "debug",
+      describe: "debugging and troubleshooting tools",
+    },
+    command(() => import("./cli/cmd/debug"), "DebugCommand"),
+  ),
+  lazy(
+    {
+      command: "auth",
+      describe: "manage credentials",
+    },
+    command(() => import("./cli/cmd/auth"), "AuthCommand"),
+  ),
+  lazy(
+    {
+      command: "agent",
+      describe: "manage agents",
+    },
+    command(() => import("./cli/cmd/agent"), "AgentCommand"),
+  ),
+  lazy(
+    {
+      command: "upgrade [target]",
+      describe: "upgrade zeroxzero to the latest or a specific version",
+    },
+    command(() => import("./cli/cmd/upgrade"), "UpgradeCommand"),
+  ),
+  lazy(
+    {
+      command: "uninstall",
+      describe: "uninstall zeroxzero and remove all related files",
+    },
+    command(() => import("./cli/cmd/uninstall"), "UninstallCommand"),
+  ),
+  lazy(
+    {
+      command: "serve",
+      describe: "starts a headless zeroxzero server",
+    },
+    command(() => import("./cli/cmd/serve"), "ServeCommand"),
+  ),
+  lazy(
+    {
+      command: "web",
+      describe: "start zeroxzero server and open web interface",
+    },
+    command(() => import("./cli/cmd/web"), "WebCommand"),
+  ),
+  lazy(
+    {
+      command: "models [provider]",
+      describe: "list all available models",
+    },
+    command(() => import("./cli/cmd/models"), "ModelsCommand"),
+  ),
+  lazy(
+    {
+      command: "stats",
+      describe: "show token usage and cost statistics",
+    },
+    command(() => import("./cli/cmd/stats"), "StatsCommand"),
+  ),
+  lazy(
+    {
+      command: "export [sessionID]",
+      describe: "export session data as JSON",
+    },
+    command(() => import("./cli/cmd/export"), "ExportCommand"),
+  ),
+  lazy(
+    {
+      command: "import <file>",
+      describe: "import shared data from URL or local file",
+    },
+    command(() => import("./cli/cmd/import"), "ImportCommand"),
+  ),
+  lazy(
+    {
+      command: "github",
+      describe: "manage GitHub agent",
+    },
+    command(() => import("./cli/cmd/github"), "GithubCommand"),
+  ),
+  lazy(
+    {
+      command: "pr <number>",
+      describe: "fetch and checkout a GitHub PR branch, then run zeroxzero",
+    },
+    command(() => import("./cli/cmd/pr"), "PrCommand"),
+  ),
+  lazy(
+    {
+      command: "session",
+      describe: "manage sessions",
+    },
+    command(() => import("./cli/cmd/session"), "SessionCommand"),
+  ),
+]
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -39,7 +224,7 @@ process.on("uncaughtException", (e) => {
   })
 })
 
-const cli = yargs(hideBin(process.argv))
+const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
   .scriptName("zeroxzero")
   .wrap(100)
@@ -66,6 +251,7 @@ const cli = yargs(hideBin(process.argv))
         return "INFO"
       })(),
     })
+    timing("log.init")
 
     process.env.AGENT = "1"
     process.env.ZEROXZERO = "1"
@@ -74,29 +260,11 @@ const cli = yargs(hideBin(process.argv))
       version: Installation.VERSION,
       args: process.argv.slice(2),
     })
+    timing("middleware.ready")
   })
   .usage("\n" + UI.logo())
   .completion("completion", "generate shell completion script")
-  .command(AcpCommand)
-  .command(McpCommand)
-  .command(TuiThreadCommand)
-  .command(AttachCommand)
-  .command(RunCommand)
-  .command(GenerateCommand)
-  .command(DebugCommand)
-  .command(AuthCommand)
-  .command(AgentCommand)
-  .command(UpgradeCommand)
-  .command(UninstallCommand)
-  .command(ServeCommand)
-  .command(WebCommand)
-  .command(ModelsCommand)
-  .command(StatsCommand)
-  .command(ExportCommand)
-  .command(ImportCommand)
-  .command(GithubCommand)
-  .command(PrCommand)
-  .command(SessionCommand)
+  .command(commands)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
@@ -113,8 +281,10 @@ const cli = yargs(hideBin(process.argv))
 
 try {
   await cli.parse()
+  timing("parse.completed")
 } catch (e) {
-  let data: Record<string, any> = {}
+  timing("parse.failed")
+  let data: Record<string, unknown> = {}
   if (e instanceof NamedError) {
     const obj = e.toObject()
     Object.assign(data, {
@@ -143,6 +313,11 @@ try {
     })
   }
   Log.Default.error("fatal", data)
+  const loaded = performance.now()
+  const { FormatError } = await import("./cli/error")
+  timing("error.formatter.loaded", {
+    duration_ms: Math.round(performance.now() - loaded),
+  })
   const formatted = FormatError(e)
   if (formatted) UI.error(formatted)
   if (formatted === undefined) {
@@ -155,5 +330,5 @@ try {
   // Most notably, some docker-container-based MCP servers don't handle such signals unless
   // run using `docker run --init`.
   // Explicitly exit to avoid any hanging subprocesses.
-  process.exit()
+  if (shouldForceExit) process.exit()
 }

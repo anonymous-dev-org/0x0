@@ -53,12 +53,12 @@ export const { use: usePermission, provider: PermissionProvider } = createSimple
     const globalSDK = useGlobalSDK()
     const globalSync = useGlobalSync()
 
-    const permissionsEnabled = createMemo(() => {
+    const permissionsEnabled = () => {
       const directory = decode64(params.dir)
       if (!directory) return false
       const [store] = globalSync.child(directory)
       return hasAutoAcceptPermissionConfig(store.config.permission)
-    })
+    }
 
     const [store, setStore, _, ready] = persisted(
       Persist.global("permission", ["permission.v3"]),

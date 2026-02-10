@@ -1,5 +1,5 @@
 import { Popover as Kobalte } from "@kobalte/core/popover"
-import { Component, ComponentProps, createEffect, createMemo, JSX, onCleanup, Show, ValidComponent } from "solid-js"
+import { Component, ComponentProps, createEffect, JSX, onCleanup, Show, ValidComponent } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
 import { useDialog } from "@0x0-ai/ui/context/dialog"
@@ -24,12 +24,11 @@ const ModelList: Component<{
   const local = useLocal()
   const language = useLanguage()
 
-  const models = createMemo(() =>
+  const models = () =>
     local.model
       .list()
       .filter((m) => local.model.visible({ modelID: m.id, providerID: m.provider.id }))
-      .filter((m) => (props.provider ? m.provider.id === props.provider : true)),
-  )
+      .filter((m) => (props.provider ? m.provider.id === props.provider : true))
 
   return (
     <List

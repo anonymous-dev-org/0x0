@@ -3,7 +3,7 @@ import { useDialog } from "@0x0-ai/ui/context/dialog"
 import { Dialog } from "@0x0-ai/ui/dialog"
 import { TextField } from "@0x0-ai/ui/text-field"
 import { Icon } from "@0x0-ai/ui/icon"
-import { createMemo, For, Show } from "solid-js"
+import { For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
@@ -20,8 +20,8 @@ export function DialogEditProject(props: { project: LocalProject }) {
   const globalSync = useGlobalSync()
   const language = useLanguage()
 
-  const folderName = createMemo(() => getFilename(props.project.worktree))
-  const defaultName = createMemo(() => props.project.name || folderName())
+  const folderName = () => getFilename(props.project.worktree)
+  const defaultName = () => props.project.name || folderName()
 
   const [store, setStore] = createStore({
     name: defaultName(),

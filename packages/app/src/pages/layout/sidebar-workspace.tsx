@@ -61,7 +61,7 @@ export const WorkspaceDragOverlay = (props: {
 }): JSX.Element => {
   const globalSync = useGlobalSync()
   const language = useLanguage()
-  const label = createMemo(() => {
+  const label = () => {
     const project = props.sidebarProject()
     if (!project) return
     const directory = props.activeWorkspace()
@@ -72,7 +72,7 @@ export const WorkspaceDragOverlay = (props: {
       directory === project.worktree ? language.t("workspace.type.local") : language.t("workspace.type.sandbox")
     const name = props.workspaceLabel(directory, workspaceStore.vcs?.branch, project.id)
     return `${kind} : ${name}`
-  })
+  }
 
   return (
     <Show when={label()}>
@@ -97,30 +97,30 @@ export const SortableWorkspace = (props: {
     open: false,
     pendingRename: false,
   })
-  const slug = createMemo(() => base64Encode(props.directory))
+  const slug = () => base64Encode(props.directory)
   const sessions = createMemo(() => sortedRootSessions(workspaceStore, Date.now()))
   const children = createMemo(() => childMapByParent(workspaceStore.session))
-  const local = createMemo(() => props.directory === props.project.worktree)
-  const active = createMemo(() => props.ctx.currentDir() === props.directory)
-  const workspaceValue = createMemo(() => {
+  const local = () => props.directory === props.project.worktree
+  const active = () => props.ctx.currentDir() === props.directory
+  const workspaceValue = () => {
     const branch = workspaceStore.vcs?.branch
     const name = branch ?? getFilename(props.directory)
     return props.ctx.workspaceName(props.directory, props.project.id, branch) ?? name
-  })
-  const open = createMemo(() => props.ctx.workspaceExpanded(props.directory, local()))
-  const boot = createMemo(() => open() || active())
+  }
+  const open = () => props.ctx.workspaceExpanded(props.directory, local())
+  const boot = () => open() || active()
   const booted = createMemo((prev) => prev || workspaceStore.status === "complete", false)
-  const hasMore = createMemo(() => workspaceStore.sessionTotal > sessions().length)
-  const busy = createMemo(() => props.ctx.isBusy(props.directory))
+  const hasMore = () => workspaceStore.sessionTotal > sessions().length
+  const busy = () => props.ctx.isBusy(props.directory)
   const wasBusy = createMemo((prev) => prev || busy(), false)
-  const loading = createMemo(() => open() && !booted() && sessions().length === 0 && !wasBusy())
-  const showNew = createMemo(() => !loading() && (sessions().length === 0 || (active() && !params.id)))
+  const loading = () => open() && !booted() && sessions().length === 0 && !wasBusy()
+  const showNew = () => !loading() && (sessions().length === 0 || (active() && !params.id))
   const loadMore = async () => {
     setWorkspaceStore("limit", (limit) => limit + 5)
     await globalSync.project.loadSessions(props.directory)
   }
 
-  const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
+  const workspaceEditActive = () => props.ctx.editorOpen(`workspace:${props.directory}`)
 
   const openWrapper = (value: boolean) => {
     props.ctx.setWorkspaceExpanded(props.directory, value)
@@ -351,12 +351,12 @@ export const LocalWorkspace = (props: {
     const [store, setStore] = globalSync.child(props.project.worktree)
     return { store, setStore }
   })
-  const slug = createMemo(() => base64Encode(props.project.worktree))
+  const slug = () => base64Encode(props.project.worktree)
   const sessions = createMemo(() => sortedRootSessions(workspace().store, Date.now()))
   const children = createMemo(() => childMapByParent(workspace().store.session))
   const booted = createMemo((prev) => prev || workspace().store.status === "complete", false)
-  const loading = createMemo(() => !booted() && sessions().length === 0)
-  const hasMore = createMemo(() => workspace().store.sessionTotal > sessions().length)
+  const loading = () => !booted() && sessions().length === 0
+  const hasMore = () => workspace().store.sessionTotal > sessions().length
   const loadMore = async () => {
     workspace().setStore("limit", (limit) => limit + 5)
     await globalSync.project.loadSessions(props.project.worktree)

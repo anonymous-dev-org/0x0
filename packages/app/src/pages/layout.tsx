@@ -90,7 +90,7 @@ export default function Layout(props: ParentProps) {
     }),
   )
 
-  const pageReady = createMemo(() => ready())
+  const pageReady = () => ready()
 
   let scrollContainerRef: HTMLDivElement | undefined
 
@@ -98,7 +98,7 @@ export default function Layout(props: ParentProps) {
   const globalSDK = useGlobalSDK()
   const globalSync = useGlobalSync()
   const layout = useLayout()
-  const layoutReady = createMemo(() => layout.ready())
+  const layoutReady = () => layout.ready()
   const platform = usePlatform()
   const settings = useSettings()
   const server = useServer()
@@ -111,7 +111,7 @@ export default function Layout(props: ParentProps) {
   const theme = useTheme()
   const language = useLanguage()
   const initialDirectory = decode64(params.dir)
-  const availableThemeEntries = createMemo(() => Object.entries(theme.themes()))
+  const availableThemeEntries = () => Object.entries(theme.themes())
   const colorSchemeOrder: ColorScheme[] = ["system", "light", "dark"]
   const colorSchemeKey: Record<ColorScheme, "theme.scheme.system" | "theme.scheme.light" | "theme.scheme.dark"> = {
     system: "theme.scheme.system",
@@ -119,7 +119,7 @@ export default function Layout(props: ParentProps) {
     dark: "theme.scheme.dark",
   }
   const colorSchemeLabel = (scheme: ColorScheme) => language.t(colorSchemeKey[scheme])
-  const currentDir = createMemo(() => decode64(params.dir) ?? "")
+  const currentDir = () => decode64(params.dir) ?? ""
 
   const [state, setState] = createStore({
     autoselect: !initialDirectory,
@@ -159,16 +159,16 @@ export default function Layout(props: ParentProps) {
     aim.reset()
   })
 
-  const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
-  const sidebarExpanded = createMemo(() => layout.sidebar.opened() || sidebarHovering())
+  const sidebarHovering = () => !layout.sidebar.opened() && state.hoverProject !== undefined
+  const sidebarExpanded = () => layout.sidebar.opened() || sidebarHovering()
   const clearHoverProjectSoon = () => queueMicrotask(() => setState("hoverProject", undefined))
   const setHoverSession = (id: string | undefined) => setState("hoverSession", id)
 
-  const hoverProjectData = createMemo(() => {
+  const hoverProjectData = () => {
     const id = state.hoverProject
     if (!id) return
     return layout.projects.list().find((project) => project.worktree === id)
-  })
+  }
 
   createEffect(() => {
     if (!layout.sidebar.opened()) return
@@ -195,7 +195,7 @@ export default function Layout(props: ParentProps) {
     ),
   )
 
-  const autoselecting = createMemo(() => {
+  const autoselecting = () => {
     if (params.dir) return false
     if (!state.autoselect) return false
     if (!pageReady()) return true
@@ -203,7 +203,7 @@ export default function Layout(props: ParentProps) {
     const list = layout.projects.list()
     if (list.length > 0) return true
     return !!server.projects.last()
-  })
+  }
 
   createEffect(() => {
     if (!state.autoselect) return
@@ -527,12 +527,12 @@ export default function Layout(props: ParentProps) {
   const workspaceLabel = (directory: string, branch?: string, projectId?: string) =>
     workspaceName(directory, projectId, branch) ?? branch ?? getFilename(directory)
 
-  const workspaceSetting = createMemo(() => {
+  const workspaceSetting = () => {
     const project = currentProject()
     if (!project) return false
     if (project.vcs !== "git") return false
     return layout.sidebar.workspaces(project.worktree)()
-  })
+  }
 
   createEffect(() => {
     if (!pageReady()) return
@@ -1298,7 +1298,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function DialogDeleteWorkspace(props: { root: string; directory: string }) {
-    const name = createMemo(() => getFilename(props.directory))
+    const name = () => getFilename(props.directory)
     const [data, setData] = createStore({
       status: "loading" as "loading" | "ready" | "error",
       dirty: false,
@@ -1352,7 +1352,7 @@ export default function Layout(props: ParentProps) {
   }
 
   function DialogResetWorkspace(props: { root: string; directory: string }) {
-    const name = createMemo(() => getFilename(props.directory))
+    const name = () => getFilename(props.directory)
     const [state, setState] = createStore({
       status: "loading" as "loading" | "ready" | "error",
       dirty: false,
@@ -1515,12 +1515,12 @@ export default function Layout(props: ParentProps) {
     return [...merged, extra]
   }
 
-  const sidebarProject = createMemo(() => {
+  const sidebarProject = () => {
     if (layout.sidebar.opened()) return currentProject()
     const hovered = hoverProjectData()
     if (hovered) return hovered
     return currentProject()
-  })
+  }
 
   function handleWorkspaceDragStart(event: unknown) {
     const id = getDraggableId(event)
@@ -1657,20 +1657,20 @@ export default function Layout(props: ParentProps) {
   }
 
   const SidebarPanel = (panelProps: { project: LocalProject | undefined; mobile?: boolean }) => {
-    const projectName = createMemo(() => {
+    const projectName = () => {
       const project = panelProps.project
       if (!project) return ""
       return project.name || getFilename(project.worktree)
-    })
-    const projectId = createMemo(() => panelProps.project?.id ?? "")
-    const workspaces = createMemo(() => workspaceIds(panelProps.project))
-    const workspacesEnabled = createMemo(() => {
+    }
+    const projectId = () => panelProps.project?.id ?? ""
+    const workspaces = () => workspaceIds(panelProps.project)
+    const workspacesEnabled = () => {
       const project = panelProps.project
       if (!project) return false
       if (project.vcs !== "git") return false
       return layout.sidebar.workspaces(project.worktree)()
-    })
-    const homedir = createMemo(() => globalSync.data.path.home)
+    }
+    const homedir = () => globalSync.data.path.home
 
     return (
       <div

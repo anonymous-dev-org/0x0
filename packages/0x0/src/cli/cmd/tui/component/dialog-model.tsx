@@ -10,9 +10,8 @@ import * as fuzzysort from "fuzzysort"
 
 export function useConnected() {
   const sync = useSync()
-  return createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
+  return () =>
+    sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0))
 }
 
 export function DialogModel(props: { providerID?: string }) {
@@ -26,11 +25,11 @@ export function DialogModel(props: { providerID?: string }) {
   const connected = useConnected()
   const providers = createDialogProviderOptions()
 
-  const showExtra = createMemo(() => {
+  const showExtra = () => {
     if (!connected()) return false
     if (props.providerID) return false
     return true
-  })
+  }
 
   const options = createMemo(() => {
     const q = query()
@@ -195,14 +194,12 @@ export function DialogModel(props: { providerID?: string }) {
     return [...favoriteOptions, ...recentOptions, ...providerOptions, ...popularProviders]
   })
 
-  const provider = createMemo(() =>
-    props.providerID ? sync.data.provider.find((x) => x.id === props.providerID) : null,
-  )
+  const provider = () => (props.providerID ? sync.data.provider.find((x) => x.id === props.providerID) : null)
 
-  const title = createMemo(() => {
+  const title = () => {
     if (provider()) return provider()!.name
     return "Select model"
-  })
+  }
 
   return (
     <DialogSelect

@@ -87,13 +87,13 @@ export function Autocomplete(props: {
     }
   })
 
-  const filter = createMemo(() => {
+  const filter = () => {
     if (!store.visible) return
     // Track props.value to make memo reactive to text changes
     props.value // <- there surely is a better way to do this, like making .input() reactive
 
     return props.input().getTextRange(store.index + 1, props.input().cursorOffset)
-  })
+  }
 
   // filter() reads reactive props.value plus non-reactive cursor/text state.
   // On keypress those can be briefly out of sync, so filter() may return an empty/partial string.
@@ -377,12 +377,12 @@ export function Autocomplete(props: {
     })
   })
 
-  const height = createMemo(() => {
+  const height = () => {
     const count = options().length || 1
     if (!store.visible) return Math.min(10, count)
     positionTick()
     return Math.min(10, count, Math.max(1, props.anchor().y))
-  })
+  }
 
   let scroll: ScrollBoxRenderable
 

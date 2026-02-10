@@ -35,23 +35,23 @@ export function SessionHeader() {
   const platform = usePlatform()
   const language = useLanguage()
 
-  const projectDirectory = createMemo(() => decode64(params.dir) ?? "")
-  const project = createMemo(() => {
+  const projectDirectory = () => decode64(params.dir) ?? ""
+  const project = () => {
     const directory = projectDirectory()
     if (!directory) return
     return layout.projects.list().find((p) => p.worktree === directory || p.sandboxes?.includes(directory))
-  })
-  const name = createMemo(() => {
+  }
+  const name = () => {
     const current = project()
     if (current) return current.name || getFilename(current.worktree)
     return getFilename(projectDirectory())
-  })
-  const hotkey = createMemo(() => command.keybind("file.open"))
+  }
+  const hotkey = () => command.keybind("file.open")
 
-  const currentSession = createMemo(() => sync.data.session.find((s) => s.id === params.id))
-  const shareEnabled = createMemo(() => sync.data.config.share !== "disabled")
-  const showShare = createMemo(() => shareEnabled() && !!currentSession())
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const currentSession = () => sync.data.session.find((s) => s.id === params.id)
+  const shareEnabled = () => sync.data.config.share !== "disabled"
+  const showShare = () => shareEnabled() && !!currentSession()
+  const sessionKey = () => `${params.dir}${params.id ? "/" + params.id : ""}`
   const view = createMemo(() => layout.view(sessionKey))
 
   const OPEN_APPS = [
@@ -153,8 +153,8 @@ export function SessionHeader() {
 
   const [prefs, setPrefs] = persisted(Persist.global("open.app"), createStore({ app: "finder" as OpenApp }))
 
-  const canOpen = createMemo(() => platform.platform === "desktop" && !!platform.openPath && server.isLocal())
-  const current = createMemo(() => options().find((o) => o.id === prefs.app) ?? options()[0])
+  const canOpen = () => platform.platform === "desktop" && !!platform.openPath && server.isLocal()
+  const current = () => options().find((o) => o.id === prefs.app) ?? options()[0]
 
   createEffect(() => {
     if (platform.platform !== "desktop") return
@@ -207,7 +207,7 @@ export function SessionHeader() {
     copied: false,
     timer: undefined as number | undefined,
   })
-  const shareUrl = createMemo(() => currentSession()?.share?.url)
+  const shareUrl = () => currentSession()?.share?.url
 
   createEffect(() => {
     const url = shareUrl()
@@ -273,8 +273,8 @@ export function SessionHeader() {
     platform.openLink(url)
   }
 
-  const centerMount = createMemo(() => document.getElementById("zeroxzero-titlebar-center"))
-  const rightMount = createMemo(() => document.getElementById("zeroxzero-titlebar-right"))
+  const centerMount = () => document.getElementById("zeroxzero-titlebar-center")
+  const rightMount = () => document.getElementById("zeroxzero-titlebar-right")
 
   return (
     <>

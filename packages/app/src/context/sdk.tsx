@@ -11,7 +11,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     const platform = usePlatform()
     const globalSDK = useGlobalSDK()
 
-    const directory = createMemo(props.directory)
+    const directory = props.directory
     const client = createMemo(() =>
       createZeroxzeroClient({
         baseUrl: globalSDK.url,

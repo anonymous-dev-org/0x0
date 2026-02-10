@@ -83,7 +83,7 @@ export function StatusPopover() {
       .sort((a, b) => a.name.localeCompare(b.name)),
   )
 
-  const mcpConnected = createMemo(() => mcpItems().filter((i) => i.status === "connected").length)
+  const mcpConnected = () => mcpItems().filter((i) => i.status === "connected").length
 
   const toggleMcp = async (name: string) => {
     if (store.loading) return
@@ -105,18 +105,18 @@ export function StatusPopover() {
     }
   }
 
-  const lspItems = createMemo(() => sync.data.lsp ?? [])
-  const lspCount = createMemo(() => lspItems().length)
-  const plugins = createMemo(() => sync.data.config.plugin ?? [])
-  const pluginCount = createMemo(() => plugins().length)
+  const lspItems = () => sync.data.lsp ?? []
+  const lspCount = () => lspItems().length
+  const plugins = () => sync.data.config.plugin ?? []
+  const pluginCount = () => plugins().length
 
-  const overallHealthy = createMemo(() => {
+  const overallHealthy = () => {
     const serverHealthy = server.healthy() === true
     const anyMcpIssue = mcpItems().some((m) => m.status !== "connected" && m.status !== "disabled")
     return serverHealthy && !anyMcpIssue
-  })
+  }
 
-  const serverCount = createMemo(() => sortedServers().length)
+  const serverCount = () => sortedServers().length
 
   const refreshDefaultServerUrl = () => {
     const result = platform.getDefaultServerUrl?.()

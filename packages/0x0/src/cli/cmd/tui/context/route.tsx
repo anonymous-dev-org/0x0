@@ -8,9 +8,7 @@ export type SessionRoute = {
   initialPrompt?: PromptInfo
 }
 
-export type Route = SessionRoute
-
-function bootRoute(): Route {
+function bootRoute(): SessionRoute {
   const raw = process.env["ZEROXZERO_ROUTE"]
   if (!raw) {
     return {
@@ -19,13 +17,6 @@ function bootRoute(): Route {
     }
   }
   const parsed = JSON.parse(raw)
-  if (parsed?.type === "home") {
-    return {
-      type: "session",
-      sessionID: "",
-      initialPrompt: parsed.initialPrompt,
-    }
-  }
   if (parsed?.type === "session") {
     return {
       type: "session",
@@ -42,13 +33,13 @@ function bootRoute(): Route {
 export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",
   init: () => {
-    const [store, setStore] = createStore<Route>(bootRoute())
+    const [store, setStore] = createStore<SessionRoute>(bootRoute())
 
     return {
       get data() {
         return store
       },
-      navigate(route: Route) {
+      navigate(route: SessionRoute) {
         setStore(route)
       },
     }
@@ -56,8 +47,3 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
 })
 
 export type RouteContext = ReturnType<typeof useRoute>
-
-export function useRouteData<T extends Route["type"]>(type: T) {
-  const route = useRoute()
-  return route.data as Extract<Route, { type: typeof type }>
-}

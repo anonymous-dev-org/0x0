@@ -1,7 +1,7 @@
 import { checksum } from "@0x0-ai/util/encode"
 import { FileDiff, type SelectedLineRange } from "@pierre/diffs"
 import { createMediaQuery } from "@solid-primitives/media"
-import { createEffect, createMemo, createSignal, onCleanup, splitProps } from "solid-js"
+import { createEffect, createSignal, onCleanup, splitProps } from "solid-js"
 import { createDefaultOptions, type DiffProps, styleVariables } from "../pierre"
 import { getWorkerPool } from "../pierre/worker"
 
@@ -76,7 +76,7 @@ export function Diff<T>(props: DiffProps<T>) {
 
   const mobile = createMediaQuery("(max-width: 640px)")
 
-  const options = createMemo(() => {
+  const options = () => {
     const opts = {
       ...createDefaultOptions(props.diffStyle),
       ...others,
@@ -86,7 +86,7 @@ export function Diff<T>(props: DiffProps<T>) {
       ...opts,
       disableLineNumbers: true,
     }
-  })
+  }
 
   let instance: FileDiff<T> | undefined
   const [current, setCurrent] = createSignal<FileDiff<T> | undefined>(undefined)

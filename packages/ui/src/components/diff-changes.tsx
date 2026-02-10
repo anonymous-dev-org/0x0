@@ -1,4 +1,4 @@
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { For, Match, Show, Switch } from "solid-js"
 
 export function DiffChanges(props: {
   class?: string
@@ -7,19 +7,17 @@ export function DiffChanges(props: {
 }) {
   const variant = () => props.variant ?? "default"
 
-  const additions = createMemo(() =>
+  const additions = () =>
     Array.isArray(props.changes)
       ? props.changes.reduce((acc, diff) => acc + (diff.additions ?? 0), 0)
-      : props.changes.additions,
-  )
-  const deletions = createMemo(() =>
+      : props.changes.additions
+  const deletions = () =>
     Array.isArray(props.changes)
       ? props.changes.reduce((acc, diff) => acc + (diff.deletions ?? 0), 0)
-      : props.changes.deletions,
-  )
-  const total = createMemo(() => (additions() ?? 0) + (deletions() ?? 0))
+      : props.changes.deletions
+  const total = () => (additions() ?? 0) + (deletions() ?? 0)
 
-  const blockCounts = createMemo(() => {
+  const blockCounts = () => {
     const TOTAL_BLOCKS = 5
 
     const adds = additions() ?? 0
@@ -75,13 +73,13 @@ export function DiffChanges(props: {
     const neutral = Math.max(0, TOTAL_BLOCKS - total_allocated)
 
     return { added, deleted, neutral }
-  })
+  }
 
   const ADD_COLOR = "var(--icon-diff-add-base)"
   const DELETE_COLOR = "var(--icon-diff-delete-base)"
   const NEUTRAL_COLOR = "var(--icon-weak-base)"
 
-  const visibleBlocks = createMemo(() => {
+  const visibleBlocks = () => {
     const counts = blockCounts()
     const blocks = [
       ...Array(counts.added).fill(ADD_COLOR),
@@ -89,7 +87,7 @@ export function DiffChanges(props: {
       ...Array(counts.neutral).fill(NEUTRAL_COLOR),
     ]
     return blocks.slice(0, 5)
-  })
+  }
 
   return (
     <Show when={variant() === "default" ? total() > 0 : true}>

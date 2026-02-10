@@ -43,7 +43,7 @@ export interface PartProps {
 
 export function Part(props: PartProps) {
   const [copied, setCopied] = createSignal(false)
-  const id = createMemo(() => props.message.id + "-" + props.index)
+  const id = () => props.message.id + "-" + props.index
 
   return (
     <div
@@ -454,11 +454,10 @@ export function GrepTool(props: ToolProps) {
 }
 
 export function ListTool(props: ToolProps) {
-  const path = createMemo(() =>
+  const path = () =>
     props.state.input?.path !== props.message.path.cwd
       ? stripWorkingDirectory(props.state.input?.path, props.message.path.cwd)
-      : props.state.input?.path,
-  )
+      : props.state.input?.path
 
   return (
     <>
@@ -505,7 +504,7 @@ export function WebFetchTool(props: ToolProps) {
 }
 
 export function ReadTool(props: ToolProps) {
-  const filePath = createMemo(() => stripWorkingDirectory(props.state.input?.filePath, props.message.path.cwd))
+  const filePath = () => stripWorkingDirectory(props.state.input?.filePath, props.message.path.cwd)
 
   return (
     <>
@@ -537,7 +536,7 @@ export function ReadTool(props: ToolProps) {
 }
 
 export function WriteTool(props: ToolProps) {
-  const filePath = createMemo(() => stripWorkingDirectory(props.state.input?.filePath, props.message.path.cwd))
+  const filePath = () => stripWorkingDirectory(props.state.input?.filePath, props.message.path.cwd)
   const diagnostics = createMemo(() => getDiagnostics(props.state.metadata?.diagnostics, props.state.input.filePath))
 
   return (
@@ -568,7 +567,7 @@ export function WriteTool(props: ToolProps) {
 }
 
 export function EditTool(props: ToolProps) {
-  const filePath = createMemo(() => stripWorkingDirectory(props.state.input.filePath, props.message.path.cwd))
+  const filePath = () => stripWorkingDirectory(props.state.input.filePath, props.message.path.cwd)
   const diagnostics = createMemo(() => getDiagnostics(props.state.metadata?.diagnostics, props.state.input.filePath))
 
   return (

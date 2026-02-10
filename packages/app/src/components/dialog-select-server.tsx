@@ -149,7 +149,7 @@ export function DialogSelectServer() {
     },
     { initialValue: null },
   )
-  const canDefault = createMemo(() => !!platform.getDefaultServerUrl && !!platform.setDefaultServerUrl)
+  const canDefault = () => !!platform.getDefaultServerUrl && !!platform.setDefaultServerUrl
   const fetcher = platform.fetch ?? globalThis.fetch
 
   const looksComplete = (value: string) => {
@@ -206,7 +206,7 @@ export function DialogSelectServer() {
     return [current, ...list.filter((x) => x !== current)]
   })
 
-  const current = createMemo(() => items().find((x) => x === server.url) ?? items()[0])
+  const current = () => items().find((x) => x === server.url) ?? items()[0]
 
   const sortedItems = createMemo(() => {
     const list = items()

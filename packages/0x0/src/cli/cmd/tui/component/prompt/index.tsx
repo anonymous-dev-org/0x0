@@ -477,7 +477,7 @@ export function Prompt(props: PromptProps) {
     return
   }
 
-  const agent = createMemo(() => local.agent.color(local.agent.current().name))
+  const agent = () => local.agent.color(local.agent.current().name)
 
   const line = createMemo(() => {
     if (keybind.leader) return theme.border
@@ -485,18 +485,18 @@ export function Prompt(props: PromptProps) {
     return tint(theme.backgroundElement, agent(), 0.12)
   })
 
-  const highlight = createMemo(() => {
+  const highlight = () => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
     return agent()
-  })
+  }
 
-  const showVariant = createMemo(() => {
+  const showVariant = () => {
     const variants = local.model.variant.list()
     if (variants.length === 0) return false
     const current = local.model.variant.current()
     return !!current
-  })
+  }
 
   const spinnerDef = createMemo(() => {
     const color = local.agent.color(local.agent.current().name)
@@ -804,19 +804,19 @@ export function Prompt(props: PromptProps) {
                     if (s.type !== "retry") return
                     return s
                   })
-                  const message = createMemo(() => {
+                  const message = () => {
                     const r = retry()
                     if (!r) return
                     if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
                       return "gemini is way too hot right now"
                     if (r.message.length > 80) return r.message.slice(0, 80) + "..."
                     return r.message
-                  })
-                  const isTruncated = createMemo(() => {
+                  }
+                  const isTruncated = () => {
                     const r = retry()
                     if (!r) return false
                     return r.message.length > 120
-                  })
+                  }
                   const [seconds, setSeconds] = createSignal(0)
                   onMount(() => {
                     const timer = setInterval(() => {

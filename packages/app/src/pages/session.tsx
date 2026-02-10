@@ -103,19 +103,19 @@ export default function Page() {
   const comments = useComments()
   const permission = usePermission()
 
-  const permRequest = createMemo(() => {
+  const permRequest = () => {
     const sessionID = params.id
     if (!sessionID) return
     return sync.data.permission[sessionID]?.[0]
-  })
+  }
 
-  const questionRequest = createMemo(() => {
+  const questionRequest = () => {
     const sessionID = params.id
     if (!sessionID) return
     return sync.data.question[sessionID]?.[0]
-  })
+  }
 
-  const blocked = createMemo(() => !!permRequest() || !!questionRequest())
+  const blocked = () => !!permRequest() || !!questionRequest()
 
   const [ui, setUi] = createStore({
     responding: false,
@@ -150,8 +150,8 @@ export default function Page() {
       })
       .finally(() => setUi("responding", false))
   }
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
-  const workspaceKey = createMemo(() => params.dir ?? "")
+  const sessionKey = () => `${params.dir}${params.id ? "/" + params.id : ""}`
+  const workspaceKey = () => params.dir ?? ""
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
@@ -233,15 +233,15 @@ export default function Page() {
   }
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
-  const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
-  const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
-  const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
-  const sessionPanelWidth = createMemo(() => {
+  const desktopReviewOpen = () => isDesktop() && view().reviewPanel.opened()
+  const desktopFileTreeOpen = () => isDesktop() && layout.fileTree.opened()
+  const desktopSidePanelOpen = () => desktopReviewOpen() || desktopFileTreeOpen()
+  const sessionPanelWidth = () => {
     if (!desktopSidePanelOpen()) return "100%"
     if (desktopReviewOpen()) return `${layout.session.width()}px`
     return `calc(100% - ${layout.fileTree.width()}px)`
-  })
-  const centered = createMemo(() => isDesktop() && !desktopSidePanelOpen())
+  }
+  const centered = () => isDesktop() && !desktopSidePanelOpen()
 
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
@@ -300,27 +300,27 @@ export default function Page() {
     tabs().setActive(normalized)
   })
 
-  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
-  const diffs = createMemo(() => (params.id ? (sync.data.session_diff[params.id] ?? []) : []))
-  const reviewCount = createMemo(() => Math.max(info()?.summary?.files ?? 0, diffs().length))
-  const hasReview = createMemo(() => reviewCount() > 0)
-  const revertMessageID = createMemo(() => info()?.revert?.messageID)
-  const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
-  const messagesReady = createMemo(() => {
+  const info = () => (params.id ? sync.session.get(params.id) : undefined)
+  const diffs = () => (params.id ? (sync.data.session_diff[params.id] ?? []) : [])
+  const reviewCount = () => Math.max(info()?.summary?.files ?? 0, diffs().length)
+  const hasReview = () => reviewCount() > 0
+  const revertMessageID = () => info()?.revert?.messageID
+  const messages = () => (params.id ? (sync.data.message[params.id] ?? []) : [])
+  const messagesReady = () => {
     const id = params.id
     if (!id) return true
     return sync.data.message[id] !== undefined
-  })
-  const historyMore = createMemo(() => {
+  }
+  const historyMore = () => {
     const id = params.id
     if (!id) return false
     return sync.session.history.more(id)
-  })
-  const historyLoading = createMemo(() => {
+  }
+  const historyLoading = () => {
     const id = params.id
     if (!id) return false
     return sync.session.history.loading(id)
-  })
+  }
 
   const [title, setTitle] = createStore({
     draft: "",
@@ -501,7 +501,7 @@ export default function Page() {
   }
 
   function DialogDeleteSession(props: { sessionID: string }) {
-    const title = createMemo(() => sync.session.get(props.sessionID)?.title ?? language.t("command.session.new"))
+    const title = () => sync.session.get(props.sessionID)?.title ?? language.t("command.session.new")
     const handleDelete = async () => {
       await deleteSession(props.sessionID)
       dialog.close()
@@ -574,8 +574,8 @@ export default function Page() {
     promptHeight: 0,
   })
 
-  const turnDiffs = createMemo(() => lastUserMessage()?.summary?.diffs ?? [])
-  const reviewDiffs = createMemo(() => (store.changes === "session" ? diffs() : turnDiffs()))
+  const turnDiffs = () => lastUserMessage()?.summary?.diffs ?? []
+  const reviewDiffs = () => (store.changes === "session" ? diffs() : turnDiffs())
 
   const renderedUserMessages = createMemo(
     () => {
@@ -591,18 +591,18 @@ export default function Page() {
     },
   )
 
-  const newSessionWorktree = createMemo(() => {
+  const newSessionWorktree = () => {
     if (store.newSessionWorktree === "create") return "create"
     const project = sync.project
     if (project && sync.data.path.directory !== project.worktree) return sync.data.path.directory
     return "main"
-  })
+  }
 
-  const activeMessage = createMemo(() => {
+  const activeMessage = () => {
     if (!store.messageId) return lastUserMessage()
     const found = visibleUserMessages()?.find((m) => m.id === store.messageId)
     return found ?? lastUserMessage()
-  })
+  }
   const setActiveMessage = (message: UserMessage | undefined) => {
     setStore("messageId", message?.id)
   }
@@ -652,12 +652,12 @@ export default function Page() {
   })
   const emptyDiffFiles: string[] = []
   const diffFiles = createMemo(() => diffs().map((d) => d.file), emptyDiffFiles, { equals: same })
-  const diffsReady = createMemo(() => {
+  const diffsReady = () => {
     const id = params.id
     if (!id) return true
     if (!hasReview()) return true
     return sync.data.session_diff[id] !== undefined
-  })
+  }
 
   const idle = { type: "idle" as const }
   let inputRef!: HTMLDivElement
@@ -736,7 +736,7 @@ export default function Page() {
     ),
   )
 
-  const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? idle)
+  const status = () => sync.data.session_status[params.id ?? ""] ?? idle
 
   createEffect(
     on(
@@ -886,15 +886,14 @@ export default function Page() {
     }, 0)
   }
 
-  const contextOpen = createMemo(() => tabs().active() === "context" || tabs().all().includes("context"))
-  const openedTabs = createMemo(() =>
+  const contextOpen = () => tabs().active() === "context" || tabs().all().includes("context")
+  const openedTabs = () =>
     tabs()
       .all()
-      .filter((tab) => tab !== "context" && tab !== "review"),
-  )
+      .filter((tab) => tab !== "context" && tab !== "review")
 
-  const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
-  const reviewTab = createMemo(() => isDesktop() && !layout.fileTree.opened())
+  const mobileChanges = () => !isDesktop() && store.mobileTab === "changes"
+  const reviewTab = () => isDesktop() && !layout.fileTree.opened()
 
   const fileTreeTab = () => layout.fileTree.tab()
   const setFileTreeTab = (value: "changes" | "all") => layout.fileTree.setTab(value)
@@ -1152,7 +1151,7 @@ export default function Page() {
     requestAnimationFrame(() => attempt(0))
   })
 
-  const activeTab = createMemo(() => {
+  const activeTab = () => {
     const active = tabs().active()
     if (active === "context") return "context"
     if (active === "review" && reviewTab()) return "review"
@@ -1163,13 +1162,13 @@ export default function Page() {
     if (contextOpen()) return "context"
     if (reviewTab() && hasReview()) return "review"
     return "empty"
-  })
+  }
 
-  const activeFileTab = createMemo(() => {
+  const activeFileTab = () => {
     const active = activeTab()
     if (!openedTabs().includes(active)) return
     return active
-  })
+  }
 
   createEffect(() => {
     if (!layout.ready()) return

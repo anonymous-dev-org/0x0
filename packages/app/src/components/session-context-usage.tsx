@@ -19,11 +19,11 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
   const layout = useLayout()
   const language = useLanguage()
 
-  const variant = createMemo(() => props.variant ?? "button")
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const variant = () => props.variant ?? "button"
+  const sessionKey = () => `${params.dir}${params.id ? "/" + params.id : ""}`
   const tabs = createMemo(() => layout.tabs(sessionKey))
   const view = createMemo(() => layout.view(sessionKey))
-  const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
+  const messages = () => (params.id ? (sync.data.message[params.id] ?? []) : [])
 
   const usd = createMemo(
     () =>
@@ -35,9 +35,7 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
 
   const metrics = createMemo(() => getSessionContextMetrics(messages(), sync.data.provider.all))
   const context = createMemo(() => metrics().context)
-  const cost = createMemo(() => {
-    return usd().format(metrics().totalCost)
-  })
+  const cost = () => usd().format(metrics().totalCost)
 
   const openContext = () => {
     if (!params.id) return

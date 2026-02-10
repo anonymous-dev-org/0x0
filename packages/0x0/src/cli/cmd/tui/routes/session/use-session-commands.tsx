@@ -64,11 +64,12 @@ export function useSessionCommands(props: {
             sessionID: props.route.sessionID,
           })
           .then((res) =>
-            Clipboard.copy(res.data!.share!.url).catch(() =>
-              props.toast.show({ message: "Failed to copy URL to clipboard", variant: "error" }),
-            ),
+            Clipboard.copyWithToast(res.data!.share!.url, props.toast, {
+              successMessage: "Share URL copied to clipboard!",
+              successVariant: "success",
+              errorMessage: "Failed to copy URL to clipboard",
+            }),
           )
-          .then(() => props.toast.show({ message: "Share URL copied to clipboard!", variant: "success" }))
           .catch(() => props.toast.show({ message: "Failed to share session", variant: "error" }))
         dialog.clear()
       },
@@ -491,9 +492,11 @@ export function useSessionCommands(props: {
           return
         }
 
-        Clipboard.copy(text)
-          .then(() => props.toast.show({ message: "Message copied to clipboard!", variant: "success" }))
-          .catch(() => props.toast.show({ message: "Failed to copy to clipboard", variant: "error" }))
+        Clipboard.copyWithToast(text, props.toast, {
+          successMessage: "Message copied to clipboard!",
+          successVariant: "success",
+          errorMessage: "Failed to copy to clipboard",
+        })
         dialog.clear()
       },
     },
@@ -518,10 +521,13 @@ export function useSessionCommands(props: {
               assistantMetadata: props.showAssistantMetadata(),
             },
           )
-          await Clipboard.copy(transcript)
-          props.toast.show({ message: "Session transcript copied to clipboard!", variant: "success" })
+          await Clipboard.copyWithToast(transcript, props.toast, {
+            successMessage: "Session transcript copied to clipboard!",
+            successVariant: "success",
+            errorMessage: "Failed to copy session transcript",
+          })
         } catch {
-          props.toast.show({ message: "Failed to copy session transcript", variant: "error" })
+          props.toast.show({ message: "Failed to format session transcript", variant: "error" })
         }
         dialog.clear()
       },

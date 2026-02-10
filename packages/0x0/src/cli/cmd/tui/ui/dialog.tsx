@@ -1,5 +1,5 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { batch, createContext, Show, useContext, type JSX, type ParentProps } from "solid-js"
+import { batch, createContext, Show, useContext, type Accessor, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
@@ -50,7 +50,7 @@ export function Dialog(
 function init() {
   const [store, setStore] = createStore({
     stack: [] as {
-      element: JSX.Element
+      element: JSX.Element | Accessor<JSX.Element>
       onClose?: () => void
     }[],
     size: "medium" as "medium" | "large",
@@ -97,7 +97,7 @@ function init() {
       })
       refocus()
     },
-    replace(input: any, onClose?: () => void) {
+    replace(element: JSX.Element | Accessor<JSX.Element>, onClose?: () => void) {
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
         focus?.blur()
@@ -108,7 +108,7 @@ function init() {
       setStore("size", "medium")
       setStore("stack", [
         {
-          element: input,
+          element,
           onClose,
         },
       ])
@@ -133,6 +133,12 @@ export function DialogProvider(props: ParentProps) {
   const value = init()
   const renderer = useRenderer()
   const toast = useToast()
+  const current = () => {
+    const element = value.stack.at(-1)?.element
+    if (!element) return undefined
+    if (typeof element === "function") return element()
+    return element
+  }
   return (
     <ctx.Provider value={value}>
       {props.children}
@@ -141,16 +147,14 @@ export function DialogProvider(props: ParentProps) {
         onMouseUp={async () => {
           const text = renderer.getSelection()?.getSelectedText()
           if (text && text.length > 0) {
-            await Clipboard.copy(text)
-              .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
-              .catch(toast.error)
+            await Clipboard.copyWithToast(text, toast)
             renderer.clearSelection()
           }
         }}
       >
         <Show when={value.stack.length}>
           <Dialog onClose={() => value.clear()} size={value.size}>
-            {value.stack.at(-1)!.element}
+            {current()}
           </Dialog>
         </Show>
       </box>

@@ -1,5 +1,5 @@
 import { json, action, useParams, createAsync, useSubmission } from "@solidjs/router"
-import { createEffect, Show, createMemo } from "solid-js"
+import { createEffect, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { withActor } from "~/context/auth.withActor"
 import { Billing } from "@0x0-ai/console-core/billing.js"
@@ -71,11 +71,11 @@ export function ReloadSection() {
     reloadTrigger: "",
   })
 
-  const processingFee = createMemo(() => {
+  const processingFee = () => {
     const reloadAmount = billingInfo()?.reloadAmount
     if (!reloadAmount) return "0.00"
     return (((reloadAmount + 0.3) / 0.956) * 0.044 + 0.3).toFixed(2)
-  })
+  }
 
   createEffect(() => {
     if (!setReloadSubmission.pending && setReloadSubmission.result && !(setReloadSubmission.result as any).error) {

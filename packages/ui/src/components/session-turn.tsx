@@ -243,7 +243,7 @@ export function SessionTurn(
     return undefined
   })
 
-  const isLastUserMessage = createMemo(() => props.messageID === lastUserMessageID())
+  const isLastUserMessage = () => props.messageID === lastUserMessageID()
 
   const parts = createMemo(() => {
     const msg = message()
@@ -286,15 +286,15 @@ export function SessionTurn(
     { equals: same },
   )
 
-  const lastAssistantMessage = createMemo(() => assistantMessages().at(-1))
+  const lastAssistantMessage = () => assistantMessages().at(-1)
 
-  const error = createMemo(() => assistantMessages().find((m) => m.error)?.error)
-  const errorText = createMemo(() => {
+  const error = () => assistantMessages().find((m) => m.error)?.error
+  const errorText = () => {
     const msg = error()?.data?.message
     if (typeof msg === "string") return unwrap(msg)
     if (msg === undefined || msg === null) return ""
     return unwrap(String(msg))
-  })
+  }
 
   const lastTextPart = createMemo(() => {
     const msgs = assistantMessages()
@@ -320,10 +320,10 @@ export function SessionTurn(
   })
 
   const permissions = createMemo(() => data.store.permission?.[props.sessionID] ?? emptyPermissions)
-  const nextPermission = createMemo(() => permissions()[0])
+  const nextPermission = () => permissions()[0]
 
   const questions = createMemo(() => data.store.question?.[props.sessionID] ?? emptyQuestions)
-  const nextQuestion = createMemo(() => questions()[0])
+  const nextQuestion = () => questions()[0]
 
   const hidden = createMemo(() => {
     const out: { messageID: string; callID: string }[] = []
@@ -372,7 +372,7 @@ export function SessionTurn(
     if (assistantPart?.type === "tool" && assistantPart.tool === "bash") return assistantPart
   })
 
-  const isShellMode = createMemo(() => !!shellModePart())
+  const isShellMode = () => !!shellModePart()
 
   const rawStatus = createMemo(() => {
     const msgs = assistantMessages()
@@ -423,20 +423,20 @@ export function SessionTurn(
     return computeStatusFromPart(last, i18n.t)
   })
 
-  const status = createMemo(() => data.store.session_status[props.sessionID] ?? idle)
-  const working = createMemo(() => status().type !== "idle" && isLastUserMessage())
-  const retry = createMemo(() => {
+  const status = () => data.store.session_status[props.sessionID] ?? idle
+  const working = () => status().type !== "idle" && isLastUserMessage()
+  const retry = () => {
     // session_status is session-scoped; only show retry on the active (last) turn
     if (!isLastUserMessage()) return
     const s = status()
     if (s.type !== "retry") return
     return s
-  })
+  }
 
-  const response = createMemo(() => lastTextPart()?.text)
-  const responsePartId = createMemo(() => lastTextPart()?.id)
-  const hasDiffs = createMemo(() => (message()?.summary?.diffs?.length ?? 0) > 0)
-  const hideResponsePart = createMemo(() => !working() && !!responsePartId())
+  const response = () => lastTextPart()?.text
+  const responsePartId = () => lastTextPart()?.id
+  const hasDiffs = () => (message()?.summary?.diffs?.length ?? 0) > 0
+  const hideResponsePart = () => !working() && !!responsePartId()
 
   const [copied, setCopied] = createSignal(false)
 

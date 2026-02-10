@@ -362,10 +362,8 @@ export default function Share(props: { id: string; api: string; info: Session.In
                       <Suspense>
                         <For each={filteredParts()}>
                           {(part, partIndex) => {
-                            const last = createMemo(
-                              () =>
-                                data().messages.length === msgIndex() + 1 && filteredParts().length === partIndex() + 1,
-                            )
+                            const last = () =>
+                              data().messages.length === msgIndex() + 1 && filteredParts().length === partIndex() + 1
 
                             onMount(() => {
                               const hash = window.location.hash.slice(1)

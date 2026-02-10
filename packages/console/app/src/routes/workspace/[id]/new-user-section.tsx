@@ -25,11 +25,11 @@ export function NewUserSection() {
   const [copiedKey, setCopiedKey] = createSignal(false)
   const keys = createAsync(() => listKeys(params.id!))
   const usage = createAsync(() => getUsageInfo(params.id!))
-  const isNew = createMemo(() => {
+  const isNew = () => {
     const keysList = keys()
     const usageList = usage()
     return keysList?.length === 1 && (!usageList || usageList.length === 0)
-  })
+  }
   const defaultKey = createMemo(() => {
     const key = keys()?.at(-1)?.key
     if (!key) return undefined

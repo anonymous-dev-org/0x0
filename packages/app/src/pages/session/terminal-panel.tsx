@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from "solid-js"
+import { For, Show } from "solid-js"
 import { Tabs } from "@0x0-ai/ui/tabs"
 import { ResizeHandle } from "@0x0-ai/ui/resize-handle"
 import { IconButton } from "@0x0-ai/ui/icon-button"
@@ -141,7 +141,7 @@ export function TerminalPanel(props: {
             <DragOverlay>
               <Show when={props.activeTerminalDraggable()}>
                 {(draggedId) => {
-                  const pty = createMemo(() => props.terminal.all().find((t: LocalPTY) => t.id === draggedId()))
+                  const pty = () => props.terminal.all().find((t: LocalPTY) => t.id === draggedId())
                   return (
                     <Show when={pty()}>
                       {(t) => (

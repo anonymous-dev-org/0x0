@@ -1,4 +1,4 @@
-import { createEffect, createMemo, Show, untrack } from "solid-js"
+import { createEffect, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocation, useNavigate } from "@solidjs/router"
 import { IconButton } from "@0x0-ai/ui/icon-button"
@@ -22,9 +22,9 @@ export function Titlebar() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
-  const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
-  const web = createMemo(() => platform.platform === "web")
+  const mac = () => platform.platform === "desktop" && platform.os === "macos"
+  const windows = () => platform.platform === "desktop" && platform.os === "windows"
+  const web = () => platform.platform === "web"
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
 
@@ -46,8 +46,8 @@ export function Titlebar() {
     })
   })
 
-  const canBack = createMemo(() => history.index > 0)
-  const canForward = createMemo(() => history.index < history.stack.length - 1)
+  const canBack = () => history.index > 0
+  const canForward = () => history.index < history.stack.length - 1
 
   const back = () => {
     const next = backPath(history)

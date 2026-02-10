@@ -1,6 +1,5 @@
-import { For, Show, type JSX } from "solid-js"
+import { For, Match, Show, Switch, type JSX } from "solid-js"
 import type { AssistantMessage, UserMessage } from "@0x0-ai/sdk/v2"
-import { SessionMessageItem } from "./session-message-item"
 
 type SessionMessage = AssistantMessage | UserMessage
 
@@ -15,16 +14,19 @@ export function SessionMessages(props: {
   return (
     <Show when={props.messages.length > 0} fallback={props.fallback}>
       <For each={props.messages}>
-        {(message, index) => (
-          <SessionMessageItem
-            message={message}
-            index={index()}
-            revertMessageID={props.revertMessageID}
-            renderRevertMarker={props.renderRevertMarker}
-            renderUser={props.renderUser}
-            renderAssistant={props.renderAssistant}
-          />
-        )}
+        {(message, index) => {
+          const i = index()
+          return (
+            <Switch>
+              <Match when={message.id === props.revertMessageID}>{props.renderRevertMarker()}</Match>
+              <Match when={props.revertMessageID && message.id >= props.revertMessageID}>
+                <></>
+              </Match>
+              <Match when={message.role === "user"}>{props.renderUser(message as UserMessage, i)}</Match>
+              <Match when={message.role === "assistant"}>{props.renderAssistant(message as AssistantMessage)}</Match>
+            </Switch>
+          )
+        }}
       </For>
     </Show>
   )

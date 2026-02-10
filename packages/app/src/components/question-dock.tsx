@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component } from "solid-js"
+import { For, Show, type Component } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@0x0-ai/ui/button"
 import { Icon } from "@0x0-ai/ui/icon"
@@ -11,8 +11,8 @@ export const QuestionDock: Component<{ request: QuestionRequest }> = (props) => 
   const sdk = useSDK()
   const language = useLanguage()
 
-  const questions = createMemo(() => props.request.questions)
-  const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
+  const questions = () => props.request.questions
+  const single = () => questions().length === 1 && questions()[0]?.multiple !== true
 
   const [store, setStore] = createStore({
     tab: 0,
@@ -22,16 +22,16 @@ export const QuestionDock: Component<{ request: QuestionRequest }> = (props) => 
     sending: false,
   })
 
-  const question = createMemo(() => questions()[store.tab])
-  const confirm = createMemo(() => !single() && store.tab === questions().length)
-  const options = createMemo(() => question()?.options ?? [])
-  const input = createMemo(() => store.custom[store.tab] ?? "")
-  const multi = createMemo(() => question()?.multiple === true)
-  const customPicked = createMemo(() => {
+  const question = () => questions()[store.tab]
+  const confirm = () => !single() && store.tab === questions().length
+  const options = () => question()?.options ?? []
+  const input = () => store.custom[store.tab] ?? ""
+  const multi = () => question()?.multiple === true
+  const customPicked = () => {
     const value = input()
     if (!value) return false
     return store.answers[store.tab]?.includes(value) ?? false
-  })
+  }
 
   const fail = (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err)

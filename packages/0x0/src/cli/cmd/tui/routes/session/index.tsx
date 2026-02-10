@@ -12,7 +12,7 @@ import {
   useContext,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import { useRoute, useRouteData } from "@tui/context/route"
+import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { tint, useTheme } from "@tui/context/theme"
@@ -82,8 +82,9 @@ function use() {
 }
 
 export function Session() {
-  const route = useRouteData("session")
-  const { navigate } = useRoute()
+  const routeContext = useRoute()
+  const route = routeContext.data
+  const { navigate } = routeContext
   const sync = useSync()
   const kv = useKV()
   const { theme } = useTheme()
@@ -105,13 +106,13 @@ export function Session() {
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
 
-  const pending = createMemo(() => {
+  const pending = () => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
-  })
+  }
 
-  const lastAssistant = createMemo(() => {
+  const lastAssistant = () => {
     return messages().findLast((x) => x.role === "assistant")
-  })
+  }
 
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
@@ -125,15 +126,15 @@ export function Session() {
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 
-  const wide = createMemo(() => dimensions().width > 120)
-  const sidebarVisible = createMemo(() => {
+  const wide = () => dimensions().width > 120
+  const sidebarVisible = () => {
     if (session()?.parentID) return false
     if (sidebarOpen()) return true
     if (sidebar() === "auto" && wide()) return true
     return false
-  })
-  const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  }
+  const showTimestamps = () => timestamps() === "show"
+  const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0) - 4
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -273,8 +274,8 @@ export function Session() {
 
   const command = useCommandDialog()
 
-  const revertInfo = createMemo(() => session()?.revert)
-  const revertMessageID = createMemo(() => revertInfo()?.messageID)
+  const revertInfo = () => session()?.revert
+  const revertMessageID = () => revertInfo()?.messageID
 
   const revertDiffFiles = createMemo(() => {
     const diffText = revertInfo()?.diff ?? ""
@@ -558,16 +559,16 @@ function UserMessage(props: {
 }) {
   const ctx = use()
   const local = useLocal()
-  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
+  const text = () => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0]
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const sync = useSync()
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
-  const queued = createMemo(() => props.pending && props.message.id > props.pending)
-  const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
-  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
+  const queued = () => props.pending && props.message.id > props.pending
+  const color = () => (queued() ? theme.accent : local.agent.color(props.message.agent))
+  const metadataVisible = () => queued() || ctx.showTimestamps()
 
-  const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
+  const compaction = () => props.parts.find((x) => x.type === "compaction")
 
   return (
     <>
@@ -598,11 +599,11 @@ function UserMessage(props: {
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
                   {(file) => {
-                    const bg = createMemo(() => {
+                    const bg = () => {
                       if (file.mime.startsWith("image/")) return theme.accent
                       if (file.mime === "application/pdf") return theme.primary
                       return theme.secondary
-                    })
+                    }
                     return (
                       <text fg={theme.text}>
                         <span style={{ bg: bg(), fg: theme.background }}> {MIME_BADGE[file.mime] ?? file.mime} </span>
@@ -650,30 +651,30 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const { theme } = useTheme()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
-  const color = createMemo(() => {
+  const color = () => {
     if (props.message.error?.name === "MessageAbortedError") return theme.textMuted
     return local.agent.color(props.message.agent)
-  })
+  }
 
-  const final = createMemo(() => {
+  const final = () => {
     return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
-  })
+  }
 
   const rail = createMemo(() => tint(theme.backgroundPanel, local.agent.color(props.message.agent), 0.12))
 
-  const duration = createMemo(() => {
+  const duration = () => {
     if (!final()) return 0
     if (!props.message.time.completed) return 0
     const user = messages().find((x) => x.role === "user" && x.id === props.message.parentID)
     if (!user || !user.time) return 0
     return props.message.time.completed - user.time.created
-  })
+  }
 
   return (
     <box border={["left"]} customBorderChars={SplitBorder.customBorderChars} borderColor={rail()}>
       <For each={props.parts}>
         {(part, index) => {
-          const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
+          const component = () => PART_MAPPING[part.type as keyof typeof PART_MAPPING]
           return (
             <Show when={component()}>
               <Dynamic
@@ -730,11 +731,11 @@ const PART_MAPPING = {
 function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
-  const content = createMemo(() => {
+  const content = () => {
     // Filter out redacted reasoning chunks from OpenRouter
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
     return props.part.text.replace("[REDACTED]", "").trim()
-  })
+  }
   return (
     <Show when={content() && ctx.showThinking()}>
       <box
@@ -799,11 +800,11 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const sync = useSync()
 
   // Hide tool if showDetails is false and tool completed successfully
-  const shouldHide = createMemo(() => {
+  const shouldHide = () => {
     if (ctx.showDetails()) return false
     if (props.part.state.status !== "completed") return false
     return true
-  })
+  }
 
   const toolprops = {
     get ctx() {

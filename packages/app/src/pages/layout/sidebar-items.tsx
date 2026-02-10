@@ -14,16 +14,16 @@ import { Spinner } from "@0x0-ai/ui/spinner"
 import { Tooltip } from "@0x0-ai/ui/tooltip"
 import { getFilename } from "@0x0-ai/util/path"
 import { type Message, type Session, type TextPart } from "@0x0-ai/sdk/v2/client"
-import { For, Match, Show, Switch, createMemo, onCleanup, type Accessor, type JSX } from "solid-js"
+import { For, Match, Show, Switch, onCleanup, type Accessor, type JSX } from "solid-js"
 import { agentColor } from "@/utils/agent"
 
 const ZEROXZERO_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
 export const ProjectIcon = (props: { project: LocalProject; class?: string; notify?: boolean }): JSX.Element => {
   const notification = useNotification()
-  const unseenCount = createMemo(() => notification.project.unseenCount(props.project.worktree))
-  const hasError = createMemo(() => notification.project.unseenHasError(props.project.worktree))
-  const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
+  const unseenCount = () => notification.project.unseenCount(props.project.worktree)
+  const hasError = () => notification.project.unseenHasError(props.project.worktree)
+  const name = () => props.project.name || getFilename(props.project.worktree)
   return (
     <div class={`relative size-8 shrink-0 rounded ${props.class ?? ""}`}>
       <div class="size-full rounded overflow-clip">
@@ -76,10 +76,10 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
   const language = useLanguage()
   const notification = useNotification()
   const globalSync = useGlobalSync()
-  const unseenCount = createMemo(() => notification.session.unseenCount(props.session.id))
-  const hasError = createMemo(() => notification.session.unseenHasError(props.session.id))
+  const unseenCount = () => notification.session.unseenCount(props.session.id)
+  const hasError = () => notification.session.unseenHasError(props.session.id)
   const [sessionStore] = globalSync.child(props.session.directory)
-  const hasPermissions = createMemo(() => {
+  const hasPermissions = () => {
     const permissions = sessionStore.permission?.[props.session.id] ?? []
     if (permissions.length > 0) return true
 
@@ -88,14 +88,14 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       if (childPermissions.length > 0) return true
     }
     return false
-  })
-  const isWorking = createMemo(() => {
+  }
+  const isWorking = () => {
     if (hasPermissions()) return false
     const status = sessionStore.session_status[props.session.id]
     return status?.type === "busy" || status?.type === "retry"
-  })
+  }
 
-  const tint = createMemo(() => {
+  const tint = () => {
     const messages = sessionStore.message[props.session.id]
     if (!messages) return undefined
     let user: Message | undefined
@@ -109,15 +109,13 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
 
     const agent = sessionStore.agent.find((a) => a.name === user.agent)
     return agentColor(user.agent, agent?.color)
-  })
+  }
 
-  const hoverMessages = createMemo(() =>
-    sessionStore.message[props.session.id]?.filter((message) => message.role === "user"),
-  )
-  const hoverReady = createMemo(() => sessionStore.message[props.session.id] !== undefined)
-  const hoverAllowed = createMemo(() => !props.mobile && props.sidebarExpanded())
-  const hoverEnabled = createMemo(() => (props.popover ?? true) && hoverAllowed())
-  const isActive = createMemo(() => props.session.id === params.id)
+  const hoverMessages = () => sessionStore.message[props.session.id]?.filter((message) => message.role === "user")
+  const hoverReady = () => sessionStore.message[props.session.id] !== undefined
+  const hoverAllowed = () => !props.mobile && props.sidebarExpanded()
+  const hoverEnabled = () => (props.popover ?? true) && hoverAllowed()
+  const isActive = () => props.session.id === params.id
 
   const hoverPrefetch = { current: undefined as ReturnType<typeof setTimeout> | undefined }
   const cancelHoverPrefetch = () => {

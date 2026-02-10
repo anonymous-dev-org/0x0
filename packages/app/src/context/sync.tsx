@@ -335,7 +335,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             setStore("session", reconcile(sessions, { key: "id" }))
           })
         },
-        more: createMemo(() => current()[0].session.length >= current()[0].limit),
+        more: () => current()[0].session.length >= current()[0].limit,
         archive: async (sessionID: string) => {
           const directory = sdk.directory
           const client = sdk.client

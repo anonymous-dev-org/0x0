@@ -151,6 +151,9 @@ export namespace Config {
     const deps = []
 
     for (const dir of unique(directories)) {
+      const stat = await fs.stat(dir).catch(() => undefined)
+      if (!stat?.isDirectory()) continue
+
       if (dir.endsWith(".zeroxzero") || dir === Flag.ZEROXZERO_CONFIG_DIR) {
         for (const file of configFiles) {
           log.debug(`loading config from ${path.join(dir, file)}`)
@@ -247,7 +250,13 @@ export namespace Config {
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)
+    if (!deps.length) return
+    const start = performance.now()
     await Promise.all(deps)
+    log.debug("dependencies ready", {
+      count: deps.length,
+      duration_ms: Math.round(performance.now() - start),
+    })
   }
 
   export async function installDependencies(dir: string) {
@@ -262,7 +271,6 @@ export namespace Config {
       "@0x0-ai/plugin": targetVersion,
     }
     await Bun.write(pkg, JSON.stringify(json, null, 2))
-    await new Promise((resolve) => setTimeout(resolve, 3000))
 
     const gitignore = path.join(dir, ".gitignore")
     const hasGitIgnore = await Bun.file(gitignore).exists()

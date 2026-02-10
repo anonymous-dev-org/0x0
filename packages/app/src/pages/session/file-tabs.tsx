@@ -35,23 +35,23 @@ export function FileTabContent(props: {
   let pending: { x: number; y: number } | undefined
   let codeScroll: HTMLElement[] = []
 
-  const path = createMemo(() => props.file.pathFromTab(props.tab))
-  const state = createMemo(() => {
+  const path = () => props.file.pathFromTab(props.tab)
+  const state = () => {
     const p = path()
     if (!p) return
     return props.file.get(p)
-  })
-  const contents = createMemo(() => state()?.content?.content ?? "")
+  }
+  const contents = () => state()?.content?.content ?? ""
   const cacheKey = createMemo(() => checksum(contents()))
-  const isImage = createMemo(() => {
+  const isImage = () => {
     const c = state()?.content
     return c?.encoding === "base64" && c?.mimeType?.startsWith("image/") && c?.mimeType !== "image/svg+xml"
-  })
-  const isSvg = createMemo(() => {
+  }
+  const isSvg = () => {
     const c = state()?.content
     return c?.mimeType === "image/svg+xml"
-  })
-  const isBinary = createMemo(() => state()?.content?.type === "binary")
+  }
+  const isBinary = () => state()?.content?.type === "binary"
   const svgContent = createMemo(() => {
     if (!isSvg()) return
     const c = state()?.content
@@ -60,13 +60,13 @@ export function FileTabContent(props: {
     return decode64(c.content)
   })
 
-  const svgDecodeFailed = createMemo(() => {
+  const svgDecodeFailed = () => {
     if (!isSvg()) return false
     const c = state()?.content
     if (!c) return false
     if (c.encoding !== "base64") return false
     return svgContent() === undefined
-  })
+  }
 
   const svgToast = { shown: false }
   createEffect(() => {
@@ -79,34 +79,34 @@ export function FileTabContent(props: {
       description: "Invalid base64 content.",
     })
   })
-  const svgPreviewUrl = createMemo(() => {
+  const svgPreviewUrl = () => {
     if (!isSvg()) return
     const c = state()?.content
     if (!c) return
     if (c.encoding === "base64") return `data:image/svg+xml;base64,${c.content}`
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(c.content)}`
-  })
-  const imageDataUrl = createMemo(() => {
+  }
+  const imageDataUrl = () => {
     if (!isImage()) return
     const c = state()?.content
     return `data:${c?.mimeType};base64,${c?.content}`
-  })
-  const selectedLines = createMemo(() => {
+  }
+  const selectedLines = () => {
     const p = path()
     if (!p) return null
     if (props.file.ready()) return props.file.selectedLines(p) ?? null
     return props.handoffFiles()?.[p] ?? null
-  })
+  }
 
   let wrap: HTMLDivElement | undefined
 
-  const fileComments = createMemo(() => {
+  const fileComments = () => {
     const p = path()
     if (!p) return []
     return props.comments.list(p)
-  })
+  }
 
-  const commentedLines = createMemo(() => fileComments().map((comment) => comment.selection))
+  const commentedLines = () => fileComments().map((comment) => comment.selection)
 
   const [note, setNote] = createStore({
     openedComment: null as string | null,

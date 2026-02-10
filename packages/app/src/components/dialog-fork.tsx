@@ -1,4 +1,4 @@
-import { Component, createMemo } from "solid-js"
+import { Component } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
@@ -30,7 +30,7 @@ export const DialogFork: Component = () => {
   const dialog = useDialog()
   const language = useLanguage()
 
-  const messages = createMemo((): ForkableMessage[] => {
+  const messages = (): ForkableMessage[] => {
     const sessionID = params.id
     if (!sessionID) return []
 
@@ -52,7 +52,7 @@ export const DialogFork: Component = () => {
     }
 
     return result.reverse()
-  })
+  }
 
   const handleSelect = (item: ForkableMessage | undefined) => {
     if (!item) return

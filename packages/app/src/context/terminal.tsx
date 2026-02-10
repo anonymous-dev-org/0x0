@@ -95,7 +95,7 @@ function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: str
   return {
     ready,
     all: createMemo(() => Object.values(store.all)),
-    active: createMemo(() => store.active),
+    active: () => store.active,
     new() {
       const existingTitleNumbers = new Set(
         store.all.flatMap((pty) => {
@@ -264,7 +264,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       return entry.value
     }
 
-    const workspace = createMemo(() => loadWorkspace(params.dir!, params.id))
+    const workspace = () => loadWorkspace(params.dir!, params.id)
 
     return {
       ready: () => workspace().ready(),

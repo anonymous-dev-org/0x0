@@ -4,7 +4,7 @@ import { FileIcon } from "@0x0-ai/ui/file-icon"
 import { List } from "@0x0-ai/ui/list"
 import { getDirectory, getFilename } from "@0x0-ai/util/path"
 import fuzzysort from "fuzzysort"
-import { createMemo, createResource, createSignal } from "solid-js"
+import { createResource, createSignal } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
@@ -31,7 +31,7 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
 
   let list: ListRef | undefined
 
-  const missingBase = createMemo(() => !(sync.data.path.home || sync.data.path.directory))
+  const missingBase = () => !(sync.data.path.home || sync.data.path.directory)
 
   const [fallbackPath] = createResource(
     () => (missingBase() ? true : undefined),
@@ -44,11 +44,10 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     { initialValue: undefined },
   )
 
-  const home = createMemo(() => sync.data.path.home || fallbackPath()?.home || "")
+  const home = () => sync.data.path.home || fallbackPath()?.home || ""
 
-  const start = createMemo(
-    () => sync.data.path.home || sync.data.path.directory || fallbackPath()?.home || fallbackPath()?.directory,
-  )
+  const start = () =>
+    sync.data.path.home || sync.data.path.directory || fallbackPath()?.home || fallbackPath()?.directory
 
   const cache = new Map<string, Promise<Array<{ name: string; absolute: string }>>>()
 

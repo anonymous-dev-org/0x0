@@ -1,4 +1,3 @@
-import { createMemo } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useCommand } from "@/context/command"
 import { useDialog } from "@0x0-ai/ui/context/dialog"
@@ -50,7 +49,7 @@ export const useSessionCommands = (input: {
   addSelectionToContext: (path: string, selection: FileSelection) => void
   focusInput: () => void
 }) => {
-  const sessionCommands = createMemo(() => [
+  const sessionCommands = () => [
     {
       id: "session.new",
       title: input.language.t("command.session.new"),
@@ -59,9 +58,9 @@ export const useSessionCommands = (input: {
       slash: "new",
       onSelect: () => input.navigate(`/${input.params.dir}/session`),
     },
-  ])
+  ]
 
-  const fileCommands = createMemo(() => [
+  const fileCommands = () => [
     {
       id: "file.open",
       title: input.language.t("command.file.open"),
@@ -83,9 +82,9 @@ export const useSessionCommands = (input: {
         input.tabs().close(active)
       },
     },
-  ])
+  ]
 
-  const contextCommands = createMemo(() => [
+  const contextCommands = () => [
     {
       id: "context.addSelection",
       title: input.language.t("command.context.addSelection"),
@@ -115,9 +114,9 @@ export const useSessionCommands = (input: {
         input.addSelectionToContext(path, selectionFromLines(range))
       },
     },
-  ])
+  ]
 
-  const viewCommands = createMemo(() => [
+  const viewCommands = () => [
     {
       id: "terminal.toggle",
       title: input.language.t("command.terminal.toggle"),
@@ -175,9 +174,9 @@ export const useSessionCommands = (input: {
         input.setExpanded(msg.id, (open: boolean | undefined) => !open)
       },
     },
-  ])
+  ]
 
-  const messageCommands = createMemo(() => [
+  const messageCommands = () => [
     {
       id: "message.previous",
       title: input.language.t("command.message.previous"),
@@ -196,9 +195,9 @@ export const useSessionCommands = (input: {
       disabled: !input.params.id,
       onSelect: () => input.navigateMessageByOffset(1),
     },
-  ])
+  ]
 
-  const agentCommands = createMemo(() => [
+  const agentCommands = () => [
     {
       id: "model.choose",
       title: input.language.t("command.model.choose"),
@@ -244,9 +243,9 @@ export const useSessionCommands = (input: {
         input.local.model.variant.cycle()
       },
     },
-  ])
+  ]
 
-  const permissionCommands = createMemo(() => [
+  const permissionCommands = () => [
     {
       id: "permissions.autoaccept",
       title:
@@ -270,9 +269,9 @@ export const useSessionCommands = (input: {
         })
       },
     },
-  ])
+  ]
 
-  const sessionActionCommands = createMemo(() => [
+  const sessionActionCommands = () => [
     {
       id: "session.undo",
       title: input.language.t("command.session.undo"),
@@ -358,9 +357,9 @@ export const useSessionCommands = (input: {
       disabled: !input.params.id || input.visibleUserMessages().length === 0,
       onSelect: () => input.dialog.show(() => <DialogFork />),
     },
-  ])
+  ]
 
-  const shareCommands = createMemo(() => {
+  const shareCommands = () => {
     if (input.sync.data.config.share === "disabled") return []
     return [
       {
@@ -437,7 +436,7 @@ export const useSessionCommands = (input: {
         },
       },
     ]
-  })
+  }
 
   input.command.register("session", () =>
     combineCommandSections([

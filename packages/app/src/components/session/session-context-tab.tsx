@@ -79,17 +79,17 @@ export function SessionContextTab(props: SessionContextTabProps) {
     return DateTime.fromMillis(value).setLocale(language.locale()).toLocaleString(DateTime.DATETIME_MED)
   }
 
-  const providerLabel = createMemo(() => {
+  const providerLabel = () => {
     const c = ctx()
     if (!c) return "—"
     return c.providerLabel
-  })
+  }
 
-  const modelLabel = createMemo(() => {
+  const modelLabel = () => {
     const c = ctx()
     if (!c) return "—"
     return c.modelLabel
-  })
+  }
 
   const breakdown = createMemo(
     on(

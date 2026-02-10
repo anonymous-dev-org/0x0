@@ -1,5 +1,5 @@
 import type { Component, JSX } from "solid-js"
-import { createMemo, splitProps } from "solid-js"
+import { splitProps } from "solid-js"
 import sprite from "./file-icons/sprite.svg"
 import type { IconName } from "./file-icons/types"
 
@@ -10,7 +10,7 @@ export type FileIconProps = JSX.GSVGAttributes<SVGSVGElement> & {
 
 export const FileIcon: Component<FileIconProps> = (props) => {
   const [local, rest] = splitProps(props, ["node", "class", "classList", "expanded"])
-  const name = createMemo(() => chooseIconName(local.node.path, local.node.type, local.expanded || false))
+  const name = () => chooseIconName(local.node.path, local.node.type, local.expanded || false)
   return (
     <svg
       data-component="file-icon"

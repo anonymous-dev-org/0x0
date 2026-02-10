@@ -20,6 +20,11 @@ function writeOsc52(text: string): void {
 }
 
 export namespace Clipboard {
+  type Toast = {
+    show: (input: { message: string; variant: "info" | "success" | "error" | "warning" }) => void
+    error: (error: unknown) => void
+  }
+
   export interface Content {
     data: string
     mime: string
@@ -155,5 +160,30 @@ export namespace Clipboard {
   export async function copy(text: string): Promise<void> {
     writeOsc52(text)
     await getCopyMethod()(text)
+  }
+
+  export async function copyWithToast(
+    text: string,
+    toast: Toast,
+    options?: {
+      successMessage?: string
+      successVariant?: "info" | "success" | "error" | "warning"
+      errorMessage?: string
+    },
+  ) {
+    await copy(text)
+      .then(() =>
+        toast.show({
+          message: options?.successMessage ?? "Copied to clipboard",
+          variant: options?.successVariant ?? "info",
+        }),
+      )
+      .catch((error) => {
+        if (!options?.errorMessage) {
+          toast.error(error)
+          return
+        }
+        toast.show({ message: options.errorMessage, variant: "error" })
+      })
   }
 }

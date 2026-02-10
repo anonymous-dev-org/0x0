@@ -1,4 +1,4 @@
-import { Component, createMemo, createSignal, Show } from "solid-js"
+import { Component, createSignal, Show } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useSDK } from "@/context/sdk"
 import { Dialog } from "@0x0-ai/ui/dialog"
@@ -12,11 +12,10 @@ export const DialogSelectMcp: Component = () => {
   const language = useLanguage()
   const [loading, setLoading] = createSignal<string | null>(null)
 
-  const items = createMemo(() =>
+  const items = () =>
     Object.entries(sync.data.mcp ?? {})
       .map(([name, status]) => ({ name, status: status.status }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  )
+      .sort((a, b) => a.name.localeCompare(b.name))
 
   const toggle = async (name: string) => {
     if (loading()) return
@@ -32,8 +31,8 @@ export const DialogSelectMcp: Component = () => {
     setLoading(null)
   }
 
-  const enabledCount = createMemo(() => items().filter((i) => i.status === "connected").length)
-  const totalCount = createMemo(() => items().length)
+  const enabledCount = () => items().filter((i) => i.status === "connected").length
+  const totalCount = () => items().length
 
   return (
     <Dialog

@@ -1,12 +1,21 @@
 import path from "path"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
+import { Global } from "@/global"
 
 export function normalizePath(input?: string) {
   if (!input) return ""
-  if (path.isAbsolute(input)) {
-    return path.relative(process.cwd(), input) || "."
+
+  const cwd = process.cwd()
+  const home = Global.Path.home
+  const absolute = path.isAbsolute(input) ? input : path.resolve(cwd, input)
+  const relative = path.relative(cwd, absolute)
+
+  if (!relative) return "."
+  if (!relative.startsWith("..")) return relative
+  if (home && (absolute === home || absolute.startsWith(home + path.sep))) {
+    return absolute.replace(home, "~")
   }
-  return input
+  return absolute
 }
 
 export function toolInput(input: Record<string, unknown>, omit?: string[]): string {

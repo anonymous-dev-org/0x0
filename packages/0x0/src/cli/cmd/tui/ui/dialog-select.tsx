@@ -119,11 +119,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
 
   const dimensions = useTerminalDimensions()
-  const height = createMemo(() =>
-    Math.min(flat().length + grouped().length * 2 - 1, Math.floor(dimensions().height / 2) - 6),
-  )
+  const height = () => Math.min(flat().length + grouped().length * 2 - 1, Math.floor(dimensions().height / 2) - 6)
 
-  const selected = createMemo(() => flat()[store.selected])
+  const selected = () => flat()[store.selected]
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
@@ -288,8 +286,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 </Show>
                 <For each={options}>
                   {(option) => {
-                    const active = createMemo(() => isDeepEqual(option.value, selected()?.value))
-                    const current = createMemo(() => isDeepEqual(option.value, props.current))
+                    const active = () => isDeepEqual(option.value, selected()?.value)
+                    const current = () => isDeepEqual(option.value, props.current)
                     return (
                       <box
                         id={JSON.stringify(option.value)}

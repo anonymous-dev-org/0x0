@@ -323,11 +323,8 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
     },
   )
 
-  const textPart = createMemo(
-    () => props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined,
-  )
-
-  const text = createMemo(() => textPart()?.text || "")
+  const text = () =>
+    (props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined)?.text || ""
 
   createEffect(() => {
     text()
@@ -343,14 +340,13 @@ export function UserMessageDisplay(props: { message: UserMessage; parts: PartTyp
     }),
   )
 
-  const inlineFiles = createMemo(() =>
+  const inlineFiles = () =>
     files().filter((f) => {
       const mime = f.mime
       return !mime.startsWith("image/") && mime !== "application/pdf" && f.source?.text?.start !== undefined
-    }),
-  )
+    })
 
-  const agents = createMemo(() => (props.parts?.filter((p) => p.type === "agent") as AgentPart[]) ?? [])
+  const agents = () => (props.parts?.filter((p) => p.type === "agent") as AgentPart[]) ?? []
 
   const openImagePreview = (url: string, alt?: string) => {
     dialog.show(() => <ImagePreview src={url} alt={alt} />)
@@ -482,7 +478,7 @@ function HighlightedText(props: { text: string; references: FilePart[]; agents: 
 }
 
 export function Part(props: MessagePartProps) {
-  const component = createMemo(() => PART_MAPPING[props.part.type])
+  const component = () => PART_MAPPING[props.part.type]
   return (
     <Show when={component()}>
       <Dynamic
@@ -537,19 +533,19 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   const i18n = useI18n()
   const part = props.part as ToolPart
 
-  const permission = createMemo(() => {
+  const permission = () => {
     const next = data.store.permission?.[props.message.sessionID]?.[0]
     if (!next || !next.tool) return undefined
     if (next.tool!.callID !== part.callID) return undefined
     return next
-  })
+  }
 
-  const questionRequest = createMemo(() => {
+  const questionRequest = () => {
     const next = data.store.question?.[props.message.sessionID]?.[0]
     if (!next || !next.tool) return undefined
     if (next.tool!.callID !== part.callID) return undefined
     return next
-  })
+  }
 
   const [showPermission, setShowPermission] = createSignal(false)
   const [showQuestion, setShowQuestion] = createSignal(false)
@@ -888,12 +884,12 @@ ToolRegistry.register({
       overflowAnchor: "auto",
     })
 
-    const childPermission = createMemo(() => {
+    const childPermission = () => {
       const sessionId = childSessionId()
       if (!sessionId) return undefined
       const permissions = data.store.permission?.[sessionId] ?? []
       return permissions[0]
-    })
+    }
 
     const childToolPart = createMemo(() => {
       const perm = childPermission()
@@ -1011,12 +1007,12 @@ ToolRegistry.register({
                   <For each={childToolParts()}>
                     {(item) => {
                       const info = createMemo(() => getToolInfo(item.tool, item.state.input))
-                      const subtitle = createMemo(() => {
+                      const subtitle = () => {
                         if (info().subtitle) return info().subtitle
                         if (item.state.status === "completed" || item.state.status === "running") {
                           return item.state.title
                         }
-                      })
+                      }
                       return (
                         <div data-slot="task-tool-item">
                           <Icon name={info().icon} size="small" />
@@ -1066,7 +1062,7 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const diffComponent = useDiffComponent()
-    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.filePath))
+    const diagnostics = () => getDiagnostics(props.metadata.diagnostics, props.input.filePath)
     const filename = () => getFilename(props.input.filePath ?? "")
     return (
       <BasicTool
@@ -1119,7 +1115,7 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const codeComponent = useCodeComponent()
-    const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.filePath))
+    const diagnostics = () => getDiagnostics(props.metadata.diagnostics, props.input.filePath)
     const filename = () => getFilename(props.input.filePath ?? "")
     return (
       <BasicTool
@@ -1180,11 +1176,11 @@ ToolRegistry.register({
     const diffComponent = useDiffComponent()
     const files = createMemo(() => (props.metadata.files ?? []) as ApplyPatchFile[])
 
-    const subtitle = createMemo(() => {
+    const subtitle = () => {
       const count = files().length
       if (count === 0) return ""
       return `${count} ${i18n.t(count > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
-    })
+    }
 
     return (
       <BasicTool
@@ -1264,11 +1260,11 @@ ToolRegistry.register({
       return []
     })
 
-    const subtitle = createMemo(() => {
+    const subtitle = () => {
       const list = todos()
       if (list.length === 0) return ""
       return `${list.filter((t: Todo) => t.status === "completed").length}/${list.length}`
-    })
+    }
 
     return (
       <BasicTool
@@ -1302,16 +1298,16 @@ ToolRegistry.register({
   name: "question",
   render(props) {
     const i18n = useI18n()
-    const questions = createMemo(() => (props.input.questions ?? []) as QuestionInfo[])
-    const answers = createMemo(() => (props.metadata.answers ?? []) as QuestionAnswer[])
-    const completed = createMemo(() => answers().length > 0)
+    const questions = () => (props.input.questions ?? []) as QuestionInfo[]
+    const answers = () => (props.metadata.answers ?? []) as QuestionAnswer[]
+    const completed = () => answers().length > 0
 
-    const subtitle = createMemo(() => {
+    const subtitle = () => {
       const count = questions().length
       if (count === 0) return ""
       if (completed()) return i18n.t("ui.question.subtitle.answered", { count })
       return `${count} ${i18n.t(count > 1 ? "ui.common.question.other" : "ui.common.question.one")}`
-    })
+    }
 
     return (
       <BasicTool
@@ -1346,8 +1342,8 @@ ToolRegistry.register({
 function QuestionPrompt(props: { request: QuestionRequest }) {
   const data = useData()
   const i18n = useI18n()
-  const questions = createMemo(() => props.request.questions)
-  const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
+  const questions = () => props.request.questions
+  const single = () => questions().length === 1 && questions()[0]?.multiple !== true
 
   const [store, setStore] = createStore({
     tab: 0,
@@ -1356,16 +1352,16 @@ function QuestionPrompt(props: { request: QuestionRequest }) {
     editing: false,
   })
 
-  const question = createMemo(() => questions()[store.tab])
-  const confirm = createMemo(() => !single() && store.tab === questions().length)
-  const options = createMemo(() => question()?.options ?? [])
-  const input = createMemo(() => store.custom[store.tab] ?? "")
-  const multi = createMemo(() => question()?.multiple === true)
-  const customPicked = createMemo(() => {
+  const question = () => questions()[store.tab]
+  const confirm = () => !single() && store.tab === questions().length
+  const options = () => question()?.options ?? []
+  const input = () => store.custom[store.tab] ?? ""
+  const multi = () => question()?.multiple === true
+  const customPicked = () => {
     const value = input()
     if (!value) return false
     return store.answers[store.tab]?.includes(value) ?? false
-  })
+  }
 
   function submit() {
     const answers = questions().map((_, i) => store.answers[i] ?? [])

@@ -1,4 +1,4 @@
-import { Match, Show, Switch, createMemo } from "solid-js"
+import { Match, Show, Switch } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createAsync, useParams, useAction, useSubmission } from "@solidjs/router"
 import { NewUserSection } from "./new-user-section"
@@ -20,7 +20,7 @@ export default function () {
   const [store, setStore] = createStore({
     checkoutRedirecting: false,
   })
-  const balance = createMemo(() => formatBalance(billingInfo()?.balance ?? 0))
+  const balance = () => formatBalance(billingInfo()?.balance ?? 0)
 
   async function onClickCheckout() {
     const baseUrl = window.location.href
