@@ -1,10 +1,10 @@
 import { getFilename } from "@0x0-ai/util/path"
-import { type AgentPartInput, type FilePartInput, type Part, type TextPartInput } from "@0x0-ai/sdk/v2/client"
+import { type FilePartInput, type Part, type TextPartInput } from "@0x0-ai/sdk/v2/client"
 import type { FileSelection } from "@/context/file"
-import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
+import type { FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
 import { Identifier } from "@/utils/id"
 
-type PromptRequestPart = (TextPartInput | FilePartInput | AgentPartInput) & { id: string }
+type PromptRequestPart = (TextPartInput | FilePartInput) & { id: string }
 
 type ContextFile = {
   key: string
@@ -50,7 +50,6 @@ const fileQuery = (selection: FileSelection | undefined) =>
   selection ? `?start=${selection.startLine}&end=${selection.endLine}` : ""
 
 const isFileAttachment = (part: Prompt[number]): part is FileAttachmentPart => part.type === "file"
-const isAgentAttachment = (part: Prompt[number]): part is AgentPart => part.type === "agent"
 
 const commentNote = (path: string, selection: FileSelection | undefined, comment: string) => {
   const start = selection ? Math.min(selection.startLine, selection.endLine) : undefined
@@ -78,22 +77,12 @@ const toOptimisticPart = (part: PromptRequestPart, sessionID: string, messageID:
       messageID,
     }
   }
-  if (part.type === "file") {
-    return {
-      id: part.id,
-      type: "file",
-      mime: part.mime,
-      filename: part.filename,
-      url: part.url,
-      source: part.source,
-      sessionID,
-      messageID,
-    }
-  }
   return {
     id: part.id,
-    type: "agent",
-    name: part.name,
+    type: "file",
+    mime: part.mime,
+    filename: part.filename,
+    url: part.url,
     source: part.source,
     sessionID,
     messageID,
@@ -125,19 +114,6 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
           end: attachment.end,
         },
         path,
-      },
-    } satisfies PromptRequestPart
-  })
-
-  const agents = input.prompt.filter(isAgentAttachment).map((attachment) => {
-    return {
-      id: Identifier.ascending("part"),
-      type: "agent",
-      name: attachment.name,
-      source: {
-        value: attachment.content,
-        start: attachment.start,
-        end: attachment.end,
       },
     } satisfies PromptRequestPart
   })
@@ -181,7 +157,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     } satisfies PromptRequestPart
   })
 
-  requestParts.push(...files, ...context, ...agents, ...images)
+  requestParts.push(...files, ...context, ...images)
 
   return {
     requestParts,

@@ -12,6 +12,16 @@ export interface ACPSessionState {
   }
   variant?: string
   modeId?: string
+  modes?: Record<
+    string,
+    {
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      variant?: string
+    }
+  >
 }
 
 export interface ACPConfig {

@@ -127,7 +127,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
-      setTimeout(() => {
+      queueMicrotask(() => {
         if (filter.length > 0) {
           moveTo(0, true)
         } else if (current) {
@@ -136,7 +136,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             moveTo(currentIndex, true)
           }
         }
-      }, 0)
+      })
     }),
   )
 
@@ -251,11 +251,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedTextColor={theme.textMuted}
             ref={(r) => {
               input = r
-              setTimeout(() => {
+              queueMicrotask(() => {
                 if (!input) return
                 if (input.isDestroyed) return
                 input.focus()
-              }, 1)
+              })
             }}
             placeholder={props.placeholder ?? "Search"}
           />

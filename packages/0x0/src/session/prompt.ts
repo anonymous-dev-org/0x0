@@ -1167,33 +1167,6 @@ export namespace SessionPrompt {
           }
         }
 
-        if (part.type === "agent") {
-          // Check if this agent would be denied by task permission
-          const perm = PermissionNext.evaluate("task", part.name, agent.permission)
-          const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
-          return [
-            {
-              id: Identifier.ascending("part"),
-              ...part,
-              messageID: info.id,
-              sessionID: input.sessionID,
-            },
-            {
-              id: Identifier.ascending("part"),
-              messageID: info.id,
-              sessionID: input.sessionID,
-              type: "text",
-              synthetic: true,
-              // An extra space is added here. Otherwise the 'Use' gets appended
-              // to user's last word; making a combined word
-              text:
-                " Use the above message and context to generate a prompt and call the task tool with agent: " +
-                part.name +
-                hint,
-            },
-          ]
-        }
-
         return [
           {
             id: Identifier.ascending("part"),

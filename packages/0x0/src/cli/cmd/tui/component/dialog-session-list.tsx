@@ -30,7 +30,7 @@ export function DialogSessionList() {
     return result.data ?? []
   })
 
-  const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
+  const currentSessionID = createMemo(() => route.data.sessionID || undefined)
 
   const sessions = createMemo(() => searchResults() ?? sync.data.session)
 

@@ -37,6 +37,7 @@ export class ACPSessionManager {
       mcpServers,
       createdAt: new Date(),
       model: resolvedModel,
+      modes: {},
     }
     log.info("creating_session", { state })
 
@@ -68,6 +69,7 @@ export class ACPSessionManager {
       mcpServers,
       createdAt: new Date(session.time.created),
       model: resolvedModel,
+      modes: {},
     }
     log.info("loading_session", { state })
 
@@ -92,6 +94,11 @@ export class ACPSessionManager {
   setModel(sessionId: string, model: ACPSessionState["model"]) {
     const session = this.get(sessionId)
     session.model = model
+    if (session.modeId) {
+      if (!session.modes) session.modes = {}
+      if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
+      session.modes[session.modeId].model = model
+    }
     this.sessions.set(sessionId, session)
     return session
   }
@@ -104,13 +111,50 @@ export class ACPSessionManager {
   setVariant(sessionId: string, variant?: string) {
     const session = this.get(sessionId)
     session.variant = variant
+    if (session.modeId) {
+      if (!session.modes) session.modes = {}
+      if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
+      session.modes[session.modeId].variant = variant
+    }
     this.sessions.set(sessionId, session)
     return session
   }
 
   setMode(sessionId: string, modeId: string) {
     const session = this.get(sessionId)
+    if (session.modeId) {
+      if (!session.modes) session.modes = {}
+      if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
+      session.modes[session.modeId].model = session.model
+      session.modes[session.modeId].variant = session.variant
+    }
     session.modeId = modeId
+    const restored = session.modes?.[modeId]
+    session.model = restored?.model
+    session.variant = restored?.variant
+    this.sessions.set(sessionId, session)
+    return session
+  }
+
+  getModeSelection(sessionId: string, modeId: string) {
+    const session = this.get(sessionId)
+    return session.modes?.[modeId]
+  }
+
+  setModeSelection(
+    sessionId: string,
+    modeId: string,
+    selection: {
+      model?: ACPSessionState["model"]
+      variant?: string
+    },
+  ) {
+    const session = this.get(sessionId)
+    if (!session.modes) session.modes = {}
+    session.modes[modeId] = {
+      model: selection.model,
+      variant: selection.variant,
+    }
     this.sessions.set(sessionId, session)
     return session
   }

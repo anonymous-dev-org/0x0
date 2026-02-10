@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { batch, createEffect, createMemo } from "solid-js"
+import { batch, createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { uniqueBy } from "remeda"
@@ -36,7 +36,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     const agent = iife(() => {
       const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
-      const visibleAgents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
       const [agentStore, setAgentStore] = createStore<{
         current: string
       }>({
@@ -83,9 +82,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return Locale.titlecase(name)
         },
         color(name: string) {
-          const index = visibleAgents().findIndex((x) => x.name === name)
+          const index = agents().findIndex((x) => x.name === name)
           if (index === -1) return colors()[0]
-          const agent = visibleAgents()[index]
+          const agent = agents()[index]
 
           if (agent?.color) {
             const color = agent.color
@@ -221,6 +220,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         favorite() {
           return modelStore.favorite
         },
+        list() {
+          return sync.data.provider.flatMap((provider) =>
+            Object.values(provider.models).map((model) => ({
+              ...model,
+              provider,
+            })),
+          )
+        },
         parsed: createMemo(() => {
           const value = currentModel()
           if (!value) {
@@ -249,7 +256,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (next >= recent.length) next = 0
           const val = recent[next]
           if (!val) return
-          setModelStore("model", agent.current().name, { ...val })
+          this.set({ ...val })
         },
         cycleFavorite(direction: 1 | -1) {
           const favorites = modelStore.favorite.filter((item) => isModelValid(item))
@@ -275,7 +282,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
           const next = favorites[index]
           if (!next) return
-          setModelStore("model", agent.current().name, { ...next })
+          this.set({ ...next })
           const uniq = uniqueBy([next, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
           if (uniq.length > 10) uniq.pop()
           setModelStore(
@@ -294,7 +301,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               })
               return
             }
-            setModelStore("model", agent.current().name, model)
+            const currentAgent = agent.current()
+            setModelStore("model", currentAgent.name, model)
+            const provider = sync.data.provider.find((x) => x.id === model.providerID)
+            const variants = Object.keys(provider?.models[model.modelID]?.variants ?? {})
+            const variant = modelStore.variant[currentAgent.name]
+            if (variant && !variants.includes(variant)) {
+              setModelStore("variant", currentAgent.name, undefined)
+            }
             if (options?.recent) {
               const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
               if (uniq.length > 10) uniq.pop()
@@ -333,8 +347,16 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           current() {
             const m = currentModel()
             if (!m) return undefined
-            const key = `${m.providerID}/${m.modelID}`
-            return modelStore.variant[key]
+            const agentName = agent.current().name
+            const legacyKey = `${m.providerID}/${m.modelID}`
+            const value = modelStore.variant[agentName] ?? modelStore.variant[legacyKey]
+            if (!value) return undefined
+            const provider = sync.data.provider.find((x) => x.id === m.providerID)
+            const model = provider?.models[m.modelID]
+            if (model?.variants && value in model.variants) {
+              return value
+            }
+            return undefined
           },
           list() {
             const m = currentModel()
@@ -347,8 +369,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           set(value: string | undefined) {
             const m = currentModel()
             if (!m) return
-            const key = `${m.providerID}/${m.modelID}`
-            setModelStore("variant", key, value)
+            if (value && !this.list().includes(value)) return
+            setModelStore("variant", agent.current().name, value)
             save()
           },
           cycle() {
@@ -386,24 +408,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         }
       },
     }
-
-    // Automatically update model when agent changes
-    createEffect(() => {
-      const value = agent.current()
-      if (value.model) {
-        if (isModelValid(value.model))
-          model.set({
-            providerID: value.model.providerID,
-            modelID: value.model.modelID,
-          })
-        else
-          toast.show({
-            variant: "warning",
-            message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
-            duration: 3000,
-          })
-      }
-    })
 
     const result = {
       model,

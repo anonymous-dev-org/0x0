@@ -1,13 +1,12 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show, Switch, Match } from "solid-js"
+import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, TextAttributes, t, dim, fg } from "@opentui/core"
+import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show } from "solid-js"
 import "opentui-spinner/solid"
 import { useLocal } from "@tui/context/local"
-import { useTheme } from "@tui/context/theme"
+import { tint, useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { Identifier } from "@/id/id"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -21,7 +20,6 @@ import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@0x0-ai/sdk/v2"
 import { TuiEvent } from "../../event"
-import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
@@ -32,6 +30,9 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { usePromptCommands } from "./use-prompt-commands"
+import { usePromptParts } from "./use-prompt-parts"
+import { submitPrompt } from "./submit-prompt"
 
 export type PromptProps = {
   sessionID?: string
@@ -93,18 +94,24 @@ export function Prompt(props: PromptProps) {
   const agentStyleId = syntax().getStyleId("extmark.agent")!
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId = 0
+  const defer = (cb: () => void) => {
+    queueMicrotask(() => {
+      if (!input || input.isDestroyed) return
+      cb()
+    })
+  }
 
-  sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
+  const off = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!input || input.isDestroyed) return
     input.insertText(evt.properties.text)
-    setTimeout(() => {
-      // setTimeout is a workaround and needs to be addressed properly
-      if (!input || input.isDestroyed) return
+    defer(() => {
       input.getLayoutNode().markDirty()
       input.gotoBufferEnd()
       renderer.requestRender()
-    }, 0)
+    })
   })
+
+  onCleanup(off)
 
   createEffect(() => {
     if (props.disabled) input.cursorColor = theme.backgroundElement
@@ -150,196 +157,110 @@ export function Prompt(props: PromptProps) {
       if (msg.agent && hasAgent) {
         local.agent.set(msg.agent)
         if (msg.model) local.model.set(msg.model)
-        if (msg.variant) local.model.variant.set(msg.variant)
+        local.model.variant.set(msg.variant)
       }
     }
   })
 
-  command.register(() => {
-    return [
-      {
-        title: "Clear prompt",
-        value: "prompt.clear",
-        category: "Prompt",
-        hidden: true,
-        onSelect: (dialog) => {
-          input.extmarks.clear()
-          input.clear()
-          dialog.clear()
-        },
-      },
-      {
-        title: "Submit prompt",
-        value: "prompt.submit",
-        keybind: "input_submit",
-        category: "Prompt",
-        hidden: true,
-        onSelect: (dialog) => {
-          if (!input.focused) return
-          submit()
-          dialog.clear()
-        },
-      },
-      {
-        title: "Paste",
-        value: "prompt.paste",
-        keybind: "input_paste",
-        category: "Prompt",
-        hidden: true,
-        onSelect: async () => {
-          const content = await Clipboard.read()
-          if (content?.mime.startsWith("image/")) {
-            await pasteImage({
-              filename: "clipboard",
-              mime: content.mime,
-              content: content.data,
-            })
+  function clear() {
+    input.extmarks.clear()
+    input.clear()
+  }
+
+  async function paste() {
+    const content = await Clipboard.read()
+    if (content?.mime.startsWith("image/")) {
+      await pasteImage({
+        filename: "clipboard",
+        mime: content.mime,
+        content: content.data,
+      })
+    }
+  }
+
+  async function edit() {
+    const text = store.prompt.parts
+      .filter((p) => p.type === "text")
+      .reduce((acc, p) => {
+        if (!p.source) return acc
+        return acc.replace(p.source.text.value, p.text)
+      }, store.prompt.input)
+
+    const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
+
+    const value = text
+    const content = await Editor.open({ value, renderer })
+    if (!content) return
+
+    input.setText(content)
+
+    const updatedNonTextParts = nonTextParts
+      .map((part) => {
+        let virtualText = ""
+        if (part.type === "file" && part.source?.text) {
+          virtualText = part.source.text.value
+        } else if (part.type === "agent" && part.source) {
+          virtualText = part.source.value
+        }
+
+        if (!virtualText) return part
+
+        const newStart = content.indexOf(virtualText)
+        if (newStart === -1) return null
+
+        const newEnd = newStart + virtualText.length
+
+        if (part.type === "file" && part.source?.text) {
+          return {
+            ...part,
+            source: {
+              ...part.source,
+              text: {
+                ...part.source.text,
+                start: newStart,
+                end: newEnd,
+              },
+            },
           }
-        },
-      },
-      {
-        title: "Interrupt session",
-        value: "session.interrupt",
-        keybind: "session_interrupt",
-        category: "Session",
-        hidden: true,
-        enabled: status().type !== "idle",
-        onSelect: (dialog) => {
-          if (autocomplete.visible) return
-          if (!input.focused) return
-          // TODO: this should be its own command
-          if (store.mode === "shell") {
-            setStore("mode", "normal")
-            return
+        }
+
+        if (part.type === "agent" && part.source) {
+          return {
+            ...part,
+            source: {
+              ...part.source,
+              start: newStart,
+              end: newEnd,
+            },
           }
-          if (!props.sessionID) return
+        }
 
-          setStore("interrupt", store.interrupt + 1)
+        return part
+      })
+      .filter((part) => part !== null)
 
-          setTimeout(() => {
-            setStore("interrupt", 0)
-          }, 5000)
+    setStore("prompt", {
+      input: content,
+      parts: updatedNonTextParts,
+    })
+    parts.restore(updatedNonTextParts)
+    input.cursorOffset = Bun.stringWidth(content)
+  }
 
-          if (store.interrupt >= 2) {
-            sdk.client.session.abort({
-              sessionID: props.sessionID,
-            })
-            setStore("interrupt", 0)
-          }
-          dialog.clear()
-        },
-      },
-      {
-        title: "Open editor",
-        category: "Session",
-        keybind: "editor_open",
-        value: "prompt.editor",
-        slash: {
-          name: "editor",
-        },
-        onSelect: async (dialog) => {
-          dialog.clear()
-
-          // replace summarized text parts with the actual text
-          const text = store.prompt.parts
-            .filter((p) => p.type === "text")
-            .reduce((acc, p) => {
-              if (!p.source) return acc
-              return acc.replace(p.source.text.value, p.text)
-            }, store.prompt.input)
-
-          const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
-
-          const value = text
-          const content = await Editor.open({ value, renderer })
-          if (!content) return
-
-          input.setText(content)
-
-          // Update positions for nonTextParts based on their location in new content
-          // Filter out parts whose virtual text was deleted
-          // this handles a case where the user edits the text in the editor
-          // such that the virtual text moves around or is deleted
-          const updatedNonTextParts = nonTextParts
-            .map((part) => {
-              let virtualText = ""
-              if (part.type === "file" && part.source?.text) {
-                virtualText = part.source.text.value
-              } else if (part.type === "agent" && part.source) {
-                virtualText = part.source.value
-              }
-
-              if (!virtualText) return part
-
-              const newStart = content.indexOf(virtualText)
-              // if the virtual text is deleted, remove the part
-              if (newStart === -1) return null
-
-              const newEnd = newStart + virtualText.length
-
-              if (part.type === "file" && part.source?.text) {
-                return {
-                  ...part,
-                  source: {
-                    ...part.source,
-                    text: {
-                      ...part.source.text,
-                      start: newStart,
-                      end: newEnd,
-                    },
-                  },
-                }
-              }
-
-              if (part.type === "agent" && part.source) {
-                return {
-                  ...part,
-                  source: {
-                    ...part.source,
-                    start: newStart,
-                    end: newEnd,
-                  },
-                }
-              }
-
-              return part
-            })
-            .filter((part) => part !== null)
-
+  function skills() {
+    dialog.replace(() => (
+      <DialogSkill
+        onSelect={(skill) => {
+          input.setText(`/${skill} `)
           setStore("prompt", {
-            input: content,
-            // keep only the non-text parts because the text parts were
-            // already expanded inline
-            parts: updatedNonTextParts,
+            input: `/${skill} `,
+            parts: [],
           })
-          restoreExtmarksFromParts(updatedNonTextParts)
-          input.cursorOffset = Bun.stringWidth(content)
-        },
-      },
-      {
-        title: "Skills",
-        value: "prompt.skills",
-        category: "Prompt",
-        slash: {
-          name: "skills",
-        },
-        onSelect: () => {
-          dialog.replace(() => (
-            <DialogSkill
-              onSelect={(skill) => {
-                input.setText(`/${skill} `)
-                setStore("prompt", {
-                  input: `/${skill} `,
-                  parts: [],
-                })
-                input.gotoBufferEnd()
-              }}
-            />
-          ))
-        },
-      },
-    ]
-  })
+          input.gotoBufferEnd()
+        }}
+      />
+    ))
+  }
 
   const ref: PromptRef = {
     get focused() {
@@ -357,7 +278,7 @@ export function Prompt(props: PromptProps) {
     set(prompt) {
       input.setText(prompt.input)
       setStore("prompt", prompt)
-      restoreExtmarksFromParts(prompt.parts)
+      parts.restore(prompt.parts)
       input.gotoBufferEnd()
     },
     reset() {
@@ -383,270 +304,99 @@ export function Prompt(props: PromptProps) {
     props.onInputChange?.(store.prompt.input)
   })
 
-  function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
-    input.extmarks.clear()
-    setStore("extmarkToPartIndex", new Map())
+  const parts = usePromptParts({
+    input: () => input,
+    promptPartTypeId: () => promptPartTypeId,
+    fileStyleId,
+    agentStyleId,
+    pasteStyleId,
+    getParts: () => store.prompt.parts,
+    getMap: () => store.extmarkToPartIndex,
+    setParts: (parts) => setStore("prompt", "parts", parts),
+    setMap: (map) => setStore("extmarkToPartIndex", map),
+  })
 
-    parts.forEach((part, partIndex) => {
-      let start = 0
-      let end = 0
-      let virtualText = ""
-      let styleId: number | undefined
-
-      if (part.type === "file" && part.source?.text) {
-        start = part.source.text.start
-        end = part.source.text.end
-        virtualText = part.source.text.value
-        styleId = fileStyleId
-      } else if (part.type === "agent" && part.source) {
-        start = part.source.start
-        end = part.source.end
-        virtualText = part.source.value
-        styleId = agentStyleId
-      } else if (part.type === "text" && part.source?.text) {
-        start = part.source.text.start
-        end = part.source.text.end
-        virtualText = part.source.text.value
-        styleId = pasteStyleId
-      }
-
-      if (virtualText) {
-        const extmarkId = input.extmarks.create({
-          start,
-          end,
-          virtual: true,
-          styleId,
-          typeId: promptPartTypeId,
-        })
-        setStore("extmarkToPartIndex", (map: Map<number, number>) => {
-          const newMap = new Map(map)
-          newMap.set(extmarkId, partIndex)
-          return newMap
-        })
-      }
+  function stashPush() {
+    if (!store.prompt.input) return
+    stash.push({
+      input: store.prompt.input,
+      parts: store.prompt.parts,
     })
+    input.extmarks.clear()
+    input.clear()
+    setStore("prompt", { input: "", parts: [] })
+    setStore("extmarkToPartIndex", new Map())
   }
 
-  function syncExtmarksWithPromptParts() {
-    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    setStore(
-      produce((draft) => {
-        const newMap = new Map<number, number>()
-        const newParts: typeof draft.prompt.parts = []
-
-        for (const extmark of allExtmarks) {
-          const partIndex = draft.extmarkToPartIndex.get(extmark.id)
-          if (partIndex !== undefined) {
-            const part = draft.prompt.parts[partIndex]
-            if (part) {
-              if (part.type === "agent" && part.source) {
-                part.source.start = extmark.start
-                part.source.end = extmark.end
-              } else if (part.type === "file" && part.source?.text) {
-                part.source.text.start = extmark.start
-                part.source.text.end = extmark.end
-              } else if (part.type === "text" && part.source?.text) {
-                part.source.text.start = extmark.start
-                part.source.text.end = extmark.end
-              }
-              newMap.set(extmark.id, newParts.length)
-              newParts.push(part)
-            }
-          }
-        }
-
-        draft.extmarkToPartIndex = newMap
-        draft.prompt.parts = newParts
-      }),
-    )
+  function stashPop() {
+    const entry = stash.pop()
+    if (!entry) return
+    input.setText(entry.input)
+    setStore("prompt", { input: entry.input, parts: entry.parts })
+    parts.restore(entry.parts)
+    input.gotoBufferEnd()
   }
 
-  command.register(() => [
-    {
-      title: "Stash prompt",
-      value: "prompt.stash",
-      category: "Prompt",
-      enabled: !!store.prompt.input,
-      onSelect: (dialog) => {
-        if (!store.prompt.input) return
-        stash.push({
-          input: store.prompt.input,
-          parts: store.prompt.parts,
-        })
-        input.extmarks.clear()
-        input.clear()
-        setStore("prompt", { input: "", parts: [] })
-        setStore("extmarkToPartIndex", new Map())
-        dialog.clear()
-      },
-    },
-    {
-      title: "Stash pop",
-      value: "prompt.stash.pop",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        const entry = stash.pop()
-        if (entry) {
+  function stashList() {
+    dialog.replace(() => (
+      <DialogStash
+        onSelect={(entry) => {
           input.setText(entry.input)
           setStore("prompt", { input: entry.input, parts: entry.parts })
-          restoreExtmarksFromParts(entry.parts)
+          parts.restore(entry.parts)
           input.gotoBufferEnd()
-        }
-        dialog.clear()
-      },
+        }}
+      />
+    ))
+  }
+
+  usePromptCommands({
+    command,
+    sessionID: props.sessionID,
+    status,
+    promptInput: () => store.prompt.input,
+    stashCount: () => stash.list().length,
+    mode: () => store.mode,
+    interrupt: () => store.interrupt,
+    inputFocused: () => input.focused,
+    autocompleteVisible: () => autocomplete.visible !== false,
+    setMode: (mode: "normal" | "shell") => setStore("mode", mode),
+    setInterrupt: (value: number) => setStore("interrupt", value),
+    abortSession: (sessionID: string) => {
+      sdk.client.session.abort({ sessionID })
     },
-    {
-      title: "Stash list",
-      value: "prompt.stash.list",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        dialog.replace(() => (
-          <DialogStash
-            onSelect={(entry) => {
-              input.setText(entry.input)
-              setStore("prompt", { input: entry.input, parts: entry.parts })
-              restoreExtmarksFromParts(entry.parts)
-              input.gotoBufferEnd()
-            }}
-          />
-        ))
-      },
-    },
-  ])
+    clear,
+    submit,
+    paste,
+    edit,
+    skills,
+    stashPush,
+    stashPop,
+    stashList,
+  })
 
   async function submit() {
-    if (props.disabled) return
-    if (autocomplete?.visible) return
-    if (!store.prompt.input) return
-    const trimmed = store.prompt.input.trim()
-    if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
-      exit()
-      return
-    }
-    const selectedModel = local.model.current()
-    if (!selectedModel) {
-      promptModelWarning()
-      return
-    }
-    const sessionID = props.sessionID
-      ? props.sessionID
-      : await (async () => {
-          const sessionID = await sdk.client.session.create({}).then((x) => x.data!.id)
-          return sessionID
-        })()
-    const messageID = Identifier.ascending("message")
-    let inputText = store.prompt.input
-
-    // Expand pasted text inline before submitting
-    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
-
-    for (const extmark of sortedExtmarks) {
-      const partIndex = store.extmarkToPartIndex.get(extmark.id)
-      if (partIndex !== undefined) {
-        const part = store.prompt.parts[partIndex]
-        if (part?.type === "text" && part.text) {
-          const before = inputText.slice(0, extmark.start)
-          const after = inputText.slice(extmark.end)
-          inputText = before + part.text + after
-        }
-      }
-    }
-
-    // Filter out text parts (pasted content) since they're now expanded inline
-    const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
-
-    // Capture mode before it gets reset
-    const currentMode = store.mode
-    const variant = local.model.variant.current()
-
-    if (store.mode === "shell") {
-      sdk.client.session.shell({
-        sessionID,
-        agent: local.agent.current().name,
-        model: {
-          providerID: selectedModel.providerID,
-          modelID: selectedModel.modelID,
-        },
-        command: inputText,
-      })
-      setStore("mode", "normal")
-    } else if (
-      inputText.startsWith("/") &&
-      iife(() => {
-        const firstLine = inputText.split("\n")[0]
-        const command = firstLine.split(" ")[0].slice(1)
-        return sync.data.command.some((x) => x.name === command)
-      })
-    ) {
-      // Parse command from first line, preserve multi-line content in arguments
-      const firstLineEnd = inputText.indexOf("\n")
-      const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-      const [command, ...firstLineArgs] = firstLine.split(" ")
-      const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-      const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
-
-      sdk.client.session.command({
-        sessionID,
-        command: command.slice(1),
-        arguments: args,
-        agent: local.agent.current().name,
-        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-        messageID,
-        variant,
-        parts: nonTextParts
-          .filter((x) => x.type === "file")
-          .map((x) => ({
-            id: Identifier.ascending("part"),
-            ...x,
-          })),
-      })
-    } else {
-      sdk.client.session
-        .prompt({
-          sessionID,
-          ...selectedModel,
-          messageID,
-          agent: local.agent.current().name,
-          model: selectedModel,
-          variant,
-          parts: [
-            {
-              id: Identifier.ascending("part"),
-              type: "text",
-              text: inputText,
-            },
-            ...nonTextParts.map((x) => ({
-              id: Identifier.ascending("part"),
-              ...x,
-            })),
-          ],
-        })
-        .catch(() => {})
-    }
-    history.append({
-      ...store.prompt,
-      mode: currentMode,
+    await submitPrompt({
+      disabled: props.disabled,
+      autocompleteVisible: autocomplete.visible !== false,
+      prompt: store.prompt,
+      mode: store.mode,
+      extmarkToPartIndex: store.extmarkToPartIndex,
+      sessionID: props.sessionID,
+      local,
+      sdk,
+      sync,
+      route,
+      history,
+      input,
+      promptPartTypeId,
+      setMode: (mode) => setStore("mode", mode),
+      setPrompt: (prompt) => setStore("prompt", prompt),
+      setExtmarkToPartIndex: (map) => setStore("extmarkToPartIndex", map),
+      onPromptModelWarning: promptModelWarning,
+      onSubmit: props.onSubmit,
+      exit,
     })
-    input.extmarks.clear()
-    setStore("prompt", {
-      input: "",
-      parts: [],
-    })
-    setStore("extmarkToPartIndex", new Map())
-    props.onSubmit?.()
-
-    // temporary hack to make sure the message is sent
-    if (!props.sessionID)
-      setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 50)
-    input.clear()
   }
   const exit = useExit()
 
@@ -727,10 +477,18 @@ export function Prompt(props: PromptProps) {
     return
   }
 
+  const agent = createMemo(() => local.agent.color(local.agent.current().name))
+
+  const line = createMemo(() => {
+    if (keybind.leader) return theme.border
+    if (store.mode === "shell") return theme.primary
+    return tint(theme.backgroundElement, agent(), 0.12)
+  })
+
   const highlight = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
-    return local.agent.color(local.agent.current().name)
+    return agent()
   })
 
   const showVariant = createMemo(() => {
@@ -770,22 +528,12 @@ export function Prompt(props: PromptProps) {
         setPrompt={(cb) => {
           setStore("prompt", produce(cb))
         }}
-        setExtmark={(partIndex, extmarkId) => {
-          setStore("extmarkToPartIndex", (map: Map<number, number>) => {
-            const newMap = new Map(map)
-            newMap.set(extmarkId, partIndex)
-            return newMap
-          })
-        }}
         value={store.prompt.input}
-        fileStyleId={fileStyleId}
-        agentStyleId={agentStyleId}
-        promptPartTypeId={() => promptPartTypeId}
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
         <box
           border={["left"]}
-          borderColor={highlight()}
+          borderColor={line()}
           customBorderChars={{
             ...EmptyBorder,
             vertical: "┃",
@@ -810,7 +558,7 @@ export function Prompt(props: PromptProps) {
                 const value = input.plainText
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
-                syncExtmarksWithPromptParts()
+                parts.sync()
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
@@ -890,7 +638,7 @@ export function Prompt(props: PromptProps) {
                       input.setText(item.input)
                       setStore("prompt", item)
                       setStore("mode", item.mode ?? "normal")
-                      restoreExtmarksFromParts(item.parts)
+                      parts.restore(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
                       if (direction === 1) input.cursorOffset = input.plainText.length
@@ -965,12 +713,10 @@ export function Prompt(props: PromptProps) {
                 }
 
                 // Force layout update and render for the pasted content
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
+                defer(() => {
                   input.getLayoutNode().markDirty()
                   renderer.requestRender()
-                }, 0)
+                })
               }}
               ref={(r: TextareaRenderable) => {
                 input = r
@@ -978,31 +724,33 @@ export function Prompt(props: PromptProps) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
                 props.ref?.(ref)
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
+                defer(() => {
                   input.cursorColor = theme.text
-                }, 0)
+                })
               }}
               onMouseDown={(r: MouseEvent) => r.target?.focus()}
               focusedBackgroundColor={theme.backgroundElement}
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
+            <box flexDirection="row" flexShrink={0} paddingTop={0} gap={1}>
+              <text fg={highlight()} attributes={TextAttributes.DIM}>
                 {store.mode === "shell" ? "Shell" : local.agent.label(local.agent.current().name)}{" "}
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                  <text flexShrink={0} fg={theme.textMuted} attributes={TextAttributes.DIM}>
                     {local.model.parsed().model}
                   </text>
-                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                    {local.model.parsed().provider}
+                  </text>
                   <Show when={showVariant()}>
-                    <text fg={theme.textMuted}>·</text>
-                    <text>
-                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                      ·
+                    </text>
+                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                      {local.model.variant.current()}
                     </text>
                   </Show>
                 </box>
@@ -1013,7 +761,7 @@ export function Prompt(props: PromptProps) {
         <box
           height={1}
           border={["left"]}
-          borderColor={highlight()}
+          borderColor={line()}
           customBorderChars={{
             ...EmptyBorder,
             vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
@@ -1036,112 +784,86 @@ export function Prompt(props: PromptProps) {
             }
           />
         </box>
-        <box flexDirection="row" justifyContent="space-between">
-          <Show when={status().type !== "idle"} fallback={<text />}>
-            <box
-              flexDirection="row"
-              gap={1}
-              flexGrow={1}
-              justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-            >
-              <box flexShrink={0} flexDirection="row" gap={1}>
-                <box marginLeft={1}>
-                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                  </Show>
-                </box>
-                <box flexDirection="row" gap={1} flexShrink={0}>
-                  {(() => {
-                    const retry = createMemo(() => {
-                      const s = status()
-                      if (s.type !== "retry") return
-                      return s
-                    })
-                    const message = createMemo(() => {
-                      const r = retry()
-                      if (!r) return
-                      if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                        return "gemini is way too hot right now"
-                      if (r.message.length > 80) return r.message.slice(0, 80) + "..."
-                      return r.message
-                    })
-                    const isTruncated = createMemo(() => {
-                      const r = retry()
-                      if (!r) return false
-                      return r.message.length > 120
-                    })
-                    const [seconds, setSeconds] = createSignal(0)
-                    onMount(() => {
-                      const timer = setInterval(() => {
-                        const next = retry()?.next
-                        if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                      }, 1000)
-
-                      onCleanup(() => {
-                        clearInterval(timer)
-                      })
-                    })
-                    const handleMessageClick = () => {
-                      const r = retry()
-                      if (!r) return
-                      if (isTruncated()) {
-                        DialogAlert.show(dialog, "Retry Error", r.message)
-                      }
-                    }
-
-                    const retryText = () => {
-                      const r = retry()
-                      if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                      const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
-
-                    return (
-                      <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
-                        </box>
-                      </Show>
-                    )
-                  })()}
-                </box>
+        <Show when={status().type !== "idle"}>
+          <box
+            flexDirection="row"
+            gap={1}
+            flexGrow={1}
+            justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
+          >
+            <box flexShrink={0} flexDirection="row" gap={1}>
+              <box marginLeft={1}>
+                <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                  <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                </Show>
               </box>
-              <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                esc{" "}
-                <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                </span>
-              </text>
+              <box flexDirection="row" gap={1} flexShrink={0}>
+                {(() => {
+                  const retry = createMemo(() => {
+                    const s = status()
+                    if (s.type !== "retry") return
+                    return s
+                  })
+                  const message = createMemo(() => {
+                    const r = retry()
+                    if (!r) return
+                    if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
+                      return "gemini is way too hot right now"
+                    if (r.message.length > 80) return r.message.slice(0, 80) + "..."
+                    return r.message
+                  })
+                  const isTruncated = createMemo(() => {
+                    const r = retry()
+                    if (!r) return false
+                    return r.message.length > 120
+                  })
+                  const [seconds, setSeconds] = createSignal(0)
+                  onMount(() => {
+                    const timer = setInterval(() => {
+                      const next = retry()?.next
+                      if (next) setSeconds(Math.round((next - Date.now()) / 1000))
+                    }, 1000)
+
+                    onCleanup(() => {
+                      clearInterval(timer)
+                    })
+                  })
+                  const handleMessageClick = () => {
+                    const r = retry()
+                    if (!r) return
+                    if (isTruncated()) {
+                      DialogAlert.show(dialog, "Retry Error", r.message)
+                    }
+                  }
+
+                  const retryText = () => {
+                    const r = retry()
+                    if (!r) return ""
+                    const baseMessage = message()
+                    const truncatedHint = isTruncated() ? " (click to expand)" : ""
+                    const duration = formatDuration(seconds())
+                    const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
+                    return baseMessage + truncatedHint + retryInfo
+                  }
+
+                  return (
+                    <Show when={retry()}>
+                      <box onMouseUp={handleMessageClick}>
+                        <text fg={theme.error}>{retryText()}</text>
+                      </box>
+                    </Show>
+                  )
+                })()}
+              </box>
             </box>
-          </Show>
-          <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
-              <Switch>
-                <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
-                    <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                    </text>
-                  </Show>
-                  <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
-                </Match>
-                <Match when={store.mode === "shell"}>
-                  <text fg={theme.text}>
-                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                  </text>
-                </Match>
-              </Switch>
-            </box>
-          </Show>
-        </box>
+            <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
+              esc{" "}
+              <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
+                {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+              </span>
+            </text>
+          </box>
+        </Show>
       </box>
     </>
   )

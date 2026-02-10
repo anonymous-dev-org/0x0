@@ -1287,18 +1287,6 @@ export type KeybindsConfig = {
    */
   history_next?: string
   /**
-   * Next child session
-   */
-  session_child_cycle?: string
-  /**
-   * Previous child session
-   */
-  session_child_cycle_reverse?: string
-  /**
-   * Go to parent session
-   */
-  session_parent?: string
-  /**
    * Suspend terminal
    */
   terminal_suspend?: string
@@ -1320,6 +1308,52 @@ export type KeybindsConfig = {
  * Log level
  */
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
+
+/**
+ * Override built-in system prompts and reminders
+ */
+export type PromptConfig = {
+  system?: {
+    /**
+     * Override Codex instructions header
+     */
+    codex_instructions?: string
+    /**
+     * Override default system prompt for gpt-5 models
+     */
+    gpt5?: string
+    /**
+     * Override default system prompt for gpt/o1/o3 models
+     */
+    openai?: string
+    /**
+     * Override default system prompt for Gemini models
+     */
+    gemini?: string
+    /**
+     * Override default system prompt for Claude models
+     */
+    claude?: string
+    /**
+     * Override default system prompt for Trinity models
+     */
+    trinity?: string
+    /**
+     * Override fallback system prompt for other models
+     */
+    fallback?: string
+  }
+  reminder?: {
+    /**
+     * Override queued-user reminder. Use {{message}} placeholder for the user text.
+     */
+    queued_user?: string
+    /**
+     * Override max-steps reminder when step limit is reached
+     */
+    max_steps?: string
+  }
+}
 
 /**
  * Server configuration for zeroxzero serve and web commands
@@ -1641,6 +1675,7 @@ export type Config = {
      */
     diff_style?: "auto" | "stacked"
   }
+  prompt?: PromptConfig
   server?: ServerConfig
   /**
    * Command configuration, see https://zeroxzero.ai/docs/commands
@@ -1701,7 +1736,7 @@ export type Config = {
    */
   small_model?: string
   /**
-   * Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.
+   * Default agent to use when none is specified. Falls back to 'build' if not set or if the specified agent is invalid.
    */
   default_agent?: string
   /**

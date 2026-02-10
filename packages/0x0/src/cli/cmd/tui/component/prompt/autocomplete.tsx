@@ -1,49 +1,19 @@
 import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "@opentui/core"
-import { pathToFileURL } from "bun"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
-import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
+import { createMemo, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useSDK } from "@tui/context/sdk"
+import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
-import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
-import { useFrecency } from "./frecency"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
   return hashIndex !== -1 ? input.substring(0, hashIndex) : input
-}
-
-function extractLineRange(input: string) {
-  const hashIndex = input.lastIndexOf("#")
-  if (hashIndex === -1) {
-    return { baseQuery: input }
-  }
-
-  const baseName = input.substring(0, hashIndex)
-  const linePart = input.substring(hashIndex + 1)
-  const lineMatch = linePart.match(/^(\d+)(?:-(\d*))?$/)
-
-  if (!lineMatch) {
-    return { baseQuery: baseName }
-  }
-
-  const startLine = Number(lineMatch[1])
-  const endLine = lineMatch[2] && startLine < Number(lineMatch[2]) ? Number(lineMatch[2]) : undefined
-
-  return {
-    lineRange: {
-      baseName,
-      startLine,
-      endLine,
-    },
-    baseQuery: baseName,
-  }
 }
 
 export type AutocompleteRef = {
@@ -67,20 +37,15 @@ export function Autocomplete(props: {
   value: string
   sessionID?: string
   setPrompt: (input: (prompt: PromptInfo) => void) => void
-  setExtmark: (partIndex: number, extmarkId: number) => void
   anchor: () => BoxRenderable
   input: () => TextareaRenderable
   ref: (ref: AutocompleteRef) => void
-  fileStyleId: number
-  agentStyleId: number
-  promptPartTypeId: () => number
 }) {
-  const sdk = useSDK()
+  const local = useLocal()
   const sync = useSync()
   const command = useCommandDialog()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
-  const frecency = useFrecency()
 
   const [store, setStore] = createStore({
     index: 0,
@@ -148,13 +113,9 @@ export function Autocomplete(props: {
     setStore("input", "keyboard")
   })
 
-  function insertPart(text: string, part: PromptInfo["parts"][number]) {
+  function replaceAtTrigger(text = "") {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
-
-    const charAfterCursor = props.value.at(currentCursorOffset)
-    const needsSpace = charAfterCursor !== " "
-    const append = "@" + text + (needsSpace ? " " : "")
 
     input.cursorOffset = store.index
     const startCursor = input.logicalCursor
@@ -162,194 +123,57 @@ export function Autocomplete(props: {
     const endCursor = input.logicalCursor
 
     input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
-    input.insertText(append)
-
-    const virtualText = "@" + text
-    const extmarkStart = store.index
-    const extmarkEnd = extmarkStart + Bun.stringWidth(virtualText)
-
-    const styleId = part.type === "file" ? props.fileStyleId : part.type === "agent" ? props.agentStyleId : undefined
-
-    const extmarkId = input.extmarks.create({
-      start: extmarkStart,
-      end: extmarkEnd,
-      virtual: true,
-      styleId,
-      typeId: props.promptPartTypeId(),
-    })
-
-    props.setPrompt((draft) => {
-      if (part.type === "file") {
-        const existingIndex = draft.parts.findIndex((p) => p.type === "file" && "url" in p && p.url === part.url)
-        if (existingIndex !== -1) {
-          const existing = draft.parts[existingIndex]
-          if (
-            part.source?.text &&
-            existing &&
-            "source" in existing &&
-            existing.source &&
-            "text" in existing.source &&
-            existing.source.text
-          ) {
-            existing.source.text.start = extmarkStart
-            existing.source.text.end = extmarkEnd
-            existing.source.text.value = virtualText
-          }
-          return
-        }
-      }
-
-      if (part.type === "file" && part.source?.text) {
-        part.source.text.start = extmarkStart
-        part.source.text.end = extmarkEnd
-        part.source.text.value = virtualText
-      } else if (part.type === "agent" && part.source) {
-        part.source.start = extmarkStart
-        part.source.end = extmarkEnd
-        part.source.value = virtualText
-      }
-      const partIndex = draft.parts.length
-      draft.parts.push(part)
-      props.setExtmark(partIndex, extmarkId)
-    })
-
-    if (part.type === "file" && part.source && part.source.type === "file") {
-      frecency.updateFrecency(part.source.path)
-    }
+    if (!text) return
+    input.insertText(text)
   }
 
-  const [files] = createResource(
-    () => search(),
-    async (query) => {
-      if (!store.visible || store.visible === "/") return []
-
-      const { lineRange, baseQuery } = extractLineRange(query ?? "")
-
-      // Get files from SDK
-      const result = await sdk.client.find.files({
-        query: baseQuery,
-      })
-
-      const options: AutocompleteOption[] = []
-
-      // Add file options
-      if (!result.error && result.data) {
-        const sortedFiles = result.data.sort((a, b) => {
-          const aScore = frecency.getFrecency(a)
-          const bScore = frecency.getFrecency(b)
-          if (aScore !== bScore) return bScore - aScore
-          const aDepth = a.split("/").length
-          const bDepth = b.split("/").length
-          if (aDepth !== bDepth) return aDepth - bDepth
-          return a.localeCompare(b)
-        })
-
-        const width = props.anchor().width - 4
-        options.push(
-          ...sortedFiles.map((item): AutocompleteOption => {
-            const fullPath = `${process.cwd()}/${item}`
-            const urlObj = pathToFileURL(fullPath)
-            let filename = item
-            if (lineRange && !item.endsWith("/")) {
-              filename = `${item}#${lineRange.startLine}${lineRange.endLine ? `-${lineRange.endLine}` : ""}`
-              urlObj.searchParams.set("start", String(lineRange.startLine))
-              if (lineRange.endLine !== undefined) {
-                urlObj.searchParams.set("end", String(lineRange.endLine))
-              }
-            }
-            const url = urlObj.href
-
-            const isDir = item.endsWith("/")
-            return {
-              display: Locale.truncateMiddle(filename, width),
-              value: filename,
-              isDirectory: isDir,
-              path: item,
-              onSelect: () => {
-                insertPart(filename, {
-                  type: "file",
-                  mime: "text/plain",
-                  filename,
-                  url,
-                  source: {
-                    type: "file",
-                    text: {
-                      start: 0,
-                      end: 0,
-                      value: "",
-                    },
-                    path: item,
-                  },
-                })
-              },
-            }
-          }),
-        )
-      }
-
-      return options
-    },
-    {
-      initialValue: [],
-    },
-  )
-
-  const mcpResources = createMemo(() => {
-    if (!store.visible || store.visible === "/") return []
-
-    const options: AutocompleteOption[] = []
-    const width = props.anchor().width - 4
-
-    for (const res of Object.values(sync.data.mcp_resource)) {
-      const text = `${res.name} (${res.uri})`
-      options.push({
-        display: Locale.truncateMiddle(text, width),
-        value: text,
-        description: res.description,
-        onSelect: () => {
-          insertPart(res.name, {
-            type: "file",
-            mime: res.mimeType ?? "text/plain",
-            filename: res.name,
-            url: res.uri,
-            source: {
-              type: "resource",
-              text: {
-                start: 0,
-                end: 0,
-                value: "",
-              },
-              clientName: res.client,
-              uri: res.uri,
-            },
-          })
-        },
-      })
-    }
-
-    return options
-  })
-
-  const agents = createMemo(() => {
-    const agents = sync.data.agent
-    return agents
-      .filter((agent) => !agent.hidden && agent.mode !== "primary")
+  const agents = createMemo(() =>
+    sync.data.agent
+      .filter((agent) => !agent.hidden)
       .map(
         (agent): AutocompleteOption => ({
-          display: "@" + agent.name,
+          display: `@${agent.name}`,
+          value: `${agent.name} agent ${agent.description ?? ""}`,
+          description: agent.description,
           onSelect: () => {
-            insertPart(agent.name, {
-              type: "agent",
-              name: agent.name,
-              source: {
-                start: 0,
-                end: 0,
-                value: "",
-              },
-            })
+            local.agent.set(agent.name)
+            replaceAtTrigger()
           },
         }),
-      )
+      ),
+  )
+
+  const models = createMemo(() =>
+    local.model.list().map(
+      (model: { id: string; name: string; provider: { id: string; name: string } }): AutocompleteOption => ({
+        display: `@${model.provider.id}/${model.id}`,
+        value: `${model.name} model ${model.provider.name} ${model.provider.id}/${model.id}`,
+        description: model.name,
+        onSelect: () => {
+          local.model.set({
+            providerID: model.provider.id,
+            modelID: model.id,
+          })
+          replaceAtTrigger()
+        },
+      }),
+    ),
+  )
+
+  const variants = createMemo(() => {
+    const values = local.model.variant.list()
+    if (values.length === 0) return []
+    return [undefined, ...values].map(
+      (variant): AutocompleteOption => ({
+        display: `@${variant ?? "default"}`,
+        value: `thinking ${variant ?? "default"}`,
+        description: variant ? `variant: ${variant}` : "clear model variant",
+        onSelect: () => {
+          local.model.variant.set(variant)
+          replaceAtTrigger()
+        },
+      }),
+    )
   })
 
   const commands = createMemo((): AutocompleteOption[] => {
@@ -381,22 +205,19 @@ export function Autocomplete(props: {
     }))
   })
 
-  const options = createMemo((prev: AutocompleteOption[] | undefined) => {
-    const filesValue = files()
+  const options = createMemo(() => {
     const agentsValue = agents()
+    const modelsValue = models()
+    const variantsValue = variants()
     const commandsValue = commands()
 
     const mixed: AutocompleteOption[] =
-      store.visible === "@" ? [...agentsValue, ...(filesValue || []), ...mcpResources()] : [...commandsValue]
+      store.visible === "@" ? [...agentsValue, ...modelsValue, ...variantsValue] : [...commandsValue]
 
     const searchValue = search()
 
     if (!searchValue) {
       return mixed
-    }
-
-    if (files.loading && prev && prev.length > 0) {
-      return prev
     }
 
     const result = fuzzysort.go(removeLineRange(searchValue), mixed, {
@@ -406,15 +227,6 @@ export function Autocomplete(props: {
         (obj) => obj.aliases?.join(" ") ?? "",
       ],
       limit: 10,
-      scoreFn: (objResults) => {
-        const displayResult = objResults[0]
-        let score = objResults.score
-        if (displayResult && displayResult.target.startsWith(store.visible + searchValue)) {
-          score *= 2
-        }
-        const frecencyScore = objResults.obj.path ? frecency.getFrecency(objResults.obj.path) : 0
-        return score * (1 + frecencyScore)
-      },
     })
 
     return result.map((arr) => arr.obj)

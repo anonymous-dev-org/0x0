@@ -30,7 +30,7 @@ describe("buildRequestParts", () => {
     })
 
     expect(result.requestParts[0]?.type).toBe("text")
-    expect(result.requestParts.some((part) => part.type === "agent")).toBe(true)
+    expect(result.requestParts.every((part) => part.type === "text" || part.type === "file")).toBe(true)
     expect(
       result.requestParts.some((part) => part.type === "file" && part.url.startsWith("file:///repo/src/foo.ts")),
     ).toBe(true)

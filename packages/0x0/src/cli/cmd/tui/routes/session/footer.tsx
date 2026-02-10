@@ -14,7 +14,6 @@ export function Footer() {
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const lsp = createMemo(() => Object.keys(sync.data.lsp))
   const permissions = createMemo(() => {
-    if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
   })
   const directory = useDirectory()

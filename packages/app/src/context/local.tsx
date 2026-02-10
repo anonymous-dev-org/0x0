@@ -42,13 +42,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }>({
         current: list()[0]?.name,
       })
-      const apply = (value: ReturnType<typeof list>[number] | undefined) => {
-        if (!value?.model) return
-        model.set({
-          providerID: value.model.providerID,
-          modelID: value.model.modelID,
-        })
-      }
       return {
         list,
         current() {
@@ -63,14 +56,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             return
           }
           if (name && available.some((x) => x.name === name)) {
-            const value = available.find((x) => x.name === name)
             setStore("current", name)
-            apply(value)
             return
           }
           const value = available[0]
           setStore("current", value.name)
-          apply(value)
         },
         move(direction: 1 | -1) {
           const available = list()
@@ -84,7 +74,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const value = available[next]
           if (!value) return
           setStore("current", value.name)
-          apply(value)
         },
       }
     })()
@@ -94,8 +83,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       const [ephemeral, setEphemeral] = createStore<{
         model: Record<string, ModelKey | undefined>
+        variant: Record<string, string | undefined>
       }>({
         model: {},
+        variant: {},
       })
 
       const fallbackModel = createMemo<ModelKey | undefined>(() => {
@@ -179,7 +170,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           batch(() => {
             const currentAgent = agent.current()
             const next = model ?? fallbackModel()
-            if (currentAgent) setEphemeral("model", currentAgent.name, next)
+            if (currentAgent) {
+              setEphemeral("model", currentAgent.name, next)
+              const variants = next ? Object.keys(models.find(next)?.variants ?? {}) : []
+              const variant = ephemeral.variant[currentAgent.name]
+              if (variant && !variants.includes(variant)) {
+                setEphemeral("variant", currentAgent.name, undefined)
+              }
+            }
             if (model) models.setVisibility(model, true)
             if (options?.recent && model) models.recent.push(model)
           })
@@ -192,11 +190,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         },
         variant: {
           current() {
+            const a = agent.current()
+            if (!a) return undefined
+            const value = ephemeral.variant[a.name]
             const m = current()
             if (!m) return undefined
-            const value = models.variant.get({ providerID: m.provider.id, modelID: m.id })
-            if (value !== undefined) return value
-            const a = agent.current()
+            if (value !== undefined) {
+              if (m.variants && value in m.variants) return value
+              return undefined
+            }
             if (!a?.variant || !a.model) return undefined
             if (a.model.providerID !== m.provider.id || a.model.modelID !== m.id) return undefined
             return a.variant
@@ -208,9 +210,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             return Object.keys(m.variants)
           },
           set(value: string | undefined) {
-            const m = current()
-            if (!m) return
-            models.variant.set({ providerID: m.provider.id, modelID: m.id }, value)
+            const a = agent.current()
+            if (!a) return
+            if (value && !this.list().includes(value)) return
+            setEphemeral("variant", a.name, value)
           },
           cycle() {
             const variants = this.list()

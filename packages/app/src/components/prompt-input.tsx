@@ -290,30 +290,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!isFocused()) setComposing(false)
   })
 
-  const atProperties = createMemo<AtOption[]>(() => [
-    {
-      type: "property",
-      id: "agent",
-      display: "agent",
-      label: "@agent:",
-      description: language.t("prompt.quick.agent"),
-    },
-    {
-      type: "property",
-      id: "model",
-      display: "model",
-      label: "@model:",
-      description: language.t("prompt.quick.model"),
-    },
-    {
-      type: "property",
-      id: "thinking",
-      display: "thinking",
-      label: "@thinking:",
-      description: language.t("prompt.quick.thinking"),
-    },
-  ])
-
   const replaceAtToken = (next: string) => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return false
@@ -359,11 +335,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const handleAtSelect = (option: AtOption | undefined) => {
     if (!option) return
 
-    if (option.type === "property") {
-      replaceAtToken("@" + option.id + ":")
-      return
-    }
-
     if (option.type === "agent") {
       local.agent.set(option.name)
       replaceAtToken("")
@@ -391,7 +362,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const atKey = (x: AtOption | undefined) => {
     if (!x) return ""
-    if (x.type === "property") return `property:${x.id}`
     if (x.type === "agent") return `agent:${x.name}`
     if (x.type === "model") return `model:${x.providerID}/${x.modelID}`
     return `thinking:${x.value ?? "default"}`
@@ -404,64 +374,56 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onInput: atOnInput,
     onKeyDown: atOnKeyDown,
   } = useFilteredList<AtOption>({
-    items: (query) => {
-      const index = query.indexOf(":")
-      if (index === -1) return atProperties()
+    items: (_query) => {
+      const agentItems = local.agent.list().map(
+        (agent): AtOption => ({
+          type: "agent",
+          name: agent.name,
+          display: `${agent.name} agent ${agent.description ?? ""}`,
+          label: "@" + agent.name,
+          description: agent.description,
+        }),
+      )
 
-      const key = query.slice(0, index).toLowerCase()
-
-      if (key === "agent") {
-        return local.agent.list().map(
-          (agent): AtOption => ({
-            type: "agent",
-            name: agent.name,
-            display: `agent:${agent.name}`,
-            label: "@agent:" + agent.name,
-            description: agent.description,
+      const modelItems = local.model
+        .list()
+        .filter((model) => local.model.visible({ providerID: model.provider.id, modelID: model.id }))
+        .map(
+          (model): AtOption => ({
+            type: "model",
+            providerID: model.provider.id,
+            modelID: model.id,
+            display: `${model.name} model ${model.provider.name} ${model.provider.id}/${model.id}`,
+            label: "@" + model.name,
+            description: `${model.provider.name}/${model.id}`,
           }),
         )
-      }
 
-      if (key === "model") {
-        return local.model
-          .list()
-          .filter((model) => local.model.visible({ providerID: model.provider.id, modelID: model.id }))
-          .map(
-            (model): AtOption => ({
-              type: "model",
-              providerID: model.provider.id,
-              modelID: model.id,
-              display: `model:${model.provider.id}/${model.id} ${model.name}`,
-              label: "@model:" + model.name,
-              description: model.provider.name,
-            }),
-          )
-      }
+      const variants = local.model.variant.list()
+      const thinkingItems = (variants.length ? [undefined, ...variants] : []).map(
+        (value): AtOption => ({
+          type: "thinking",
+          value,
+          display: `thinking ${value ?? "default"}`,
+          label: "@" + (value ?? language.t("common.default")),
+          description: value ? language.t("prompt.quick.thinking") : language.t("prompt.quick.thinking.default"),
+        }),
+      )
 
-      if (key === "thinking") {
-        return [undefined, ...local.model.variant.list()].map(
-          (value): AtOption => ({
-            type: "thinking",
-            value,
-            display: `thinking:${value ?? "default"}`,
-            label: "@thinking:" + (value ?? language.t("common.default")),
-            description: value ? undefined : language.t("prompt.quick.thinking.default"),
-          }),
-        )
-      }
-
-      return []
+      return [...agentItems, ...modelItems, ...thinkingItems]
     },
     key: atKey,
     filterKeys: ["display", "label", "description"],
     groupBy: (item) => {
-      if (item.type === "property") return "property"
-      return "value"
+      return item.type
     },
     sortGroupsBy: (a, b) => {
-      if (a.category === b.category) return 0
-      if (a.category === "property") return -1
-      return 1
+      const rank = (category: string) => {
+        if (category === "agent") return 0
+        if (category === "model") return 1
+        return 2
+      }
+      return rank(a.category) - rank(b.category)
     },
     onSelect: handleAtSelect,
   })

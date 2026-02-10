@@ -5,13 +5,6 @@ import { getDirectory, getFilename } from "@0x0-ai/util/path"
 
 export type AtOption =
   | {
-      type: "property"
-      id: "agent" | "model" | "thinking"
-      display: string
-      label: string
-      description?: string
-    }
-  | {
       type: "agent"
       name: string
       display: string
@@ -72,7 +65,6 @@ type PromptPopoverProps = {
 
 export const PromptPopover: Component<PromptPopoverProps> = (props) => {
   const atIcon = (item: AtOption) => {
-    if (item.type === "property") return "sliders"
     if (item.type === "model") return "models"
     if (item.type === "thinking") return "brain"
     return "mcp"
