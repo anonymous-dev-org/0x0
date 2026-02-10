@@ -2,7 +2,7 @@
 <p align="center">Открытый AI-агент для программирования.</p>
 <p align="center">
   <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/0x0-ai"><img alt="npm" src="https://img.shields.io/npm/v/0x0-ai?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
@@ -37,10 +37,10 @@
 curl -fsSL https://0x0.ai/install | bash
 
 # Менеджеры пакетов
-npm i -g 0x0-ai@latest        # или bun/pnpm/yarn
+npm i -g @anonymous-dev/0x0@latest        # или bun/pnpm/yarn
 scoop install 0x0             # Windows
 choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/zeroxzero # macOS и Linux (рекомендуем, всегда актуально)
+brew install anonymous-dev-org/tap/0x0 # macOS и Linux (рекомендуем, всегда актуально)
 brew install 0x0              # macOS и Linux (официальная формула brew, обновляется реже)
 paru -S 0x0-bin               # Arch Linux
 mise use -g 0x0               # любая ОС
@@ -54,12 +54,12 @@ nix run nixpkgs#0x0           # или github:anomalyco/0x0 для самой с
 
 Terminal Agent также доступен как десктопное приложение. Скачайте его со [страницы релизов](https://github.com/anomalyco/0x0/releases) или с [0x0.ai/download](https://0x0.ai/download).
 
-| Платформа             | Загрузка                              |
-| --------------------- | ------------------------------------- |
+| Платформа             | Загрузка                         |
+| --------------------- | -------------------------------- |
 | macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
 | macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
 | Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm` или AppImage           |
+| Linux                 | `.deb`, `.rpm` или AppImage      |
 
 ```bash
 # macOS (Homebrew)

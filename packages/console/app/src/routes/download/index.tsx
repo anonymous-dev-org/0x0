@@ -125,21 +125,21 @@ export default function Download() {
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("npm i -g 0x0-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("npm i -g @anonymous-dev/0x0")}>
                 <code>
-                  npm i -g <strong>0x0-ai</strong>
+                  npm i -g <strong>@anonymous-dev/0x0</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("bun add -g 0x0-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("bun add -g @anonymous-dev/0x0")}>
                 <code>
-                  bun add -g <strong>0x0-ai</strong>
+                  bun add -g <strong>@anonymous-dev/0x0</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("brew install anonymous-dev-org/tap/zeroxzero")}>
+              <button data-component="cli-row" onClick={handleCopyClick("brew install anonymous-dev-org/tap/0x0")}>
                 <code>
-                  brew install <strong>anonymous-dev-org/tap/zeroxzero</strong>
+                  brew install <strong>anonymous-dev-org/tap/0x0</strong>
                 </code>
                 <CopyStatus />
               </button>

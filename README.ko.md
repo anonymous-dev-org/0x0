@@ -2,7 +2,7 @@
 <p align="center">오픈 소스 AI 코딩 에이전트.</p>
 <p align="center">
   <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/0x0-ai"><img alt="npm" src="https://img.shields.io/npm/v/0x0-ai?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
@@ -37,10 +37,10 @@
 curl -fsSL https://0x0.ai/install | bash
 
 # 패키지 매니저
-npm i -g 0x0-ai@latest        # bun/pnpm/yarn 도 가능
+npm i -g @anonymous-dev/0x0@latest        # bun/pnpm/yarn 도 가능
 scoop install 0x0             # Windows
 choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/zeroxzero # macOS 및 Linux (권장, 항상 최신)
+brew install anonymous-dev-org/tap/0x0 # macOS 및 Linux (권장, 항상 최신)
 brew install 0x0              # macOS 및 Linux (공식 brew formula, 업데이트 빈도 낮음)
 paru -S 0x0-bin               # Arch Linux
 mise use -g 0x0               # 어떤 OS든
@@ -54,12 +54,12 @@ nix run nixpkgs#0x0           # 또는 github:anomalyco/0x0 로 최신 dev 브�
 
 Terminal Agent 는 데스크톱 앱으로도 제공됩니다. [releases page](https://github.com/anomalyco/0x0/releases) 에서 직접 다운로드하거나 [0x0.ai/download](https://0x0.ai/download) 를 이용하세요.
 
-| 플랫폼                | 다운로드                              |
-| --------------------- | ------------------------------------- |
+| 플랫폼                | 다운로드                         |
+| --------------------- | -------------------------------- |
 | macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
 | macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
 | Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, 또는 AppImage         |
+| Linux                 | `.deb`, `.rpm`, 또는 AppImage    |
 
 ```bash
 # macOS (Homebrew)

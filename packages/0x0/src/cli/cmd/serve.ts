@@ -6,14 +6,14 @@ import { Flag } from "../../flag/flag"
 export const ServeCommand = cmd({
   command: "serve",
   builder: (yargs) => withNetworkOptions(yargs),
-  describe: "starts a headless zeroxzero server",
+  describe: "starts a headless 0x0 server",
   handler: async (args) => {
     if (!Flag.ZEROXZERO_SERVER_PASSWORD) {
       console.log("Warning: ZEROXZERO_SERVER_PASSWORD is not set; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
     const server = Server.listen(opts)
-    console.log(`zeroxzero server listening on http://${server.hostname}:${server.port}`)
+    console.log(`0x0 server listening on http://${server.hostname}:${server.port}`)
     await new Promise(() => {})
     await server.stop()
   },

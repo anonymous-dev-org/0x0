@@ -2,7 +2,7 @@
 <p align="center">开源的 AI Coding Agent。</p>
 <p align="center">
   <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/0x0-ai"><img alt="npm" src="https://img.shields.io/npm/v/0x0-ai?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
@@ -37,10 +37,10 @@
 curl -fsSL https://0x0.ai/install | bash
 
 # 软件包管理器
-npm i -g 0x0-ai@latest        # 也可使用 bun/pnpm/yarn
+npm i -g @anonymous-dev/0x0@latest        # 也可使用 bun/pnpm/yarn
 scoop install 0x0             # Windows
 choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/zeroxzero # macOS 和 Linux（推荐，始终保持最新）
+brew install anonymous-dev-org/tap/0x0 # macOS 和 Linux（推荐，始终保持最新）
 brew install 0x0              # macOS 和 Linux（官方 brew formula，更新频率较低）
 paru -S 0x0-bin               # Arch Linux
 mise use -g 0x0               # 任意系统
@@ -54,12 +54,12 @@ nix run nixpkgs#0x0           # 或用 github:anomalyco/0x0 获取最新 dev 分
 
 Terminal Agent 也提供桌面版应用。可直接从 [发布页 (releases page)](https://github.com/anomalyco/0x0/releases) 或 [0x0.ai/download](https://0x0.ai/download) 下载。
 
-| 平台                  | 下载文件                              |
-| --------------------- | ------------------------------------- |
+| 平台                  | 下载文件                         |
+| --------------------- | -------------------------------- |
 | macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
 | macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
 | Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`、`.rpm` 或 AppImage            |
+| Linux                 | `.deb`、`.rpm` 或 AppImage       |
 
 ```bash
 # macOS (Homebrew Cask)

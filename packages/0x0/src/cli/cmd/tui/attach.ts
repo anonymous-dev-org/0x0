@@ -3,7 +3,7 @@ import { tui } from "./app"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
-  describe: "attach to a running zeroxzero server",
+  describe: "attach to a running 0x0 server",
   builder: (yargs) =>
     yargs
       .positional("url", {

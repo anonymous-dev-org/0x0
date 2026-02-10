@@ -204,7 +204,7 @@ export function Session() {
       [
         ``,
         `  █▀▀█  ${UI.Style.TEXT_DIM}${title}${UI.Style.TEXT_NORMAL}`,
-        `  █  █  ${UI.Style.TEXT_DIM}zeroxzero -s ${session()?.id}${UI.Style.TEXT_NORMAL}`,
+        `  █  █  ${UI.Style.TEXT_DIM}0x0 -s ${session()?.id}${UI.Style.TEXT_NORMAL}`,
         `  ▀▀▀▀  `,
       ].join("\n"),
     )

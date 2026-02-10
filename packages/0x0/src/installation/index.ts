@@ -14,6 +14,7 @@ declare global {
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
+  const npmPkg = "@anonymous-dev/0x0"
 
   export type Method = Awaited<ReturnType<typeof method>>
 
@@ -81,7 +82,7 @@ export namespace Installation {
       },
       {
         name: "brew" as const,
-        command: () => $`brew list --formula zeroxzero`.throws(false).quiet().text(),
+        command: () => $`brew list --formula`.throws(false).quiet().text(),
       },
       {
         name: "scoop" as const,
@@ -103,9 +104,15 @@ export namespace Installation {
 
     for (const check of checks) {
       const output = await check.command()
-      const installedName =
-        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "zeroxzero" : "0x0-ai"
-      if (output.includes(installedName)) {
+      if (check.name === "brew") {
+        if (/\b0x0\b/.test(output) || output.includes("zeroxzero")) return check.name
+        continue
+      }
+      if (check.name === "choco" || check.name === "scoop") {
+        if (output.includes("zeroxzero")) return check.name
+        continue
+      }
+      if (output.includes(npmPkg)) {
         return check.name
       }
     }
@@ -121,13 +128,15 @@ export namespace Installation {
   )
 
   async function getBrewFormula() {
-    const tapFormula = await $`brew list --formula anonymous-dev-org/tap/zeroxzero`.throws(false).quiet().text()
-    if (tapFormula.includes("zeroxzero")) return "anonymous-dev-org/tap/zeroxzero"
+    const tapFormula = await $`brew list --formula anonymous-dev-org/tap/0x0`.throws(false).quiet().text()
+    if (/\b0x0\b/.test(tapFormula)) return "anonymous-dev-org/tap/0x0"
     const oldTapFormula = await $`brew list --formula anonymous-dev-org/tap/zeroxzero`.throws(false).quiet().text()
     if (oldTapFormula.includes("zeroxzero")) return "anonymous-dev-org/tap/zeroxzero"
-    const coreFormula = await $`brew list --formula zeroxzero`.throws(false).quiet().text()
-    if (coreFormula.includes("zeroxzero")) return "zeroxzero"
-    return "zeroxzero"
+    const coreFormula = await $`brew list --formula 0x0`.throws(false).quiet().text()
+    if (/\b0x0\b/.test(coreFormula)) return "0x0"
+    const oldCoreFormula = await $`brew list --formula zeroxzero`.throws(false).quiet().text()
+    if (oldCoreFormula.includes("zeroxzero")) return "zeroxzero"
+    return "anonymous-dev-org/tap/0x0"
   }
 
   export async function upgrade(method: Method, target: string) {
@@ -140,13 +149,13 @@ export namespace Installation {
         })
         break
       case "npm":
-        cmd = $`npm install -g 0x0-ai@${target}`
+        cmd = $`npm install -g ${npmPkg}@${target}`
         break
       case "pnpm":
-        cmd = $`pnpm install -g 0x0-ai@${target}`
+        cmd = $`pnpm install -g ${npmPkg}@${target}`
         break
       case "bun":
-        cmd = $`bun install -g 0x0-ai@${target}`
+        cmd = $`bun install -g ${npmPkg}@${target}`
         break
       case "brew": {
         const formula = await getBrewFormula()
@@ -190,8 +199,8 @@ export namespace Installation {
 
     if (detectedMethod === "brew") {
       const formula = await getBrewFormula()
-      if (formula === "zeroxzero") {
-        return fetch("https://formulae.brew.sh/api/formula/zeroxzero.json")
+      if (formula === "0x0" || formula === "zeroxzero") {
+        return fetch(`https://formulae.brew.sh/api/formula/${formula}.json`)
           .then((res) => {
             if (!res.ok) throw new Error(res.statusText)
             return res.json()
@@ -207,7 +216,8 @@ export namespace Installation {
         return reg.endsWith("/") ? reg.slice(0, -1) : reg
       })
       const channel = CHANNEL
-      return fetch(`${registry}/0x0-ai/${channel}`)
+      const pkg = encodeURIComponent(npmPkg)
+      return fetch(`${registry}/${pkg}/${channel}`)
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText)
           return res.json()
@@ -238,7 +248,7 @@ export namespace Installation {
         .then((data: any) => data.version)
     }
 
-    return fetch("https://api.github.com/repos/anomalyco/zeroxzero/releases/latest")
+    return fetch("https://api.github.com/repos/anonymous-dev-org/0x0/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()

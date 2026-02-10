@@ -2,7 +2,7 @@
 <p align="center">L'agent de codage IA open source.</p>
 <p align="center">
   <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/0x0-ai"><img alt="npm" src="https://img.shields.io/npm/v/0x0-ai?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
   <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
@@ -37,10 +37,10 @@
 curl -fsSL https://0x0.ai/install | bash
 
 # Gestionnaires de paquets
-npm i -g 0x0-ai@latest        # ou bun/pnpm/yarn
+npm i -g @anonymous-dev/0x0@latest        # ou bun/pnpm/yarn
 scoop install 0x0             # Windows
 choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/zeroxzero # macOS et Linux (recommandé, toujours à jour)
+brew install anonymous-dev-org/tap/0x0 # macOS et Linux (recommandé, toujours à jour)
 brew install 0x0              # macOS et Linux (formule officielle brew, mise à jour moins fréquente)
 paru -S 0x0-bin               # Arch Linux
 mise use -g 0x0               # n'importe quel OS
@@ -54,12 +54,12 @@ nix run nixpkgs#0x0           # ou github:anomalyco/0x0 pour la branche dev la p
 
 Terminal Agent est aussi disponible en application de bureau. Téléchargez-la directement depuis la [page des releases](https://github.com/anomalyco/0x0/releases) ou [0x0.ai/download](https://0x0.ai/download).
 
-| Plateforme            | Téléchargement                        |
-| --------------------- | ------------------------------------- |
+| Plateforme            | Téléchargement                   |
+| --------------------- | -------------------------------- |
 | macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
 | macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
 | Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, ou AppImage           |
+| Linux                 | `.deb`, `.rpm`, ou AppImage      |
 
 ```bash
 # macOS (Homebrew)

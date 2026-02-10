@@ -84,7 +84,7 @@ export const McpListCommand = cmd({
 
         if (servers.length === 0) {
           prompts.log.warn("No MCP servers configured")
-          prompts.outro("Add servers with: zeroxzero mcp add")
+          prompts.outro("Add servers with: 0x0 mcp add")
           return
         }
 
@@ -492,7 +492,7 @@ export const McpAddCommand = cmd({
         if (type === "local") {
           const command = await prompts.text({
             message: "Enter command to run",
-            placeholder: "e.g., zeroxzero x @modelcontextprotocol/server-filesystem",
+            placeholder: "e.g., 0x0 x @modelcontextprotocol/server-filesystem",
             validate: (x) => (x && x.length > 0 ? undefined : "Required"),
           })
           if (prompts.isCancel(command)) throw new UI.CancelledError()

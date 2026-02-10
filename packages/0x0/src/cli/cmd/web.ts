@@ -31,7 +31,7 @@ function getNetworkIPs() {
 export const WebCommand = cmd({
   command: "web",
   builder: (yargs) => withNetworkOptions(yargs),
-  describe: "start zeroxzero server and open web interface",
+  describe: "start 0x0 server and open web interface",
   handler: async (args) => {
     if (!Flag.ZEROXZERO_SERVER_PASSWORD) {
       UI.println(UI.Style.TEXT_WARNING_BOLD + "!  " + "ZEROXZERO_SERVER_PASSWORD is not set; server is unsecured.")

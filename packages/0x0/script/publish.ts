@@ -6,14 +6,67 @@ import { fileURLToPath } from "url"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
+const scope = process.env.ZEROXZERO_NPM_SCOPE ?? "@anonymous-dev"
+const otp = process.env.ZEROXZERO_NPM_OTP
+
+const publishTgz = async (cwd: string) => {
+  const base = `npm publish *.tgz --access public --tag ${Script.channel}`
+  if (otp) {
+    await $`${{ raw: `${base} --otp=${otp}` }}`.cwd(cwd)
+    return
+  }
+
+  while (true) {
+    const first = await $`${{ raw: base }}`.cwd(cwd).nothrow()
+    if (first.exitCode === 0) return
+
+    const stderr = first.stderr.toString()
+    if (!stderr.includes("EOTP") && !stderr.includes("Access token expired or revoked")) {
+      throw new Error(stderr || `npm publish failed with code ${first.exitCode}`)
+    }
+
+    console.log("npm requires web auth/passkey. Waiting for login...")
+    const login = await $`npm login --scope=${scope} --auth-type=web`.nothrow()
+    if (login.exitCode !== 0) {
+      throw new Error(login.stderr.toString() || "npm login failed")
+    }
+  }
+}
+
+const published = async (name: string, version: string) => {
+  const result = await $`npm view ${name}@${version} version`.quiet().nothrow()
+  if (result.exitCode !== 0) return false
+  return result.stdout.toString().trim() === version
+}
 
 const binaries: Record<string, string> = {}
+const dirs: string[] = []
 for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" })) {
-  const pkg = await Bun.file(`./dist/${filepath}`).json()
-  binaries[pkg.name] = pkg.version
+  const dir = filepath.split("/")[0]
+  if (!dir) continue
+  const info = await Bun.file(`./dist/${filepath}`).json()
+  binaries[dir] = info.version
+  dirs.push(dir)
 }
-console.log("binaries", binaries)
+
 const version = Object.values(binaries)[0]
+if (!version) throw new Error("No built binaries found in ./dist")
+const scoped = Object.fromEntries(Object.entries(binaries).map(([k, v]) => [`${scope}/${k}`, v]))
+
+for (const name of dirs) {
+  const file = `./dist/${name}/package.json`
+  const info = await Bun.file(file).json()
+  await Bun.file(file).write(
+    JSON.stringify(
+      {
+        ...info,
+        name: `${scope}/${name}`,
+      },
+      null,
+      2,
+    ),
+  )
+}
 
 await $`mkdir -p ./dist/${pkg.name}`
 await $`cp -r ./bin ./dist/${pkg.name}/bin`
@@ -23,7 +76,7 @@ await Bun.file(`./dist/${pkg.name}/LICENSE`).write(await Bun.file("../../LICENSE
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
-      name: pkg.name + "-ai",
+      name: `${scope}/${pkg.name}`,
       bin: {
         [pkg.name]: `./bin/${pkg.name}`,
       },
@@ -32,151 +85,107 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       },
       version: version,
       license: pkg.license,
-      optionalDependencies: binaries,
+      optionalDependencies: scoped,
     },
     null,
     2,
   ),
 )
 
-const tasks = Object.entries(binaries).map(async ([name]) => {
+const publish = async (name: string) => {
+  const full = `${scope}/${name}`
+  if (await published(full, version)) {
+    console.log(`skip ${full}@${version} (already published)`)
+    return
+  }
   if (process.platform !== "win32") {
     await $`chmod -R 755 .`.cwd(`./dist/${name}`)
   }
   await $`bun pm pack`.cwd(`./dist/${name}`)
-  await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(`./dist/${name}`)
-})
-await Promise.all(tasks)
-await $`cd ./dist/${pkg.name} && bun pm pack && npm publish *.tgz --access public --tag ${Script.channel}`
-
-const image = "ghcr.io/anonymous-dev-org/0x0"
-const platforms = "linux/amd64,linux/arm64"
-const tags = [`${image}:${version}`, `${image}:${Script.channel}`]
-const tagFlags = tags.flatMap((t) => ["-t", t])
-await $`docker buildx build --platform ${platforms} ${tagFlags} --push .`
-
-// registries
-if (!Script.preview) {
-  // Calculate SHA values
-  const arm64Sha = await $`sha256sum ./dist/0x0-linux-arm64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const x64Sha = await $`sha256sum ./dist/0x0-linux-x64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macX64Sha = await $`sha256sum ./dist/0x0-darwin-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
-  const macArm64Sha = await $`sha256sum ./dist/0x0-darwin-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
-
-  const [pkgver, _subver = ""] = Script.version.split(/(-.*)/, 2)
-
-  // arch
-  const binaryPkgbuild = [
-    "# Maintainer: dax",
-    "# Maintainer: adam",
-    "",
-    "pkgname='zeroxzero-bin'",
-    `pkgver=${pkgver}`,
-    `_subver=${_subver}`,
-    "options=('!debug' '!strip')",
-    "pkgrel=1",
-    "pkgdesc='The AI coding agent built for the terminal.'",
-    "url='https://github.com/anonymous-dev-org/0x0'",
-    "arch=('aarch64' 'x86_64')",
-    "license=('MIT')",
-    "provides=('zeroxzero')",
-    "conflicts=('zeroxzero')",
-    "depends=('ripgrep')",
-    "",
-    `source_aarch64=("\${pkgname}_\${pkgver}_aarch64.tar.gz::https://github.com/anonymous-dev-org/0x0/releases/download/v\${pkgver}\${_subver}/0x0-linux-arm64.tar.gz")`,
-    `sha256sums_aarch64=('${arm64Sha}')`,
-
-    `source_x86_64=("\${pkgname}_\${pkgver}_x86_64.tar.gz::https://github.com/anonymous-dev-org/0x0/releases/download/v\${pkgver}\${_subver}/0x0-linux-x64.tar.gz")`,
-    `sha256sums_x86_64=('${x64Sha}')`,
-    "",
-    "package() {",
-    '  install -Dm755 ./zeroxzero "${pkgdir}/usr/bin/zeroxzero"',
-    "}",
-    "",
-  ].join("\n")
-
-  for (const [pkg, pkgbuild] of [["zeroxzero-bin", binaryPkgbuild]]) {
-    for (let i = 0; i < 30; i++) {
-      try {
-        await $`rm -rf ./dist/aur-${pkg}`
-        await $`git clone ssh://aur@aur.archlinux.org/${pkg}.git ./dist/aur-${pkg}`
-        await $`cd ./dist/aur-${pkg} && git checkout master`
-        await Bun.file(`./dist/aur-${pkg}/PKGBUILD`).write(pkgbuild)
-        await $`cd ./dist/aur-${pkg} && makepkg --printsrcinfo > .SRCINFO`
-        await $`cd ./dist/aur-${pkg} && git add PKGBUILD .SRCINFO`
-        await $`cd ./dist/aur-${pkg} && git commit -m "Update to v${Script.version}"`
-        await $`cd ./dist/aur-${pkg} && git push`
-        break
-      } catch (e) {
-        continue
-      }
-    }
-  }
-
-  // Homebrew formula
-  const homebrewFormula = [
-    "# typed: false",
-    "# frozen_string_literal: true",
-    "",
-    "# This file was generated by GoReleaser. DO NOT EDIT.",
-    "class Zeroxzero < Formula",
-    `  desc "The AI coding agent built for the terminal."`,
-    `  homepage "https://github.com/anonymous-dev-org/0x0"`,
-    `  version "${Script.version.split("-")[0]}"`,
-    "",
-    `  depends_on "ripgrep"`,
-    "",
-    "  on_macos do",
-    "    if Hardware::CPU.intel?",
-    `      url "https://github.com/anonymous-dev-org/0x0/releases/download/v${Script.version}/0x0-darwin-x64.zip"`,
-    `      sha256 "${macX64Sha}"`,
-    "",
-    "      def install",
-    '        bin.install "0x0"',
-    "      end",
-    "    end",
-    "    if Hardware::CPU.arm?",
-    `      url "https://github.com/anonymous-dev-org/0x0/releases/download/v${Script.version}/0x0-darwin-arm64.zip"`,
-    `      sha256 "${macArm64Sha}"`,
-    "",
-    "      def install",
-    '        bin.install "0x0"',
-    "      end",
-    "    end",
-    "  end",
-    "",
-    "  on_linux do",
-    "    if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?",
-    `      url "https://github.com/anonymous-dev-org/0x0/releases/download/v${Script.version}/0x0-linux-x64.tar.gz"`,
-    `      sha256 "${x64Sha}"`,
-    "      def install",
-    '        bin.install "0x0"',
-    "      end",
-    "    end",
-    "    if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?",
-    `      url "https://github.com/anonymous-dev-org/0x0/releases/download/v${Script.version}/0x0-linux-arm64.tar.gz"`,
-    `      sha256 "${arm64Sha}"`,
-    "      def install",
-    '        bin.install "0x0"',
-    "      end",
-    "    end",
-    "  end",
-    "end",
-    "",
-    "",
-  ].join("\n")
-
-  const token = process.env.GITHUB_TOKEN
-  if (!token) {
-    console.error("GITHUB_TOKEN is required to update homebrew tap")
-    process.exit(1)
-  }
-  const tap = `https://x-access-token:${token}@github.com/anonymous-dev-org/homebrew-tap.git`
-  await $`rm -rf ./dist/homebrew-tap`
-  await $`git clone ${tap} ./dist/homebrew-tap`
-  await $`mkdir -p ./dist/homebrew-tap/Formula`
-  await Bun.file("./dist/homebrew-tap/Formula/zeroxzero.rb").write(homebrewFormula)
-  await $`cd ./dist/homebrew-tap && git add Formula/zeroxzero.rb`
-  await $`cd ./dist/homebrew-tap && git commit -m "Update to v${Script.version}"`
-  await $`cd ./dist/homebrew-tap && git push`
+  await publishTgz(`./dist/${name}`)
 }
+
+for (const name of dirs) {
+  await publish(name)
+}
+const main = `${scope}/${pkg.name}`
+if (await published(main, version)) {
+  console.log(`skip ${main}@${version} (already published)`)
+} else {
+  await $`bun pm pack`.cwd(`./dist/${pkg.name}`)
+  await publishTgz(`./dist/${pkg.name}`)
+}
+
+if (Script.preview) process.exit(0)
+
+const repo = process.env.ZEROXZERO_RELEASE_REPO ?? process.env.GITHUB_REPOSITORY ?? "anonymous-dev-org/0x0"
+const owner = repo.split("/")[0]
+if (!owner) throw new Error(`Invalid repo: ${repo}`)
+const tapRepo = process.env.ZEROXZERO_HOMEBREW_TAP || `${owner}/homebrew-tap`
+
+const arm64Sha = await $`sha256sum ./dist/0x0-linux-arm64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
+const x64Sha = await $`sha256sum ./dist/0x0-linux-x64.tar.gz | cut -d' ' -f1`.text().then((x) => x.trim())
+const macX64Sha = await $`sha256sum ./dist/0x0-darwin-x64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+const macArm64Sha = await $`sha256sum ./dist/0x0-darwin-arm64.zip | cut -d' ' -f1`.text().then((x) => x.trim())
+
+const homebrewFormula = [
+  "# typed: false",
+  "# frozen_string_literal: true",
+  "",
+  "# This file was generated by GoReleaser. DO NOT EDIT.",
+  "class Zeroxzero < Formula",
+  '  desc "The AI coding agent built for the terminal."',
+  `  homepage "https://github.com/${repo}"`,
+  `  version "${Script.version.split("-")[0]}"`,
+  "",
+  '  depends_on "ripgrep"',
+  "",
+  "  on_macos do",
+  "    if Hardware::CPU.intel?",
+  `      url "https://github.com/${repo}/releases/download/v${Script.version}/0x0-darwin-x64.zip"`,
+  `      sha256 "${macX64Sha}"`,
+  "",
+  "      def install",
+  '        bin.install "zeroxzero" => "0x0"',
+  "      end",
+  "    end",
+  "    if Hardware::CPU.arm?",
+  `      url "https://github.com/${repo}/releases/download/v${Script.version}/0x0-darwin-arm64.zip"`,
+  `      sha256 "${macArm64Sha}"`,
+  "",
+  "      def install",
+  '        bin.install "zeroxzero" => "0x0"',
+  "      end",
+  "    end",
+  "  end",
+  "",
+  "  on_linux do",
+  "    if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?",
+  `      url "https://github.com/${repo}/releases/download/v${Script.version}/0x0-linux-x64.tar.gz"`,
+  `      sha256 "${x64Sha}"`,
+  "      def install",
+  '        bin.install "zeroxzero" => "0x0"',
+  "      end",
+  "    end",
+  "    if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?",
+  `      url "https://github.com/${repo}/releases/download/v${Script.version}/0x0-linux-arm64.tar.gz"`,
+  `      sha256 "${arm64Sha}"`,
+  "      def install",
+  '        bin.install "zeroxzero" => "0x0"',
+  "      end",
+  "    end",
+  "  end",
+  "end",
+  "",
+].join("\n")
+
+const token = process.env.GITHUB_TOKEN
+const tap = token ? `https://x-access-token:${token}@github.com/${tapRepo}.git` : `git@github.com:${tapRepo}.git`
+await $`rm -rf ./dist/homebrew-tap`
+await $`git clone ${tap} ./dist/homebrew-tap`
+await $`mkdir -p ./dist/homebrew-tap/Formula ./dist/homebrew-tap/Aliases`
+await Bun.file("./dist/homebrew-tap/Formula/zeroxzero.rb").write(homebrewFormula)
+await $`cd ./dist/homebrew-tap && ln -sf ../Formula/zeroxzero.rb Aliases/0x0`
+await $`cd ./dist/homebrew-tap && git add Formula/zeroxzero.rb Aliases/0x0`
+await $`cd ./dist/homebrew-tap && git commit -m "Update to v${Script.version}"`
+await $`cd ./dist/homebrew-tap && git push`

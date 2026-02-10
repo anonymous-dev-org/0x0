@@ -5,7 +5,7 @@ import { $ } from "bun"
 
 export const PrCommand = cmd({
   command: "pr <number>",
-  describe: "fetch and checkout a GitHub PR branch, then run zeroxzero",
+  describe: "fetch and checkout a GitHub PR branch, then run 0x0",
   builder: (yargs) =>
     yargs.positional("number", {
       type: "number",
@@ -63,15 +63,15 @@ export const PrCommand = cmd({
               await $`git branch --set-upstream-to=${remoteName}/${headRefName} ${localBranchName}`.nothrow()
             }
 
-            // Check for zeroxzero session link in PR body
+            // Check for 0x0 session link in PR body
             if (prInfo && prInfo.body) {
               const sessionMatch = prInfo.body.match(/https:\/\/opncd\.ai\/s\/([a-zA-Z0-9_-]+)/)
               if (sessionMatch) {
                 const sessionUrl = sessionMatch[0]
-                UI.println(`Found zeroxzero session: ${sessionUrl}`)
+                UI.println(`Found 0x0 session: ${sessionUrl}`)
                 UI.println(`Importing session...`)
 
-                const importResult = await $`zeroxzero import ${sessionUrl}`.nothrow()
+                const importResult = await $`0x0 import ${sessionUrl}`.nothrow()
                 if (importResult.exitCode === 0) {
                   const importOutput = importResult.text().trim()
                   // Extract session ID from the output (format: "Imported session: <session-id>")
@@ -88,23 +88,23 @@ export const PrCommand = cmd({
 
         UI.println(`Successfully checked out PR #${prNumber} as branch '${localBranchName}'`)
         UI.println()
-        UI.println("Starting zeroxzero...")
+        UI.println("Starting 0x0...")
         UI.println()
 
-        // Launch zeroxzero TUI with session ID if available
+        // Launch 0x0 TUI with session ID if available
         const { spawn } = await import("child_process")
-        const zeroxzeroArgs = sessionId ? ["-s", sessionId] : []
-        const zeroxzeroProcess = spawn("zeroxzero", zeroxzeroArgs, {
+        const cliArgs = sessionId ? ["-s", sessionId] : []
+        const proc = spawn("0x0", cliArgs, {
           stdio: "inherit",
           cwd: process.cwd(),
         })
 
         await new Promise<void>((resolve, reject) => {
-          zeroxzeroProcess.on("exit", (code) => {
+          proc.on("exit", (code) => {
             if (code === 0) resolve()
-            else reject(new Error(`zeroxzero exited with code ${code}`))
+            else reject(new Error(`0x0 exited with code ${code}`))
           })
-          zeroxzeroProcess.on("error", reject)
+          proc.on("error", reject)
         })
       },
     })

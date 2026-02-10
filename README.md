@@ -2,8 +2,8 @@
 <p align="center">An open source AI coding agent.</p>
 <p align="center">
   <a href="https://discord.gg"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/0x0-ai"><img alt="npm" src="https://img.shields.io/npm/v/0x0-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
+  <a href="https://github.com/anonymous-dev-org/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anonymous-dev-org/0x0/publish.yml?style=flat-square&branch=main" /></a>
 </p>
 
 <p align="center">
@@ -38,14 +38,14 @@
 curl -fsSL https://0x0.ai/install | bash
 
 # Package managers
-npm i -g 0x0-ai@latest        # or bun/pnpm/yarn
+npm i -g @anonymous-dev/0x0@latest        # or bun/pnpm/yarn
 scoop install 0x0             # Windows
 choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/zeroxzero # macOS and Linux (recommended, always up to date)
+brew install anonymous-dev-org/tap/0x0 # macOS and Linux (recommended, always up to date)
 brew install 0x0              # macOS and Linux (official brew formula, updated less)
 paru -S 0x0-bin               # Arch Linux
 mise use -g 0x0               # Any OS
-nix run nixpkgs#0x0           # or github:anomalyco/0x0 for latest dev branch
+nix run nixpkgs#0x0           # or github:anonymous-dev-org/0x0 for latest dev branch
 ```
 
 > [!TIP]
@@ -53,14 +53,14 @@ nix run nixpkgs#0x0           # or github:anomalyco/0x0 for latest dev branch
 
 ### Desktop App (BETA)
 
-The project is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/0x0/releases) or [download page](https://0x0.ai/download).
+The project is also available as a desktop application. Download directly from the [releases page](https://github.com/anonymous-dev-org/0x0/releases) or [download page](https://0x0.ai/download).
 
-| Platform              | Download                              |
-| --------------------- | ------------------------------------- |
+| Platform              | Download                         |
+| --------------------- | -------------------------------- |
 | macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
 | macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
 | Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, or AppImage           |
+| Linux                 | `.deb`, `.rpm`, or AppImage      |
 
 ```bash
 # macOS (Homebrew)

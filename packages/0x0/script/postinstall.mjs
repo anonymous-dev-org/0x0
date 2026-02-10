@@ -49,23 +49,25 @@ function detectPlatformAndArch() {
 
 function findBinary() {
   const { platform, arch } = detectPlatformAndArch()
-  const packageName = `zeroxzero-${platform}-${arch}`
-  const binaryName = platform === "windows" ? "zeroxzero.exe" : "zeroxzero"
+  const binaryName = platform === "windows" ? "0x0.exe" : "0x0"
+  const scope = process.env.ZEROXZERO_NPM_SCOPE || "@anonymous-dev"
+  const names = [`${scope}/0x0-${platform}-${arch}`, `0x0-${platform}-${arch}`, `zeroxzero-${platform}-${arch}`]
 
-  try {
-    // Use require.resolve to find the package
-    const packageJsonPath = require.resolve(`${packageName}/package.json`)
-    const packageDir = path.dirname(packageJsonPath)
-    const binaryPath = path.join(packageDir, "bin", binaryName)
-
-    if (!fs.existsSync(binaryPath)) {
-      throw new Error(`Binary not found at ${binaryPath}`)
+  for (const packageName of names) {
+    try {
+      const packageJsonPath = require.resolve(`${packageName}/package.json`)
+      const packageDir = path.dirname(packageJsonPath)
+      const binaryPath = path.join(packageDir, "bin", binaryName)
+      if (!fs.existsSync(binaryPath)) {
+        continue
+      }
+      return { binaryPath, binaryName }
+    } catch {
+      continue
     }
-
-    return { binaryPath, binaryName }
-  } catch (error) {
-    throw new Error(`Could not find package ${packageName}: ${error.message}`)
   }
+
+  throw new Error(`Could not find platform package for 0x0-${platform}-${arch}`)
 }
 
 function prepareBinDirectory(binaryName) {
@@ -89,7 +91,7 @@ function symlinkBinary(sourcePath, binaryName) {
   const { targetPath } = prepareBinDirectory(binaryName)
 
   fs.symlinkSync(sourcePath, targetPath)
-  console.log(`zeroxzero binary symlinked: ${targetPath} -> ${sourcePath}`)
+  console.log(`0x0 binary symlinked: ${targetPath} -> ${sourcePath}`)
 
   // Verify the file exists after operation
   if (!fs.existsSync(targetPath)) {
@@ -112,7 +114,7 @@ async function main() {
     console.log(`Platform binary verified at: ${binaryPath}`)
     console.log("Wrapper script will handle binary execution")
   } catch (error) {
-    console.error("Failed to setup zeroxzero binary:", error.message)
+    console.error("Failed to setup 0x0 binary:", error.message)
     process.exit(1)
   }
 }

@@ -214,7 +214,7 @@ function normalizePath(input?: string) {
 
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run zeroxzero with a message",
+  describe: "run 0x0 with a message",
   builder: (yargs: Argv) => {
     return yargs
       .positional("message", {
@@ -272,7 +272,7 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running zeroxzero server (e.g., http://localhost:4096)",
+        describe: "attach to a running 0x0 server (e.g., http://localhost:4096)",
       })
       .option("port", {
         type: "number",

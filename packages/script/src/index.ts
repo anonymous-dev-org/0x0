@@ -33,7 +33,7 @@ const IS_PREVIEW = CHANNEL !== "latest"
 const VERSION = await (async () => {
   if (env.ZEROXZERO_VERSION) return env.ZEROXZERO_VERSION
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
-  const version = await fetch("https://registry.npmjs.org/0x0-ai/latest")
+  const version = await fetch("https://registry.npmjs.org/@anonymous-dev%2F0x0/latest")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
       return res.json()

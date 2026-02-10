@@ -54,7 +54,8 @@ async function fetchNpmDownloads(packageName: string): Promise<number> {
     // Use a range from 2020 to current year + 5 years to ensure it works forever
     const currentYear = new Date().getFullYear()
     const endYear = currentYear + 5
-    const response = await fetch(`https://api.npmjs.org/downloads/range/2020-01-01:${endYear}-12-31/${packageName}`)
+    const pkg = encodeURIComponent(packageName)
+    const response = await fetch(`https://api.npmjs.org/downloads/range/2020-01-01:${endYear}-12-31/${pkg}`)
     if (!response.ok) {
       console.warn(`Failed to fetch npm downloads for ${packageName}: ${response.status}`)
       return 0
@@ -73,7 +74,7 @@ async function fetchReleases(): Promise<Release[]> {
   const per = 100
 
   while (true) {
-    const url = `https://api.github.com/repos/anomalyco/zeroxzero/releases?page=${page}&per_page=${per}`
+    const url = `https://api.github.com/repos/anonymous-dev-org/0x0/releases?page=${page}&per_page=${per}`
 
     const response = await fetch(url)
     if (!response.ok) {
@@ -137,15 +138,21 @@ async function save(githubTotal: number, npmDownloads: number) {
     const lines = content.trim().split("\n")
 
     for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim()
-      if (line.startsWith("|") && !line.includes("Date") && !line.includes("---")) {
-        const match = line.match(
+      const line = lines[i]
+      if (!line) continue
+      const value = line.trim()
+      if (value.startsWith("|") && !value.includes("Date") && !value.includes("---")) {
+        const match = value.match(
           /\|\s*[\d-]+\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|/,
         )
         if (match) {
-          previousGithub = parseInt(match[1].replace(/,/g, ""))
-          previousNpm = parseInt(match[2].replace(/,/g, ""))
-          previousTotal = parseInt(match[3].replace(/,/g, ""))
+          const github = match[1]
+          const npm = match[2]
+          const total = match[3]
+          if (!github || !npm || !total) continue
+          previousGithub = parseInt(github.replace(/,/g, ""))
+          previousNpm = parseInt(npm.replace(/,/g, ""))
+          previousTotal = parseInt(total.replace(/,/g, ""))
           break
         }
       }
@@ -188,15 +195,15 @@ async function save(githubTotal: number, npmDownloads: number) {
   )
 }
 
-console.log("Fetching GitHub releases for anomalyco/zeroxzero...\n")
+console.log("Fetching GitHub releases for anonymous-dev-org/0x0...\n")
 
 const releases = await fetchReleases()
 console.log(`\nFetched ${releases.length} releases total\n`)
 
 const { total: githubTotal, stats } = calculate(releases)
 
-console.log("Fetching npm all-time downloads for 0x0-ai...\n")
-const npmDownloads = await fetchNpmDownloads("0x0-ai")
+console.log("Fetching npm all-time downloads for @anonymous-dev/0x0...\n")
+const npmDownloads = await fetchNpmDownloads("@anonymous-dev/0x0")
 console.log(`Fetched npm all-time downloads: ${npmDownloads.toLocaleString()}\n`)
 
 await save(githubTotal, npmDownloads)

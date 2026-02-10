@@ -128,7 +128,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">npm i -g </span>
-                        <span data-slot="highlight">0x0-ai</span>
+                        <span data-slot="highlight">@anonymous-dev/0x0</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -137,7 +137,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">bun add -g </span>
-                        <span data-slot="highlight">0x0-ai</span>
+                        <span data-slot="highlight">@anonymous-dev/0x0</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -146,7 +146,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">brew install </span>
-                        <span data-slot="highlight">anonymous-dev-org/tap/zeroxzero</span>
+                        <span data-slot="highlight">anonymous-dev-org/tap/0x0</span>
                       </span>
                       <CopyStatus />
                     </button>

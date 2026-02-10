@@ -113,7 +113,7 @@ export default function Home() {
             <h3 data-component="title">npm</h3>
             <button data-copy data-slot="button">
               <span>
-                npm install -g <strong>0x0-ai</strong>
+                npm install -g <strong>@anonymous-dev/0x0</strong>
               </span>
               <CopyStatus />
             </button>
@@ -122,7 +122,7 @@ export default function Home() {
             <h3 data-component="title">bun</h3>
             <button data-copy data-slot="button">
               <span>
-                bun install -g <strong>0x0-ai</strong>
+                bun install -g <strong>@anonymous-dev/0x0</strong>
               </span>
               <CopyStatus />
             </button>
@@ -131,7 +131,7 @@ export default function Home() {
             <h3 data-component="title">homebrew</h3>
             <button data-copy data-slot="button">
               <span>
-                brew install <strong>zeroxzero</strong>
+                brew install <strong>anonymous-dev-org/tap/0x0</strong>
               </span>
               <CopyStatus />
             </button>

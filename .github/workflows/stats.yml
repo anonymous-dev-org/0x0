@@ -9,7 +9,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   stats:
-    if: github.repository == 'anomalyco/0x0'
+    if: github.repository == 'anonymous-dev-org/0x0'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write

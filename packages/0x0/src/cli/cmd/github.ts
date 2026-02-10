@@ -389,8 +389,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run zeroxzero
-        uses: anomalyco/zeroxzero/github@latest${envStr}
+      - name: Run 0x0
+        uses: anonymous-dev-org/0x0/github@latest${envStr}
         with:
           model: ${provider}/${model}`,
             )

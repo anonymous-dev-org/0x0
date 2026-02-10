@@ -219,7 +219,7 @@ export const AuthLoginCommand = cmd({
   describe: "log in to a provider",
   builder: (yargs) =>
     yargs.positional("url", {
-      describe: "zeroxzero auth provider",
+      describe: "0x0 auth provider",
       type: "string",
     }),
   async handler(args) {

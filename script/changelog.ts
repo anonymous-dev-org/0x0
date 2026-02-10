@@ -5,6 +5,20 @@ import { createZeroxzero } from "@0x0-ai/sdk/v2"
 import { parseArgs } from "util"
 import { Script } from "@0x0-ai/script"
 
+const repo =
+  process.env.ZEROXZERO_RELEASE_REPO ||
+  process.env.GITHUB_REPOSITORY ||
+  (await $`git config --get remote.origin.url`
+    .nothrow()
+    .quiet()
+    .text()
+    .then((x) => x.trim())
+    .then((x) => x.match(/github\.com[:/]([^/]+\/[^/.]+)(?:\.git)?$/)?.[1]))
+
+if (!repo) {
+  throw new Error("Could not determine repository. Set ZEROXZERO_RELEASE_REPO or GITHUB_REPOSITORY.")
+}
+
 type Release = {
   tag_name: string
   draft: boolean
@@ -12,7 +26,7 @@ type Release = {
 }
 
 export async function getLatestRelease(skip?: string) {
-  const data = await fetch("https://api.github.com/repos/anomalyco/zeroxzero/releases?per_page=100").then((res) => {
+  const data = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`).then((res) => {
     if (!res.ok) throw new Error(res.statusText)
     return res.json()
   })
@@ -43,7 +57,7 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
 
   // Get commit data with GitHub usernames from the API
   const compare =
-    await $`gh api "/repos/anomalyco/zeroxzero/compare/${fromRef}...${toRef}" --jq '.commits[] | {sha: .sha, login: .author.login, message: .commit.message}'`.text()
+    await $`gh api "/repos/${repo}/compare/${fromRef}...${toRef}" --jq '.commits[] | {sha: .sha, login: .author.login, message: .commit.message}'`.text()
 
   const commitData = new Map<string, { login: string | null; message: string }>()
   for (const line of compare.split("\n").filter(Boolean)) {
@@ -53,7 +67,7 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
 
   // Get commits that touch the relevant packages
   const log =
-    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/zeroxzero packages/sdk packages/plugin packages/desktop packages/app sdks/vscode packages/extensions github`.text()
+    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/0x0 packages/sdk packages/plugin packages/desktop packages/app sdks/vscode packages/extensions github`.text()
   const hashes = log.split("\n").filter(Boolean)
 
   const commits: Commit[] = []
@@ -68,8 +82,8 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
     const areas = new Set<string>()
 
     for (const file of files.split("\n").filter(Boolean)) {
-      if (file.startsWith("packages/zeroxzero/src/cli/cmd/")) areas.add("tui")
-      else if (file.startsWith("packages/zeroxzero/")) areas.add("core")
+      if (file.startsWith("packages/0x0/src/cli/cmd/")) areas.add("tui")
+      else if (file.startsWith("packages/0x0/")) areas.add("core")
       else if (file.startsWith("packages/desktop/src-tauri/")) areas.add("tauri")
       else if (file.startsWith("packages/desktop/")) areas.add("app")
       else if (file.startsWith("packages/app/")) areas.add("app")
@@ -136,7 +150,10 @@ function getSection(areas: Set<string>): string {
   return "Core"
 }
 
-async function summarizeCommit(zeroxzero: Awaited<ReturnType<typeof createZeroxzero>>, message: string): Promise<string> {
+async function summarizeCommit(
+  zeroxzero: Awaited<ReturnType<typeof createZeroxzero>>,
+  message: string,
+): Promise<string> {
   console.log("summarizing commit:", message)
   const session = await zeroxzero.client.session.create()
   const result = await zeroxzero.client.session
@@ -201,7 +218,7 @@ export async function getContributors(from: string, to: string) {
   const fromRef = from.startsWith("v") ? from : `v${from}`
   const toRef = to === "HEAD" ? to : to.startsWith("v") ? to : `v${to}`
   const compare =
-    await $`gh api "/repos/anomalyco/zeroxzero/compare/${fromRef}...${toRef}" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.text()
+    await $`gh api "/repos/${repo}/compare/${fromRef}...${toRef}" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.text()
   const contributors = new Map<string, Set<string>>()
 
   for (const line of compare.split("\n").filter(Boolean)) {
@@ -227,6 +244,14 @@ export async function buildNotes(from: string, to: string) {
 
   console.log("generating changelog since " + from)
 
+  if (!process.env.ZEROXZERO_API_KEY) {
+    console.log("ZEROXZERO_API_KEY not set, using raw commit messages")
+    return commits.map((commit) => {
+      const attribution = commit.author && !Script.team.includes(commit.author) ? ` (@${commit.author})` : ""
+      return `- ${commit.message}${attribution}`
+    })
+  }
+
   const zeroxzero = await createZeroxzero({ port: 0 })
   const notes: string[] = []
 
@@ -240,7 +265,7 @@ export async function buildNotes(from: string, to: string) {
     if (error instanceof Error && error.name === "TimeoutError") {
       console.log("Changelog generation timed out, using raw commits")
       for (const commit of commits) {
-        const attribution = commit.author && !team.includes(commit.author) ? ` (@${commit.author})` : ""
+        const attribution = commit.author && !Script.team.includes(commit.author) ? ` (@${commit.author})` : ""
         notes.push(`- ${commit.message}${attribution}`)
       }
     } else {

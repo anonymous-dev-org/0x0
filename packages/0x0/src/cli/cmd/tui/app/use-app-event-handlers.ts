@@ -124,7 +124,7 @@ export function useAppEventHandlers(props: {
       props.toast.show({
         variant: "info",
         title: "Update Available",
-        message: `Terminal Agent v${evt.properties.version} is available. Run 'zeroxzero upgrade' to update manually.`,
+        message: `Terminal Agent v${evt.properties.version} is available. Run '0x0 upgrade' to update manually.`,
         duration: 10000,
       })
     }),

@@ -88,21 +88,21 @@ const commands = [
   lazy(
     {
       command: "$0 [project]",
-      describe: "start zeroxzero tui",
+      describe: "start 0x0 tui",
     },
     command(() => import("./cli/cmd/tui/thread"), "TuiThreadCommand"),
   ),
   lazy(
     {
       command: "attach <url>",
-      describe: "attach to a running zeroxzero server",
+      describe: "attach to a running 0x0 server",
     },
     command(() => import("./cli/cmd/tui/attach"), "AttachCommand"),
   ),
   lazy(
     {
       command: "run [message..]",
-      describe: "run zeroxzero with a message",
+      describe: "run 0x0 with a message",
     },
     command(() => import("./cli/cmd/run"), "RunCommand"),
   ),
@@ -136,28 +136,28 @@ const commands = [
   lazy(
     {
       command: "upgrade [target]",
-      describe: "upgrade zeroxzero to the latest or a specific version",
+      describe: "upgrade 0x0 to the latest or a specific version",
     },
     command(() => import("./cli/cmd/upgrade"), "UpgradeCommand"),
   ),
   lazy(
     {
       command: "uninstall",
-      describe: "uninstall zeroxzero and remove all related files",
+      describe: "uninstall 0x0 and remove all related files",
     },
     command(() => import("./cli/cmd/uninstall"), "UninstallCommand"),
   ),
   lazy(
     {
       command: "serve",
-      describe: "starts a headless zeroxzero server",
+      describe: "starts a headless 0x0 server",
     },
     command(() => import("./cli/cmd/serve"), "ServeCommand"),
   ),
   lazy(
     {
       command: "web",
-      describe: "start zeroxzero server and open web interface",
+      describe: "start 0x0 server and open web interface",
     },
     command(() => import("./cli/cmd/web"), "WebCommand"),
   ),
@@ -199,7 +199,7 @@ const commands = [
   lazy(
     {
       command: "pr <number>",
-      describe: "fetch and checkout a GitHub PR branch, then run zeroxzero",
+      describe: "fetch and checkout a GitHub PR branch, then run 0x0",
     },
     command(() => import("./cli/cmd/pr"), "PrCommand"),
   ),
@@ -226,7 +226,7 @@ process.on("uncaughtException", (e) => {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("zeroxzero")
+  .scriptName("0x0")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")

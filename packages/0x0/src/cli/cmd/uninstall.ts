@@ -8,6 +8,8 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 
+const npmPkg = "@anonymous-dev/0x0"
+
 interface UninstallArgs {
   keepConfig: boolean
   keepData: boolean
@@ -23,7 +25,7 @@ interface RemovalTargets {
 
 export const UninstallCommand = {
   command: "uninstall",
-  describe: "uninstall zeroxzero and remove all related files",
+  describe: "uninstall 0x0 and remove all related files",
   builder: (yargs: Argv) =>
     yargs
       .option("keep-config", {
@@ -128,11 +130,11 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string> = {
-      npm: "npm uninstall -g 0x0-ai",
-      pnpm: "pnpm uninstall -g 0x0-ai",
-      bun: "bun remove -g 0x0-ai",
-      yarn: "yarn global remove 0x0-ai",
-      brew: "brew uninstall zeroxzero",
+      npm: `npm uninstall -g ${npmPkg}`,
+      pnpm: `pnpm uninstall -g ${npmPkg}`,
+      bun: `bun remove -g ${npmPkg}`,
+      yarn: `yarn global remove ${npmPkg}`,
+      brew: "brew uninstall 0x0",
       choco: "choco uninstall zeroxzero",
       scoop: "scoop uninstall zeroxzero",
     }
@@ -179,11 +181,11 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "0x0-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "0x0-ai"],
-      bun: ["bun", "remove", "-g", "0x0-ai"],
-      yarn: ["yarn", "global", "remove", "0x0-ai"],
-      brew: ["brew", "uninstall", "zeroxzero"],
+      npm: ["npm", "uninstall", "-g", npmPkg],
+      pnpm: ["pnpm", "uninstall", "-g", npmPkg],
+      bun: ["bun", "remove", "-g", npmPkg],
+      yarn: ["yarn", "global", "remove", npmPkg],
+      brew: ["brew", "uninstall", "0x0"],
       choco: ["choco", "uninstall", "zeroxzero"],
       scoop: ["scoop", "uninstall", "zeroxzero"],
     }

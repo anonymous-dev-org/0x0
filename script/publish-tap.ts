@@ -26,8 +26,8 @@ if (flag("help")) {
       "Options:",
       "  --version <semver>      Release version without v prefix",
       "  --bump <type>           Version bump: patch | minor | major",
-      "  --tap <org/repo>        Tap repo (default: anonymous-dev-org/homebrew-tap)",
-      "  --repo <org/repo>       Release repo (default: anonymous-dev-org/0x0)",
+      "  --tap <org/repo>        Tap repo (default: <repo-owner>/homebrew-tap)",
+      "  --repo <org/repo>       Release repo (default: current repository)",
       "  --formula-name <name>   Formula name (default: zeroxzero)",
       "  --formula <path>        Formula path in tap (default: Formula/<formula-name>.rb)",
       "  --no-push               Do not push commit",
@@ -38,8 +38,18 @@ if (flag("help")) {
   process.exit(0)
 }
 
-const tap = read("tap") ?? "anonymous-dev-org/homebrew-tap"
-const repo = read("repo") ?? "anonymous-dev-org/0x0"
+const currentRepo =
+  process.env.GITHUB_REPOSITORY ||
+  (await $`gh repo view --json nameWithOwner --jq .nameWithOwner`.nothrow().quiet().text()).trim()
+const repo = read("repo") ?? currentRepo
+if (!repo) {
+  throw new Error("Could not determine repository. Pass --repo <org/repo>.")
+}
+const owner = repo.split("/")[0]
+if (!owner) {
+  throw new Error(`Invalid --repo value: ${repo}`)
+}
+const tap = read("tap") ?? `${owner}/homebrew-tap`
 const versionArg = read("version")
 const bump = read("bump")
 const formulaName = read("formula-name") ?? "zeroxzero"
@@ -59,10 +69,10 @@ const klass = formulaName
   .trim()
   .split(/\s+/)
   .filter(Boolean)
-  .map((x) => x[0].toUpperCase() + x.slice(1))
+  .map((x) => x.charAt(0).toUpperCase() + x.slice(1))
   .join("")
 
-const formulaClass = /^[A-Z]/.test(klass) ? klass : `Formula${klass || "Zeroxzero"}`
+const formulaClass = /^[A-Z]/.test(klass) ? klass : "Zeroxzero"
 
 const latest = await $`gh release list --repo ${repo} --limit 1 --json tagName --jq '.[0].tagName'`
   .nothrow()
@@ -72,7 +82,7 @@ const latest = await $`gh release list --repo ${repo} --limit 1 --json tagName -
   .then((x) => (x && x !== "null" ? x.replace(/^v/, "") : ""))
 
 const parse = (v: string) => {
-  const s = v.split("-")[0]
+  const s = v.split("-").at(0) ?? ""
   const p = s.split(".").map((x) => Number(x))
   if (p.length !== 3 || p.some((x) => Number.isNaN(x) || x < 0)) {
     throw new Error(`Invalid semver: ${v}`)
@@ -87,7 +97,7 @@ const next = (v: string, t: string) => {
   return `${major}.${minor}.${patch + 1}`
 }
 
-const version =
+const versionRaw =
   versionArg ??
   (bump
     ? next(latest || "0.0.0", bump)
@@ -100,13 +110,12 @@ const version =
           if (x && x !== "null") return x.replace(/^v/, "")
           throw new Error(`No latest release found for ${repo}. Pass --version <semver> or --bump <type>.`)
         }))
+if (!versionRaw) {
+  throw new Error("Could not resolve release version")
+}
+const version = versionRaw
 
-const files = [
-  "0x0-darwin-arm64.zip",
-  "0x0-darwin-x64.zip",
-  "0x0-linux-arm64.tar.gz",
-  "0x0-linux-x64.tar.gz",
-]
+const files = ["0x0-darwin-arm64.zip", "0x0-darwin-x64.zip", "0x0-linux-arm64.tar.gz", "0x0-linux-x64.tar.gz"]
 
 const releaseCheck = await $`gh release view v${version} --repo ${repo} --json tagName`.nothrow().quiet()
 if (releaseCheck.exitCode !== 0) {
@@ -166,7 +175,7 @@ const formulaText = [
   `      sha256 "${macX64Sha}"`,
   "",
   "      def install",
-  '        bin.install "0x0"',
+  '        bin.install "zeroxzero" => "0x0"',
   "      end",
   "    end",
   "    if Hardware::CPU.arm?",
@@ -174,7 +183,7 @@ const formulaText = [
   `      sha256 "${macArm64Sha}"`,
   "",
   "      def install",
-  '        bin.install "0x0"',
+  '        bin.install "zeroxzero" => "0x0"',
   "      end",
   "    end",
   "  end",
@@ -184,14 +193,14 @@ const formulaText = [
   `      url "https://github.com/${repo}/releases/download/v${version}/0x0-linux-x64.tar.gz"`,
   `      sha256 "${linuxX64Sha}"`,
   "      def install",
-  '        bin.install "0x0"',
+  '        bin.install "zeroxzero" => "0x0"',
   "      end",
   "    end",
   "    if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?",
   `      url "https://github.com/${repo}/releases/download/v${version}/0x0-linux-arm64.tar.gz"`,
   `      sha256 "${linuxArm64Sha}"`,
   "      def install",
-  '        bin.install "0x0"',
+  '        bin.install "zeroxzero" => "0x0"',
   "      end",
   "    end",
   "  end",
@@ -206,7 +215,13 @@ await $`git clone ${tapUrl} ${tapDir}`
 const formulaPath = path.join(tapDir, formula)
 await Bun.write(formulaPath, formulaText)
 
-await $`git -C ${tapDir} add ${formula}`
+const aliasPath = path.join(tapDir, "Aliases", "0x0")
+await $`mkdir -p ${path.dirname(aliasPath)}`
+if (formulaName !== "0x0") {
+  await $`ln -sf ../${formula} ${aliasPath}`
+}
+
+await $`git -C ${tapDir} add ${formula} ${aliasPath}`
 const status = await $`git -C ${tapDir} status --porcelain`.text()
 if (!status.trim()) {
   console.log(`No changes for ${formula} at v${version}`)
