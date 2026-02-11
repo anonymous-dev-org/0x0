@@ -565,7 +565,6 @@ function UserMessage(props: {
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   const queued = () => props.pending && props.message.id > props.pending
-  const color = () => (queued() ? theme.accent : local.agent.color(props.message.agent))
   const metadataVisible = () => queued() || ctx.showTimestamps()
 
   const compaction = () => props.parts.find((x) => x.type === "compaction")
@@ -573,13 +572,7 @@ function UserMessage(props: {
   return (
     <>
       <Show when={text()}>
-        <box
-          id={props.message.id}
-          border={["left"]}
-          borderColor={color()}
-          customBorderChars={SplitBorder.customBorderChars}
-          marginTop={props.index === 0 ? 0 : 1}
-        >
+        <box id={props.message.id} marginTop={props.index === 0 ? 0 : 1}>
           <box
             onMouseOver={() => {
               setHover(true)
@@ -670,6 +663,8 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return props.message.time.completed - user.time.created
   }
 
+  const showFooter = () => props.last && final()
+
   return (
     <box border={["left"]} customBorderChars={SplitBorder.customBorderChars} borderColor={rail()}>
       <For each={props.parts}>
@@ -701,23 +696,18 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
         </box>
       </Show>
-      <Switch>
-        <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
-          <box paddingLeft={3}>
-            <text marginTop={1}>
-              <span style={{ fg: color() }}>▣ </span>{" "}
-              <span style={{ fg: color() }}>{local.agent.label(props.message.agent)}</span>
-              <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
-              <Show when={duration()}>
-                <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
-              </Show>
-              <Show when={props.message.error?.name === "MessageAbortedError"}>
-                <span style={{ fg: theme.textMuted }}> · interrupted</span>
-              </Show>
-            </text>
-          </box>
-        </Match>
-      </Switch>
+      <Show when={showFooter()}>
+        <box paddingLeft={3}>
+          <text marginTop={1}>
+            <span style={{ fg: color() }}>▣ </span>{" "}
+            <span style={{ fg: color() }}>{local.agent.label(props.message.agent)}</span>
+            <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
+            <Show when={duration()}>
+              <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+            </Show>
+          </text>
+        </box>
+      </Show>
     </box>
   )
 }

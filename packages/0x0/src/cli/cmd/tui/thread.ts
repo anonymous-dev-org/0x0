@@ -1,5 +1,4 @@
 import { cmd } from "@/cli/cmd/cmd"
-import { tui } from "./app"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import path from "path"
@@ -82,6 +81,8 @@ export const TuiThreadCommand = cmd({
       process.exit(1)
     }
 
+    const app = import("./app")
+
     // Resolve relative paths against PWD to preserve behavior when using --cwd flag
     const baseCwd = process.env.PWD ?? process.cwd()
     const cwd = args.project ? path.resolve(baseCwd, args.project) : process.cwd()
@@ -148,6 +149,8 @@ export const TuiThreadCommand = cmd({
       customFetch = createWorkerFetch(client)
       events = createEventSource(client)
     }
+
+    const { tui } = await app
 
     const tuiPromise = tui({
       url,

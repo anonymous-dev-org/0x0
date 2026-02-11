@@ -158,9 +158,6 @@ export function registerAppCommands(props: {
       value: "agent.list",
       keybind: "agent_list",
       category: "Agent",
-      slash: {
-        name: "agents",
-      },
       onSelect: show("agents", load.agent),
     },
     {

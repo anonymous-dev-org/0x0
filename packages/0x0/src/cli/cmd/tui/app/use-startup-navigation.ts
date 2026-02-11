@@ -1,5 +1,5 @@
 import { Provider } from "@/provider/provider"
-import { batch, createEffect, createSignal, onMount } from "solid-js"
+import { batch, createEffect, onMount } from "solid-js"
 import type { Args } from "../context/args"
 import { useLocal } from "../context/local"
 import type { RouteContext } from "../context/route"
@@ -15,34 +15,6 @@ export function useStartupNavigation(props: {
   sync: ReturnType<typeof useSync>
   toast: ReturnType<typeof useToast>
 }) {
-  const [sessionCreating, setSessionCreating] = createSignal(false)
-
-  createEffect(() => {
-    if (props.route.data.sessionID) return
-    if (sessionCreating()) return
-    const initialPrompt = props.route.data.initialPrompt
-    setSessionCreating(true)
-    props.sdk.client.session
-      .create({})
-      .then((result) => {
-        if (!result.data?.id) return
-        props.route.navigate({
-          type: "session",
-          sessionID: result.data.id,
-          initialPrompt,
-        })
-      })
-      .catch(() => {
-        props.toast.show({
-          variant: "error",
-          message: "Failed to create session",
-        })
-      })
-      .finally(() => {
-        setSessionCreating(false)
-      })
-  })
-
   onMount(() => {
     batch(() => {
       if (props.args.agent) props.local.agent.set(props.args.agent)

@@ -21,6 +21,7 @@ const dry = args.values["dry-run"]
 const scope = args.values.scope
 const tag = args.values.tag
 const otp = args.values.otp
+const token = process.env.ZEROXZERO_NPM_TOKEN ?? process.env.NPM_TOKEN ?? process.env.NODE_AUTH_TOKEN
 const folders = [
   "0x0-linux-x64-baseline",
   "0x0-linux-x64",
@@ -41,6 +42,9 @@ const version = args.values.version ?? meta.version
 if (!version) throw new Error("Could not determine version. Pass --version.")
 
 const publishName = (name: string) => `${scope}/${name}`
+const config = token
+  ? await Bun.write(`./dist/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${token}\n`).then(() => `./dist/.npmrc.publish`)
+  : undefined
 
 if (meta.optionalDependencies?.[publishName("0x0")]) {
   delete meta.optionalDependencies[publishName("0x0")]
@@ -57,6 +61,10 @@ const published = async (name: string) => {
 const login = async () => {
   if (dry) {
     console.log(`DRY RUN npm login --scope=${scope} --auth-type=web`)
+    return
+  }
+  if (token) {
+    console.log("Using npm token auth")
     return
   }
   console.log("Starting npm web login...")
@@ -84,13 +92,17 @@ const push = async (folder: string) => {
 
   while (true) {
     const result = otp
-      ? await $`npm publish *.tgz --access public --tag ${tag} --otp=${otp}`.cwd(cwd).nothrow()
-      : await $`npm publish *.tgz --access public --tag ${tag}`.cwd(cwd).nothrow()
+      ? await $`${{ raw: `npm publish *.tgz --access public --tag ${tag} --otp=${otp}${config ? ` --userconfig ${config}` : ""}` }}`.cwd(cwd).nothrow()
+      : await $`${{ raw: `npm publish *.tgz --access public --tag ${tag}${config ? ` --userconfig ${config}` : ""}` }}`.cwd(cwd).nothrow()
     if (result.exitCode === 0) return
 
     const stderr = result.stderr.toString()
     if (!stderr.includes("EOTP") && !stderr.includes("Access token expired or revoked")) {
       throw new Error(stderr || `npm publish failed for ${name}`)
+    }
+
+    if (token) {
+      throw new Error(stderr || `npm token auth failed for ${name}`)
     }
 
     await login()

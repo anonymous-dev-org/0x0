@@ -8,9 +8,13 @@ const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 const scope = process.env.ZEROXZERO_NPM_SCOPE ?? "@anonymous-dev"
 const otp = process.env.ZEROXZERO_NPM_OTP
+const npmToken = process.env.ZEROXZERO_NPM_TOKEN ?? process.env.NPM_TOKEN ?? process.env.NODE_AUTH_TOKEN
 
 const publishTgz = async (cwd: string) => {
-  const base = `npm publish *.tgz --access public --tag ${Script.channel}`
+  const config = npmToken
+    ? await Bun.write(`${cwd}/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${npmToken}\n`).then(() => `${cwd}/.npmrc.publish`)
+    : undefined
+  const base = `npm publish *.tgz --access public --tag ${Script.channel}${config ? ` --userconfig ${config}` : ""}`
   if (otp) {
     await $`${{ raw: `${base} --otp=${otp}` }}`.cwd(cwd)
     return
@@ -23,6 +27,10 @@ const publishTgz = async (cwd: string) => {
     const stderr = first.stderr.toString()
     if (!stderr.includes("EOTP") && !stderr.includes("Access token expired or revoked")) {
       throw new Error(stderr || `npm publish failed with code ${first.exitCode}`)
+    }
+
+    if (npmToken) {
+      throw new Error(stderr || "npm token auth failed")
     }
 
     console.log("npm requires web auth/passkey. Waiting for login...")
@@ -179,8 +187,10 @@ const homebrewFormula = [
   "",
 ].join("\n")
 
-const token = process.env.GITHUB_TOKEN
-const tap = token ? `https://x-access-token:${token}@github.com/${tapRepo}.git` : `git@github.com:${tapRepo}.git`
+const githubToken = process.env.GITHUB_TOKEN
+const tap = githubToken
+  ? `https://x-access-token:${githubToken}@github.com/${tapRepo}.git`
+  : `git@github.com:${tapRepo}.git`
 await $`rm -rf ./dist/homebrew-tap`
 await $`git clone ${tap} ./dist/homebrew-tap`
 await $`mkdir -p ./dist/homebrew-tap/Formula ./dist/homebrew-tap/Aliases`

@@ -485,11 +485,27 @@ export function Prompt(props: PromptProps) {
     return tint(theme.backgroundElement, agent(), 0.12)
   })
 
-  const highlight = () => {
-    if (keybind.leader) return theme.border
-    if (store.mode === "shell") return theme.primary
-    return agent()
-  }
+  const parsed = createMemo(() => local.model.parsed())
+  const activeStatus = createMemo(() => {
+    const type = status().type
+    return type === "busy" || type === "retry"
+  })
+  const [elapsed, setElapsed] = createSignal(0)
+
+  createEffect(() => {
+    if (!activeStatus()) {
+      setElapsed(0)
+      return
+    }
+    const started = Date.now()
+    setElapsed(0)
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000))
+    }, 1000)
+    onCleanup(() => {
+      clearInterval(timer)
+    })
+  })
 
   const showVariant = () => {
     const variants = local.model.variant.list()
@@ -548,6 +564,18 @@ export function Prompt(props: PromptProps) {
             backgroundColor={theme.backgroundElement}
             flexGrow={1}
           >
+            <Show when={store.mode === "normal" && parsed().reasoning}>
+              <box flexDirection="row" gap={1} paddingBottom={1}>
+                <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                  Thinking
+                </text>
+                <Show when={activeStatus()}>
+                  <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                    {elapsed()}s
+                  </text>
+                </Show>
+              </box>
+            </Show>
             <textarea
               placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
               textColor={keybind.leader ? theme.textMuted : theme.text}
@@ -733,17 +761,17 @@ export function Prompt(props: PromptProps) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={0} gap={1}>
-              <text fg={highlight()} attributes={TextAttributes.DIM}>
+            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+              <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
                 {store.mode === "shell" ? "Shell" : local.agent.label(local.agent.current().name)}{" "}
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
                   <text flexShrink={0} fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                    {local.model.parsed().model}
+                    {parsed().model}
                   </text>
                   <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                    {local.model.parsed().provider}
+                    {parsed().provider}
                   </text>
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted} attributes={TextAttributes.DIM}>

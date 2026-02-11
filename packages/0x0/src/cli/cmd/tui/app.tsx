@@ -3,7 +3,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { Terminal } from "@tui/util/terminal"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { createEffect, untrack, ErrorBoundary, createSignal, Show, on } from "solid-js"
+import { createEffect, untrack, ErrorBoundary, createSignal, Show, on, onMount } from "solid-js"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -16,6 +16,7 @@ import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command
 import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Session } from "@tui/routes/session"
+import { Prompt } from "./component/prompt"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -27,8 +28,8 @@ import { KVProvider, useKV } from "./context/kv"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { useStartupNavigation } from "./app/use-startup-navigation"
-import { registerAppCommands } from "./app/register-app-commands"
 import { useAppEventHandlers } from "./app/use-app-event-handlers"
+import { Logo } from "./component/logo"
 
 import type { EventSource } from "./context/sdk"
 
@@ -176,23 +177,27 @@ function App() {
   )
 
   const connected = useConnected()
-  registerAppCommands({
-    command,
-    connected,
-    dialog,
-    exit,
-    kv,
-    local,
-    mode,
-    promptRef,
-    renderer,
-    route,
-    sdk,
-    setMode,
-    setTerminalTitleEnabled,
-    sync,
-    terminalTitleEnabled,
-    toast,
+  onMount(() => {
+    import("./app/register-app-commands").then(({ registerAppCommands }) => {
+      registerAppCommands({
+        command,
+        connected,
+        dialog,
+        exit,
+        kv,
+        local,
+        mode,
+        promptRef,
+        renderer,
+        route,
+        sdk,
+        setMode,
+        setTerminalTitleEnabled,
+        sync,
+        terminalTitleEnabled,
+        toast,
+      })
+    })
   })
 
   createEffect(() => {
@@ -228,7 +233,21 @@ function App() {
         }
       }}
     >
-      <Show when={route.data.sessionID}>
+      <Show
+        when={route.data.sessionID}
+        fallback={
+          <box flexDirection="column" justifyContent="center" gap={1} padding={1}>
+            <Logo />
+            <Prompt
+              visible
+              ref={(r) => {
+                promptRef.set(r)
+              }}
+              onSubmit={() => {}}
+            />
+          </box>
+        }
+      >
         <Session />
       </Show>
     </box>
