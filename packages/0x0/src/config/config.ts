@@ -42,6 +42,7 @@ export namespace Config {
   const yamlConfigFiles = ["0x0.yaml", "0x0.yml", "zeroxzero.yaml", "zeroxzero.yml"] as const
   const legacyConfigFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
   const configFiles = [...yamlConfigFiles, ...legacyConfigFiles] as const
+  const projectConfigDirs = ["", ".0x0"] as const
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
@@ -66,6 +67,9 @@ export namespace Config {
     }
     if (target.instructions && source.instructions) {
       merged.instructions = Array.from(new Set([...target.instructions, ...source.instructions]))
+    }
+    if (target.knowledge && source.knowledge) {
+      merged.knowledge = Array.from(new Set([...target.knowledge, ...source.knowledge]))
     }
     return merged
   }
@@ -156,14 +160,60 @@ export namespace Config {
   }
 
   async function ensureDefaultGlobalConfigFile() {
-    const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
-    for (const candidate of candidates) {
-      if (await Bun.file(candidate).exists()) return
+    const existing = await discoverGlobalConfigFiles()
+    if (existing.length > 1) {
+      throw new ConflictError({
+        scope: "global",
+        files: existing,
+      })
     }
+    if (existing.length === 1) return
 
     const defaultPath = path.join(Global.Path.config, yamlConfigFiles[0])
     const defaultText = formatYamlConfig(defaultConfig())
     await Bun.write(defaultPath, defaultText)
+  }
+
+  async function discoverGlobalConfigFiles() {
+    const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
+    const existing = await Promise.all(
+      candidates.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)),
+    )
+    return existing.filter((file): file is string => Boolean(file))
+  }
+
+  function walkUpDirectories(start: string, stop?: string) {
+    const directories = [] as string[]
+    let current = start
+    while (true) {
+      directories.push(current)
+      if (current === stop) break
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return directories
+  }
+
+  async function discoverProjectConfigFiles(start: string, stop?: string) {
+    const files = [] as string[]
+    for (const dir of walkUpDirectories(start, stop).toReversed()) {
+      const candidates = projectConfigDirs.flatMap((prefix) =>
+        configFiles.map((file) => (prefix ? path.join(dir, prefix, file) : path.join(dir, file))),
+      )
+      const existing = await Promise.all(
+        candidates.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)),
+      )
+      const found = existing.filter((file): file is string => Boolean(file))
+      if (found.length > 1) {
+        throw new ConflictError({
+          scope: "project",
+          files: found,
+        })
+      }
+      if (found.length === 1) files.push(found[0])
+    }
+    return files
   }
 
   export const state = Instance.state(async () => {
@@ -209,11 +259,9 @@ export namespace Config {
 
     // Project config overrides global and remote config.
     if (!Flag.ZEROXZERO_DISABLE_PROJECT_CONFIG) {
-      for (const file of configFiles) {
-        const found = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
-        for (const resolved of found.toReversed()) {
-          result = mergeConfigConcatArrays(result, await loadFile(resolved))
-        }
+      const projectFiles = await discoverProjectConfigFiles(Instance.directory, Instance.worktree)
+      for (const resolved of projectFiles) {
+        result = mergeConfigConcatArrays(result, await loadFile(resolved))
       }
     }
 
@@ -1284,6 +1332,10 @@ export namespace Config {
           },
         ),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
+      knowledge: z
+        .array(z.string())
+        .optional()
+        .describe("Project-specific knowledge snippets injected into all agents"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
@@ -1331,8 +1383,15 @@ export namespace Config {
     await ensureDefaultGlobalConfigFile()
 
     let result: Info = {}
-    for (const file of [...configFiles, "config.json"]) {
-      result = mergeDeep(result, await loadFile(path.join(Global.Path.config, file)))
+    const files = await discoverGlobalConfigFiles()
+    if (files.length > 1) {
+      throw new ConflictError({
+        scope: "global",
+        files,
+      })
+    }
+    if (files[0]) {
+      result = mergeDeep(result, await loadFile(files[0]))
     }
 
     const legacy = path.join(Global.Path.config, "config")
@@ -1492,6 +1551,14 @@ export namespace Config {
     }),
   )
 
+  export const ConflictError = NamedError.create(
+    "ConfigConflictError",
+    z.object({
+      scope: z.enum(["global", "project"]),
+      files: z.array(z.string()).min(2),
+    }),
+  )
+
   export const InvalidError = NamedError.create(
     "ConfigInvalidError",
     z.object({
@@ -1522,6 +1589,24 @@ export namespace Config {
     const output = isYamlPath(filepath) ? formatYamlConfig(merged, current) : JSON.stringify(merged, null, 2)
     await Bun.write(filepath, output)
     await Instance.dispose()
+  }
+
+  export async function updateProject(config: Info) {
+    const dir = path.join(Instance.worktree, ".0x0")
+    await fs.mkdir(dir, { recursive: true })
+    const filepath = path.join(dir, yamlConfigFiles[0])
+    const existing = await loadFile(filepath)
+    const merged = mergeDeep(existing, config)
+    const current = await Bun.file(filepath)
+      .text()
+      .catch(() => "")
+    await Bun.write(filepath, formatYamlConfig(merged, current))
+    await Instance.dispose()
+    return merged
+  }
+
+  export async function getProject() {
+    return loadFile(path.join(Instance.worktree, ".0x0", yamlConfigFiles[0]))
   }
 
   function globalConfigFile() {

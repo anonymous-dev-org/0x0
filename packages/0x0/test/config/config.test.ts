@@ -24,6 +24,10 @@ async function writeConfig(dir: string, config: object, name = "zeroxzero.json")
   await Bun.write(path.join(dir, name), JSON.stringify(config))
 }
 
+async function writeYaml(dir: string, content: string, name = "0x0.yaml") {
+  await Bun.write(path.join(dir, name), content)
+}
+
 test("loads config with defaults when no files exist", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -86,6 +90,8 @@ test("loads JSONC config file", async () => {
 test("merges multiple config files with correct precedence", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
+      const projectDir = path.join(dir, "project")
+      await fs.mkdir(projectDir, { recursive: true })
       await writeConfig(
         dir,
         {
@@ -93,20 +99,135 @@ test("merges multiple config files with correct precedence", async () => {
           model: "base",
           username: "base",
         },
-        "zeroxzero.jsonc",
+        "zeroxzero.json",
       )
-      await writeConfig(dir, {
+      await writeConfig(projectDir, {
         $schema: "https://zeroxzero.ai/config.json",
         model: "override",
       })
     },
   })
   await Instance.provide({
-    directory: tmp.path,
+    directory: path.join(tmp.path, "project"),
     fn: async () => {
       const config = await Config.get()
       expect(config.model).toBe("override")
       expect(config.username).toBe("base")
+    },
+  })
+})
+
+test("throws conflict error when multiple global config files exist", async () => {
+  const jsonPath = path.join(Global.Path.config, "zeroxzero.json")
+  const yamlPath = path.join(Global.Path.config, "0x0.yaml")
+  const jsonBefore = await Bun.file(jsonPath)
+    .text()
+    .catch(() => undefined)
+  const yamlBefore = await Bun.file(yamlPath)
+    .text()
+    .catch(() => undefined)
+
+  try {
+    Config.global.reset()
+    await writeConfig(
+      Global.Path.config,
+      {
+        $schema: "https://zeroxzero.ai/config.json",
+        model: "json-model",
+      },
+      "zeroxzero.json",
+    )
+    await writeYaml(
+      Global.Path.config,
+      `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
+$schema: https://zeroxzero.ai/config.json
+model: yaml-model
+`,
+    )
+    await expect(Config.getGlobal()).rejects.toThrow("ConfigConflictError")
+  } finally {
+    Config.global.reset()
+    if (jsonBefore === undefined) {
+      await fs.rm(jsonPath, { force: true }).catch(() => {})
+    } else {
+      await Bun.write(jsonPath, jsonBefore)
+    }
+    if (yamlBefore === undefined) {
+      await fs.rm(yamlPath, { force: true }).catch(() => {})
+    } else {
+      await Bun.write(yamlPath, yamlBefore)
+    }
+  }
+})
+
+test("throws conflict error when multiple project config files exist in same directory", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeYaml(
+        dir,
+        `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
+$schema: https://zeroxzero.ai/config.json
+model: yaml-model
+`,
+      )
+      await writeConfig(
+        dir,
+        {
+          $schema: "https://zeroxzero.ai/config.json",
+          model: "json-model",
+        },
+        "zeroxzero.json",
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("ConfigConflictError")
+    },
+  })
+})
+
+test("loads project config from .0x0 directory", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const projectConfig = path.join(dir, ".0x0")
+      await fs.mkdir(projectConfig, { recursive: true })
+      await writeYaml(
+        projectConfig,
+        `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
+$schema: https://zeroxzero.ai/config.json
+model: test/model
+knowledge:
+  - project note
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.model).toBe("test/model")
+      expect(config.knowledge).toEqual(["project note"])
+    },
+  })
+})
+
+test("updateProject writes .0x0/0x0.yaml and merges knowledge", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.updateProject({ knowledge: ["first note"] })
+      await Config.updateProject({ knowledge: ["first note", "second note"] })
+      const projectConfigPath = path.join(tmp.path, ".0x0", "0x0.yaml")
+      expect(await Bun.file(projectConfigPath).exists()).toBe(true)
+      const config = await Config.getProject()
+      expect(config.knowledge).toEqual(["first note", "second note"])
     },
   })
 })
@@ -1292,9 +1413,11 @@ test("permission config preserves key order", async () => {
 test("project config can override MCP server enabled status", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
+      const projectDir = path.join(dir, "project")
+      await fs.mkdir(projectDir, { recursive: true })
       // Simulates a base config (like from remote .well-known) with disabled MCP
       await Bun.write(
-        path.join(dir, "zeroxzero.jsonc"),
+        path.join(dir, "zeroxzero.json"),
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -1313,7 +1436,7 @@ test("project config can override MCP server enabled status", async () => {
       )
       // Project config enables just jira
       await Bun.write(
-        path.join(dir, "zeroxzero.json"),
+        path.join(projectDir, "0x0.json"),
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -1328,7 +1451,7 @@ test("project config can override MCP server enabled status", async () => {
     },
   })
   await Instance.provide({
-    directory: tmp.path,
+    directory: path.join(tmp.path, "project"),
     fn: async () => {
       const config = await Config.get()
       // jira should be enabled (overridden by project config)
@@ -1350,9 +1473,11 @@ test("project config can override MCP server enabled status", async () => {
 test("MCP config deep merges preserving base config properties", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
+      const projectDir = path.join(dir, "project")
+      await fs.mkdir(projectDir, { recursive: true })
       // Base config with full MCP definition
       await Bun.write(
-        path.join(dir, "zeroxzero.jsonc"),
+        path.join(dir, "zeroxzero.json"),
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -1369,7 +1494,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       )
       // Override just enables it, should preserve other properties
       await Bun.write(
-        path.join(dir, "zeroxzero.json"),
+        path.join(projectDir, "0x0.json"),
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -1384,7 +1509,7 @@ test("MCP config deep merges preserving base config properties", async () => {
     },
   })
   await Instance.provide({
-    directory: tmp.path,
+    directory: path.join(tmp.path, "project"),
     fn: async () => {
       const config = await Config.get()
       expect(config.mcp?.myserver).toEqual({

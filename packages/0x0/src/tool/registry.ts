@@ -1,16 +1,8 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
-import { EditTool } from "./edit"
-import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
-import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
-import { TodoWriteTool, TodoReadTool } from "./todo"
-import { WebFetchTool } from "./webfetch"
-import { WriteTool } from "./write"
-import { InvalidTool } from "./invalid"
-import { SkillTool } from "./skill"
+import { TodoWriteTool } from "./todo"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -19,13 +11,13 @@ import path from "path"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@0x0-ai/plugin"
 import z from "zod"
 import { Plugin } from "../plugin"
-import { WebSearchTool } from "./websearch"
-import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 import { ApplyPatchTool } from "./apply_patch"
+import { SearchTool } from "./search"
+import { SearchRemoteTool } from "./search_remote"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -92,27 +84,18 @@ export namespace ToolRegistry {
 
   async function all(): Promise<Tool.Info[]> {
     const custom = await state().then((x) => x.custom)
-    const config = await Config.get()
 
     return [
-      InvalidTool,
       ...(["app", "cli", "desktop"].includes(Flag.ZEROXZERO_CLIENT) ? [QuestionTool] : []),
       BashTool,
       ReadTool,
-      GlobTool,
-      GrepTool,
-      EditTool,
-      WriteTool,
+      SearchTool,
       TaskTool,
-      WebFetchTool,
+      SearchRemoteTool,
       TodoWriteTool,
       // TodoReadTool,
-      WebSearchTool,
-      CodeSearchTool,
-      SkillTool,
       ApplyPatchTool,
       ...(Flag.ZEROXZERO_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]
   }
@@ -130,28 +113,13 @@ export namespace ToolRegistry {
   ) {
     const tools = await all()
     const result = await Promise.all(
-      tools
-        .filter((t) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (t.id === "codesearch" || t.id === "websearch") {
-            return model.providerID === "zeroxzero" || Flag.ZEROXZERO_ENABLE_EXA
-          }
-
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
-
-          return true
-        })
-        .map(async (t) => {
-          using _ = log.time(t.id)
-          return {
-            id: t.id,
-            ...(await t.init({ agent })),
-          }
-        }),
+      tools.map(async (t) => {
+        using _ = log.time(t.id)
+        return {
+          id: t.id,
+          ...(await t.init({ agent })),
+        }
+      }),
     )
     return result
   }

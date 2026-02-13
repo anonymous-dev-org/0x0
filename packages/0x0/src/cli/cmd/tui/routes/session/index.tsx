@@ -16,8 +16,15 @@ import { Dynamic } from "solid-js/web"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
-import { tint, useTheme } from "@tui/context/theme"
-import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA, TextAttributes } from "@opentui/core"
+import { useTheme } from "@tui/context/theme"
+import {
+  ScrollBoxRenderable,
+  addDefaultParsers,
+  MacOSScrollAccel,
+  type ScrollAcceleration,
+  RGBA,
+  TextAttributes,
+} from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@0x0-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
@@ -650,9 +657,7 @@ function Thinking(props: {
         <box flexDirection="row" gap={1}>
           <text>
             <For each={[0, 1, 2, 3, 4, 5]}>
-              {(col) => (
-                <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>
-              )}
+              {(col) => <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>}
             </For>
           </text>
           <text fg={props.textMuted} attributes={TextAttributes.DIM}>
@@ -774,16 +779,20 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const { theme } = useTheme()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
+  const agentColor = createMemo(() => {
+    const color = local.agent.color(props.message.agent)
+    return RGBA.fromInts(Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255), 255)
+  })
   const color = () => {
     if (props.message.error?.name === "MessageAbortedError") return theme.textMuted
-    return local.agent.color(props.message.agent)
+    return agentColor()
   }
 
   const final = () => {
     return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
   }
 
-  const rail = createMemo(() => tint(theme.backgroundPanel, local.agent.color(props.message.agent), 0.12))
+  const rail = createMemo(() => agentColor())
 
   const duration = () => {
     if (!final()) return 0

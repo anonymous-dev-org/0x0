@@ -13,6 +13,11 @@ import type { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 
 export namespace SystemPrompt {
+  function knowledge(config: Config.Info) {
+    if (!config.knowledge?.length) return
+    return ["Project knowledge base:", ...config.knowledge.map((entry, index) => `${index + 1}. ${entry}`)].join("\n")
+  }
+
   export async function instructions() {
     const config = await Config.get()
     const system = config.prompt?.system
@@ -33,14 +38,17 @@ export namespace SystemPrompt {
   }
 
   export async function compose(input: { model: Provider.Model; agent?: string }) {
+    const config = await Config.get()
     const seen = new Set<string>()
-    return [await instructions(), input.agent, ...(await models(input.model))].filter((item): item is string => {
-      if (!item) return false
-      const key = item.trim()
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+    return [await instructions(), input.agent, ...(await models(input.model)), knowledge(config)].filter(
+      (item): item is string => {
+        if (!item) return false
+        const key = item.trim()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      },
+    )
   }
 
   export const model = models

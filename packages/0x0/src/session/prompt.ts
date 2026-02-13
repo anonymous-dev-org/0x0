@@ -45,6 +45,7 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
+import { InvalidTool } from "@/tool/invalid"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -749,6 +750,18 @@ export namespace SessionPrompt {
         },
       })
     }
+
+    const invalid = await InvalidTool.init()
+    const invalidSchema = ProviderTransform.schema(input.model, z.toJSONSchema(invalid.parameters))
+    tools[InvalidTool.id] = tool({
+      id: InvalidTool.id as any,
+      description: invalid.description,
+      inputSchema: jsonSchema(invalidSchema as any),
+      async execute(args, options) {
+        const ctx = context(args, options)
+        return invalid.execute(args, ctx)
+      },
+    })
 
     for (const [key, item] of Object.entries(await MCP.tools())) {
       const execute = item.execute
