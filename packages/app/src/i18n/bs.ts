@@ -248,7 +248,7 @@ export const dict = {
   "dialog.mcp.empty": "Nema konfigurisnih MCP-ova",
 
   "dialog.lsp.empty": "LSP-ovi se automatski otkrivaju prema tipu datoteke",
-  "dialog.plugins.empty": "Plugini su konfigurisani u zeroxzero.json",
+  "dialog.plugins.empty": "Plugini su konfigurisani u zeroxzero.yaml",
 
   "mcp.status.connected": "povezano",
   "mcp.status.failed": "neuspjelo",
@@ -416,7 +416,7 @@ export const dict = {
   "error.chain.responseBody": "Tijelo odgovora:\n{{body}}",
   "error.chain.didYouMean": "Da li si mislio: {{suggestions}}",
   "error.chain.modelNotFound": "Model nije pronađen: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Provjeri konfiguraciju (zeroxzero.json) - nazive provajdera/modela",
+  "error.chain.checkConfig": "Provjeri konfiguraciju (zeroxzero.yaml) - nazive provajdera/modela",
   "error.chain.mcpFailed": 'MCP server "{{name}}" nije uspio. Napomena: zeroxzero još ne podržava MCP autentifikaciju.',
   "error.chain.providerAuthFailed": "Autentifikacija provajdera nije uspjela ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":

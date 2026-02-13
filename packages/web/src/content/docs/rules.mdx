@@ -98,11 +98,11 @@ The first matching file wins in each category. For example, if you have both `AG
 
 ## Custom Instructions
 
-You can specify custom instruction files in your `0x0.json` or the global `~/.config/0x0/0x0.json`. This allows you and your team to reuse existing rules rather than having to duplicate them to AGENTS.md.
+You can specify custom instruction files in your `0x0.yaml` or the global `~/.config/0x0/0x0.yaml`. This allows you and your team to reuse existing rules rather than having to duplicate them to AGENTS.md.
 
 Example:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]
@@ -111,7 +111,7 @@ Example:
 
 You can also use remote URLs to load instructions from the web.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "instructions": ["https://raw.githubusercontent.com/my-org/shared-rules/main/style.md"]
@@ -128,11 +128,11 @@ All instruction files are combined with your `AGENTS.md` files.
 
 While 0x0 doesn't automatically parse file references in `AGENTS.md`, you can achieve similar functionality in two ways:
 
-### Using 0x0.json
+### Using 0x0.yaml
 
-The recommended approach is to use the `instructions` field in `0x0.json`:
+The recommended approach is to use the `instructions` field in `0x0.yaml`:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "instructions": ["docs/development-standards.md", "test/testing-guidelines.md", "packages/*/AGENTS.md"]
@@ -176,5 +176,5 @@ This approach allows you to:
 - Ensure 0x0 loads files only when needed for the specific task
 
 :::tip
-For monorepos or projects with shared standards, using `0x0.json` with glob patterns (like `packages/*/AGENTS.md`) is more maintainable than manual instructions.
+For monorepos or projects with shared standards, using `0x0.yaml` with glob patterns (like `packages/*/AGENTS.md`) is more maintainable than manual instructions.
 :::

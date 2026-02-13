@@ -240,7 +240,7 @@ export const dict = {
   "dialog.mcp.empty": "لم يتم تكوين MCPs",
 
   "dialog.lsp.empty": "تم الكشف تلقائيًا عن LSPs من أنواع الملفات",
-  "dialog.plugins.empty": "الإضافات المكونة في zeroxzero.json",
+  "dialog.plugins.empty": "الإضافات المكونة في zeroxzero.yaml",
 
   "mcp.status.connected": "متصل",
   "mcp.status.failed": "فشل",
@@ -389,7 +389,7 @@ export const dict = {
   "error.chain.responseBody": "نص الاستجابة:\n{{body}}",
   "error.chain.didYouMean": "هل كنت تعني: {{suggestions}}",
   "error.chain.modelNotFound": "النموذج غير موجود: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "تحقق من أسماء الموفر/النموذج في التكوين (zeroxzero.json)",
+  "error.chain.checkConfig": "تحقق من أسماء الموفر/النموذج في التكوين (zeroxzero.yaml)",
   "error.chain.mcpFailed": 'فشل خادم MCP "{{name}}". لاحظ أن zeroxzero لا يدعم مصادقة MCP بعد.',
   "error.chain.providerAuthFailed": "فشلت مصادقة الموفر ({{provider}}): {{message}}",
   "error.chain.providerInitFailed": 'فشل تهيئة الموفر "{{provider}}". تحقق من بيانات الاعتماد والتكوين.',

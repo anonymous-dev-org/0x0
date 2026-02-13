@@ -240,7 +240,7 @@ export const dict = {
   "dialog.mcp.empty": "Brak skonfigurowanych MCP",
 
   "dialog.lsp.empty": "LSP wykryte automatycznie na podstawie typów plików",
-  "dialog.plugins.empty": "Wtyczki skonfigurowane w zeroxzero.json",
+  "dialog.plugins.empty": "Wtyczki skonfigurowane w zeroxzero.yaml",
 
   "mcp.status.connected": "połączono",
   "mcp.status.failed": "niepowodzenie",
@@ -390,7 +390,7 @@ export const dict = {
   "error.chain.responseBody": "Treść odpowiedzi:\n{{body}}",
   "error.chain.didYouMean": "Czy miałeś na myśli: {{suggestions}}",
   "error.chain.modelNotFound": "Model nie znaleziony: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Sprawdź swoją konfigurację (zeroxzero.json) nazwy dostawców/modeli",
+  "error.chain.checkConfig": "Sprawdź swoją konfigurację (zeroxzero.yaml) nazwy dostawców/modeli",
   "error.chain.mcpFailed":
     'Serwer MCP "{{name}}" nie powiódł się. Uwaga, zeroxzero nie obsługuje jeszcze uwierzytelniania MCP.',
   "error.chain.providerAuthFailed": "Uwierzytelnianie dostawcy nie powiodło się ({{provider}}): {{message}}",

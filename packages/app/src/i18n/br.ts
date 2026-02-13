@@ -240,7 +240,7 @@ export const dict = {
   "dialog.mcp.empty": "Nenhum MCP configurado",
 
   "dialog.lsp.empty": "LSPs detectados automaticamente pelos tipos de arquivo",
-  "dialog.plugins.empty": "Plugins configurados em zeroxzero.json",
+  "dialog.plugins.empty": "Plugins configurados em zeroxzero.yaml",
   "mcp.status.connected": "conectado",
   "mcp.status.failed": "falhou",
   "mcp.status.needs_auth": "precisa de autenticação",
@@ -388,7 +388,7 @@ export const dict = {
   "error.chain.responseBody": "Corpo da resposta:\n{{body}}",
   "error.chain.didYouMean": "Você quis dizer: {{suggestions}}",
   "error.chain.modelNotFound": "Modelo não encontrado: {{provider}}/{{model}}",
-  "error.chain.checkConfig": "Verifique os nomes de provedor/modelo na sua configuração (zeroxzero.json)",
+  "error.chain.checkConfig": "Verifique os nomes de provedor/modelo na sua configuração (zeroxzero.yaml)",
   "error.chain.mcpFailed": 'Servidor MCP "{{name}}" falhou. Nota: zeroxzero ainda não suporta autenticação MCP.',
   "error.chain.providerAuthFailed": "Autenticação do provedor falhou ({{provider}}): {{message}}",
   "error.chain.providerInitFailed":

@@ -30,7 +30,7 @@ Files in these directories are automatically loaded at startup.
 
 Specify npm packages in your config file.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "plugin": ["0x0-helicone-session", "0x0-wakatime", "@my-org/custom-plugin"]
@@ -55,8 +55,8 @@ Browse available plugins in the [ecosystem](/docs/ecosystem#plugins).
 
 Plugins are loaded from all sources and all hooks run in sequence. The load order is:
 
-1. Global config (`~/.config/0x0/0x0.json`)
-2. Project config (`0x0.json`)
+1. Global config (`~/.config/0x0/0x0.yaml`)
+2. Project config (`0x0.yaml`)
 3. Global plugin directory (`~/.config/0x0/plugins/`)
 4. Project plugin directory (`.0x0/plugins/`)
 

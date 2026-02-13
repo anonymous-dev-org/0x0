@@ -161,14 +161,12 @@ export const McpAuthCommand = cmd({
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")
-          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in 0x0.json:")
+          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in 0x0.yaml:")
           prompts.log.info(`
-  "mcp": {
-    "my-server": {
-      "type": "remote",
-      "url": "https://example.com/mcp"
-    }
-  }`)
+mcp:
+  my-server:
+    type: remote
+    url: https://example.com/mcp`)
           prompts.outro("Done")
           return
         }
@@ -380,8 +378,12 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .zeroxzero/ subdirectory too)
+  // Check for existing config files, including .zeroxzero/ subdirectory
   const candidates = [
+    path.join(baseDir, "0x0.yaml"),
+    path.join(baseDir, "0x0.yml"),
+    path.join(baseDir, "zeroxzero.yaml"),
+    path.join(baseDir, "zeroxzero.yml"),
     path.join(baseDir, "0x0.json"),
     path.join(baseDir, "0x0.jsonc"),
     path.join(baseDir, "zeroxzero.json"),
@@ -390,6 +392,10 @@ async function resolveConfigPath(baseDir: string, global = false) {
 
   if (!global) {
     candidates.push(
+      path.join(baseDir, ".zeroxzero", "0x0.yaml"),
+      path.join(baseDir, ".zeroxzero", "0x0.yml"),
+      path.join(baseDir, ".zeroxzero", "zeroxzero.yaml"),
+      path.join(baseDir, ".zeroxzero", "zeroxzero.yml"),
       path.join(baseDir, ".zeroxzero", "0x0.json"),
       path.join(baseDir, ".zeroxzero", "0x0.jsonc"),
       path.join(baseDir, ".zeroxzero", "zeroxzero.json"),
@@ -403,7 +409,7 @@ async function resolveConfigPath(baseDir: string, global = false) {
     }
   }
 
-  // Default to 0x0.json if none exist
+  // Default to 0x0.yaml if none exist
   return candidates[0]
 }
 

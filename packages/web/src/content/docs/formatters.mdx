@@ -58,7 +58,7 @@ This process happens in the background, ensuring your code styles are maintained
 
 You can customize formatters through the `formatter` section in your Terminal Agent config.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "formatter": {}
@@ -82,7 +82,7 @@ Let's look at some examples.
 
 To disable **all** formatters globally, set `formatter` to `false`:
 
-```json title="0x0.json" {3}
+```yaml title="0x0.yaml" {3}
 {
   "$schema": "https://0x0.ai/config.json",
   "formatter": false
@@ -91,7 +91,7 @@ To disable **all** formatters globally, set `formatter` to `false`:
 
 To disable a **specific** formatter, set `disabled` to `true`:
 
-```json title="0x0.json" {5}
+```yaml title="0x0.yaml" {5}
 {
   "$schema": "https://0x0.ai/config.json",
   "formatter": {
@@ -108,7 +108,7 @@ To disable a **specific** formatter, set `disabled` to `true`:
 
 You can override the built-in formatters or add new ones by specifying the command, environment variables, and file extensions:
 
-```json title="0x0.json" {4-14}
+```yaml title="0x0.yaml" {4-14}
 {
   "$schema": "https://0x0.ai/config.json",
   "formatter": {

@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { batch, createMemo } from "solid-js"
+import { batch, createEffect, createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { uniqueBy } from "remeda"
@@ -35,10 +35,26 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     function createAgent() {
       const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
+      const preferred = createMemo(() => {
+        const list = agents()
+        if (list.length === 0) return ""
+
+        const configured = sync.data.config.default_agent
+        if (configured && list.some((x) => x.name === configured)) return configured
+        if (list.some((x) => x.name === "plan")) return "plan"
+        return list[0]?.name ?? ""
+      })
       const [agentStore, setAgentStore] = createStore<{
         current: string
       }>({
-        current: agents()[0].name,
+        current: preferred(),
+      })
+
+      createEffect(() => {
+        const list = agents()
+        if (list.length === 0) return
+        if (list.some((x) => x.name === agentStore.current)) return
+        setAgentStore("current", preferred())
       })
       const { theme } = useTheme()
       const colors = createMemo(() => [
@@ -55,7 +71,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return agents()
         },
         current() {
-          return agents().find((x) => x.name === agentStore.current)!
+          return agents().find((x) => x.name === agentStore.current) ?? agents()[0]!
         },
         set(name: string) {
           if (!agents().some((x) => x.name === name))

@@ -568,8 +568,8 @@ test("updates config and writes to file", async () => {
       const newConfig = { model: "updated/model" }
       await Config.update(newConfig as any)
 
-      const writtenConfig = JSON.parse(await Bun.file(path.join(tmp.path, "config.json")).text())
-      expect(writtenConfig.model).toBe("updated/model")
+      const writtenConfig = await Bun.file(path.join(tmp.path, "0x0.yaml")).text()
+      expect(writtenConfig).toContain("model: updated/model")
     },
   })
 })

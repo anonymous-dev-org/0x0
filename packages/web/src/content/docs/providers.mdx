@@ -33,7 +33,7 @@ config.
 
 You can customize the base URL for any provider by setting the `baseURL` option. This is useful when using proxy services or custom endpoints.
 
-```json title="0x0.json" {6}
+```yaml title="0x0.yaml" {6}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -159,9 +159,9 @@ To use Amazon Bedrock with Terminal Agent:
 
    #### Configuration File (Recommended)
 
-   For project-specific or persistent configuration, use `0x0.json`:
+   For project-specific or persistent configuration, use `0x0.yaml`:
 
-   ```json title="0x0.json"
+   ```yaml title="0x0.yaml"
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -188,7 +188,7 @@ To use Amazon Bedrock with Terminal Agent:
 
    If you're using VPC endpoints for Bedrock:
 
-   ```json title="0x0.json"
+   ```yaml title="0x0.yaml"
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -232,7 +232,7 @@ To use Amazon Bedrock with Terminal Agent:
 :::note
 For custom inference profiles, use the model and provider name in the key and set the `id` property to the arn. This ensures correct caching:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -484,7 +484,7 @@ Cloudflare AI Gateway lets you access models from OpenAI, Anthropic, Workers AI,
 
    You can also add models through your 0x0 config.
 
-   ```json title="0x0.json"
+   ```yaml title="0x0.yaml"
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -688,7 +688,7 @@ to store token in 0x0 auth storage.
 Terminal Agent uses a small model for some AI tasks like generating the session title.
 It is configured to use gpt-5-nano by default, hosted by Zen. To lock Terminal Agent
 to only use your own GitLab-hosted instance, add the following to your
-`0x0.json` file. It is also recommended to disable session sharing.
+`0x0.yaml` file. It is also recommended to disable session sharing.
 
 ```json
 {
@@ -750,9 +750,9 @@ More documentation on [opencode-gitlab-auth](https://www.npmjs.com/package/@gitl
 
 ##### Configuration
 
-Customize through `0x0.json`:
+Customize through `0x0.yaml`:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -773,7 +773,7 @@ Customize through `0x0.json`:
 
 To access GitLab tools (merge requests, issues, pipelines, CI/CD, etc.):
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "plugin": ["@gitlab/0x0-gitlab-plugin"]
@@ -956,7 +956,7 @@ In the event you see a feature or model from Helicone that isn't configured auto
 
 Here's [Helicone's Model Directory](https://helicone.ai/models), you'll need this to grab the IDs of the models you want to add.
 
-```jsonc title="~/.config/0x0/0x0.jsonc"
+```yaml title="~/.config/0x0/0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -984,7 +984,7 @@ Here's [Helicone's Model Directory](https://helicone.ai/models), you'll need thi
 
 Helicone supports custom headers for features like caching, user tracking, and session management. Add them to your provider config using `options.headers`:
 
-```jsonc title="~/.config/0x0/0x0.jsonc"
+```yaml title="~/.config/0x0/0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -1013,7 +1013,7 @@ npm install -g 0x0-helicone-session
 
 Add it to your config.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "plugin": ["0x0-helicone-session"]
 }
@@ -1038,7 +1038,7 @@ See the [Helicone Header Directory](https://docs.helicone.ai/helicone-headers/he
 
 You can configure 0x0 to use local models through [llama.cpp's](https://github.com/ggml-org/llama.cpp) llama-server utility
 
-```json title="0x0.json" "llama.cpp" {5, 6, 8, 10-15}
+```yaml title="0x0.yaml" "llama.cpp" {5, 6, 8, 10-15}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -1105,7 +1105,7 @@ IO.NET offers 17 models optimized for various use cases:
 
 You can configure 0x0 to use local models through LM Studio.
 
-```json title="0x0.json" "lmstudio" {5, 6, 8, 10-14}
+```yaml title="0x0.yaml" "lmstudio" {5, 6, 8, 10-14}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -1226,7 +1226,7 @@ You can configure 0x0 to use local models through Ollama.
 Ollama can automatically configure itself for Terminal Agent. See the [Ollama integration docs](https://docs.ollama.com/integrations/0x0) for details.
 :::
 
-```json title="0x0.json" "ollama" {5, 6, 8, 10-14}
+```yaml title="0x0.yaml" "ollama" {5, 6, 8, 10-14}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -1388,7 +1388,7 @@ Terminal Agent Zen is a list of tested and verified models provided by the Termi
 
    You can also add additional models through your 0x0 config.
 
-   ```json title="0x0.json" {6}
+   ```yaml title="0x0.yaml" {6}
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -1403,7 +1403,7 @@ Terminal Agent Zen is a list of tested and verified models provided by the Termi
 
 5. You can also customize them through your 0x0 config. Here's an example of specifying a provider
 
-   ```json title="0x0.json"
+   ```yaml title="0x0.yaml"
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -1619,7 +1619,7 @@ Vercel AI Gateway lets you access models from OpenAI, Anthropic, Google, xAI, an
 
 You can also customize models through your 0x0 config. Here's an example of specifying provider routing order.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -1729,7 +1729,7 @@ Some useful routing options:
 
    You can also add additional models through your 0x0 config.
 
-   ```json title="0x0.json" {6}
+   ```yaml title="0x0.yaml" {6}
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -1788,16 +1788,16 @@ You can use any OpenAI-compatible provider with 0x0. Most modern AI providers of
 
    ┌  Add credential
    │
-   ▲  This only stores a credential for myprovider - you will need to configure it in 0x0.json, check the docs for examples.
+   ▲  This only stores a credential for myprovider - you will need to configure it in 0x0.yaml, check the docs for examples.
    │
    ◇  Enter your API key
    │  sk-...
    └
    ```
 
-4. Create or update your `0x0.json` file in your project directory:
+4. Create or update your `0x0.yaml` file in your project directory:
 
-   ```json title="0x0.json" ""myprovider"" {5-15}
+   ```yaml title="0x0.yaml" ""myprovider"" {5-15}
    {
      "$schema": "https://0x0.ai/config.json",
      "provider": {
@@ -1835,7 +1835,7 @@ You can use any OpenAI-compatible provider with 0x0. Most modern AI providers of
 
 Here's an example setting the `apiKey`, `headers`, and model `limit` options.
 
-```json title="0x0.json" {9,11,17-20}
+```yaml title="0x0.yaml" {9,11,17-20}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {

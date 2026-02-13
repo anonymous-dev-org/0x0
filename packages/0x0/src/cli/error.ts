@@ -13,16 +13,14 @@ export function FormatError(input: unknown) {
       `Model not found: ${providerID}/${modelID}`,
       ...(Array.isArray(suggestions) && suggestions.length ? ["Did you mean: " + suggestions.join(", ")] : []),
       `Try: \`zeroxzero models\` to list available models`,
-      `Or check your config (0x0.json) provider/model names`,
+      `Or check your config (0x0.yaml) provider/model names`,
     ].join("\n")
   }
   if (Provider.InitError.isInstance(input)) {
     return `Failed to initialize provider "${input.data.providerID}". Check credentials and configuration.`
   }
   if (Config.JsonError.isInstance(input)) {
-    return (
-      `Config file at ${input.data.path} is not valid JSON(C)` + (input.data.message ? `: ${input.data.message}` : "")
-    )
+    return `Config file at ${input.data.path} is not valid JSON/JSONC/YAML` + (input.data.message ? `: ${input.data.message}` : "")
   }
   if (Config.ConfigDirectoryTypoError.isInstance(input)) {
     return `Directory "${input.data.dir}" in ${input.data.path} is not valid. Rename the directory to "${input.data.suggestion}" or remove it. This is a common typo.`

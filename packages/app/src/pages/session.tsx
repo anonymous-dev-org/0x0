@@ -241,7 +241,7 @@ export default function Page() {
     if (desktopReviewOpen()) return `${layout.session.width()}px`
     return `calc(100% - ${layout.fileTree.width()}px)`
   }
-  const centered = () => isDesktop() && !desktopSidePanelOpen()
+  const centered = () => false
 
   function normalizeTab(tab: string) {
     if (!tab.startsWith("file://")) return tab
@@ -596,6 +596,21 @@ export default function Page() {
     const project = sync.project
     if (project && sync.data.path.directory !== project.worktree) return sync.data.path.directory
     return "main"
+  }
+
+  const handleWorktreeChange = (value: string) => {
+    if (value === "create") {
+      setStore("newSessionWorktree", value)
+      return
+    }
+
+    setStore("newSessionWorktree", "main")
+
+    const target = value === "main" ? sync.project?.worktree : value
+    if (!target) return
+    if (target === sync.data.path.directory) return
+    layout.projects.open(target)
+    navigate(`/${base64Encode(target)}/session`)
   }
 
   const activeMessage = () => {
@@ -1536,6 +1551,7 @@ export default function Page() {
 
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_0%_0%,rgba(56,127,255,0.12),transparent_58%),radial-gradient(120%_100%_at_100%_100%,rgba(0,184,148,0.1),transparent_60%)]" />
       <SessionHeader />
       <div class="flex-1 min-h-0 flex flex-col md:flex-row">
         <SessionMobileTabs
@@ -1562,7 +1578,15 @@ export default function Page() {
           <div class="flex-1 min-h-0 overflow-hidden">
             <Switch>
               <Match when={params.id}>
-                <Show when={activeMessage()}>
+                <Show
+                  when={activeMessage()}
+                  fallback={
+                    <NewSessionView
+                      worktree={newSessionWorktree()}
+                      onWorktreeChange={handleWorktreeChange}
+                    />
+                  }
+                >
                   <MessageTimeline
                     mobileChanges={mobileChanges()}
                     mobileFallback={reviewContent({
@@ -1641,20 +1665,7 @@ export default function Page() {
               <Match when={true}>
                 <NewSessionView
                   worktree={newSessionWorktree()}
-                  onWorktreeChange={(value) => {
-                    if (value === "create") {
-                      setStore("newSessionWorktree", value)
-                      return
-                    }
-
-                    setStore("newSessionWorktree", "main")
-
-                    const target = value === "main" ? sync.project?.worktree : value
-                    if (!target) return
-                    if (target === sync.data.path.directory) return
-                    layout.projects.open(target)
-                    navigate(`/${base64Encode(target)}/session`)
-                  }}
+                  onWorktreeChange={handleWorktreeChange}
                 />
               </Match>
             </Switch>

@@ -1,6 +1,6 @@
 import { SyntaxStyle, RGBA, type TerminalColors } from "@opentui/core"
 import path from "path"
-import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { createSimpleContext } from "./helper"
 import aura from "./theme/aura.json" with { type: "json" }
@@ -279,6 +279,26 @@ function ansiToRgba(code: number): RGBA {
   return RGBA.fromInts(0, 0, 0)
 }
 
+const DEFAULT_TINT_STRENGTH = 1
+const MIN_TINT_STRENGTH = 0
+const MAX_TINT_STRENGTH = 1
+const [tintStrength, setTintStrength] = createSignal(DEFAULT_TINT_STRENGTH)
+
+function clampTintStrength(value: number) {
+  return Math.max(MIN_TINT_STRENGTH, Math.min(MAX_TINT_STRENGTH, value))
+}
+
+function parseTintStrength(value: unknown) {
+  if (typeof value !== "number") return undefined
+  if (!Number.isFinite(value)) return undefined
+  return clampTintStrength(value)
+}
+
+function defaultTintStrength(config: unknown) {
+  const value = parseTintStrength((config as { tint_strength?: number } | undefined)?.tint_strength)
+  return value ?? DEFAULT_TINT_STRENGTH
+}
+
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode: "dark" | "light" }) => {
@@ -294,6 +314,12 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     createEffect(() => {
       const theme = sync.data.config.theme
       if (theme) setStore("active", theme)
+    })
+
+    createEffect(() => {
+      const local = parseTintStrength(kv.get("tint_strength"))
+      const fallback = defaultTintStrength(sync.data.config.tui)
+      setTintStrength(local ?? fallback)
     })
 
     function init() {
@@ -387,6 +413,19 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         setStore("active", theme)
         kv.set("theme", theme)
       },
+      tintStrength() {
+        return tintStrength()
+      },
+      defaultTintStrength() {
+        return defaultTintStrength(sync.data.config.tui)
+      },
+      setTintStrength(value: number | null) {
+        if (value === null) {
+          kv.set("tint_strength", null)
+          return
+        }
+        kv.set("tint_strength", clampTintStrength(value))
+      },
       get ready() {
         return store.ready
       },
@@ -422,9 +461,10 @@ async function getCustomThemes() {
 }
 
 export function tint(base: RGBA, overlay: RGBA, alpha: number): RGBA {
-  const r = base.r + (overlay.r - base.r) * alpha
-  const g = base.g + (overlay.g - base.g) * alpha
-  const b = base.b + (overlay.b - base.b) * alpha
+  const mix = Math.max(0, Math.min(1, alpha)) * tintStrength()
+  const r = base.r + (overlay.r - base.r) * mix
+  const g = base.g + (overlay.g - base.g) * mix
+  const b = base.b + (overlay.b - base.b) * mix
   return RGBA.fromInts(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255))
 }
 

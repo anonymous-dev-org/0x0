@@ -5,7 +5,7 @@ import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep, pipe, unique } from "remeda"
+import { mergeDeep, unique } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
@@ -31,12 +31,17 @@ import { Event } from "../server/event"
 import { PackageRegistry } from "@/bun/registry"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
+import YAML from "yaml"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
 
   const log = Log.create({ service: "config" })
-  const configFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
+  const configSchemaURL = "https://zeroxzero.ai/config.json"
+  const yamlLanguageServerSchema = `# yaml-language-server: $schema=${configSchemaURL}`
+  const yamlConfigFiles = ["0x0.yaml", "0x0.yml", "zeroxzero.yaml", "zeroxzero.yml"] as const
+  const legacyConfigFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
+  const configFiles = [...yamlConfigFiles, ...legacyConfigFiles] as const
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
@@ -65,15 +70,60 @@ export namespace Config {
     return merged
   }
 
+  function isYamlPath(filepath: string) {
+    return filepath.endsWith(".yaml") || filepath.endsWith(".yml")
+  }
+
+  function addYamlSchemaMetadata(original: string) {
+    const hasTrailingNewline = original.endsWith("\n")
+    const lines = original.split("\n")
+
+    if (!lines.some((line) => line.includes("yaml-language-server: $schema="))) {
+      lines.unshift(yamlLanguageServerSchema)
+    }
+
+    if (!lines.some((line) => /^\s*\$schema\s*:/.test(line))) {
+      const insertAt = lines[0].includes("yaml-language-server: $schema=") ? 1 : 0
+      lines.splice(insertAt, 0, `$schema: ${configSchemaURL}`)
+    }
+
+    const result = lines.join("\n")
+    return hasTrailingNewline ? `${result}\n` : result
+  }
+
+  function formatYamlConfig(config: Info, original?: string) {
+    const normalized = {
+      ...config,
+      $schema: config.$schema ?? configSchemaURL,
+    }
+
+    let output = YAML.stringify(normalized)
+    if (!original?.includes("yaml-language-server: $schema=")) {
+      output = `${yamlLanguageServerSchema}\n${output}`
+    }
+    return output
+  }
+
+  async function ensureDefaultGlobalConfigFile() {
+    const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
+    for (const candidate of candidates) {
+      if (await Bun.file(candidate).exists()) return
+    }
+
+    const defaultPath = path.join(Global.Path.config, yamlConfigFiles[0])
+    const defaultText = `${yamlLanguageServerSchema}\n$schema: ${configSchemaURL}\n`
+    await Bun.write(defaultPath, defaultText)
+  }
+
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
     // 1) Remote .well-known/zeroxzero (org defaults)
-    // 2) Global config (~/.config/zeroxzero/0x0.json{,c})
+    // 2) Global config (~/.config/zeroxzero/0x0.yaml)
     // 3) Custom config (ZEROXZERO_CONFIG)
-    // 4) Project config (0x0.json{,c} or zeroxzero.json{,c})
-    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.json{,c})
+    // 4) Project config (0x0.yaml or zeroxzero.yaml)
+    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.yaml)
     // 6) Inline config (ZEROXZERO_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
@@ -88,7 +138,7 @@ export namespace Config {
         const wellknown = (await response.json()) as any
         const remoteConfig = wellknown.config ?? {}
         // Add $schema to prevent load() from trying to write back to a non-existent file
-        if (!remoteConfig.$schema) remoteConfig.$schema = "https://zeroxzero.ai/config.json"
+        if (!remoteConfig.$schema) remoteConfig.$schema = configSchemaURL
         result = mergeConfigConcatArrays(
           result,
           await load(JSON.stringify(remoteConfig), `${key}/.well-known/zeroxzero`),
@@ -502,9 +552,9 @@ export namespace Config {
    * Deduplicates plugins by name, with later entries (higher priority) winning.
    * Priority order (highest to lowest):
    * 1. Local plugin/ directory
-   * 2. Local 0x0.json
+   * 2. Local 0x0.yaml
    * 3. Global plugin/ directory
-   * 4. Global 0x0.json
+   * 4. Global 0x0.yaml
    *
    * Since plugins are added in low-to-high priority order,
    * we reverse, deduplicate (keeping first occurrence), then restore order.
@@ -935,6 +985,12 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+    tint_strength: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe("Global tint opacity scale for TUI color blending, from 0 to 1 (default: 1.0)"),
   })
 
   export const Prompt = z
@@ -1097,7 +1153,7 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Falls back to 'build' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Falls back to 'plan' if not set or if the specified agent is invalid.",
         ),
       username: z
         .string()
@@ -1238,14 +1294,12 @@ export namespace Config {
   export type Info = z.output<typeof Info>
 
   export const global = lazy(async () => {
-    let result: Info = pipe(
-      {},
-      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "0x0.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "0x0.jsonc"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "zeroxzero.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "zeroxzero.jsonc"))),
-    )
+    await ensureDefaultGlobalConfigFile()
+
+    let result: Info = {}
+    for (const file of [...configFiles, "config.json"]) {
+      result = mergeDeep(result, await loadFile(path.join(Global.Path.config, file)))
+    }
 
     const legacy = path.join(Global.Path.config, "config")
     if (existsSync(legacy)) {
@@ -1257,9 +1311,10 @@ export namespace Config {
         .then(async (mod) => {
           const { provider, model, ...rest } = mod.default
           if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = "https://zeroxzero.ai/config.json"
+          result["$schema"] = configSchemaURL
           result = mergeDeep(result, rest)
-          await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
+          const target = path.join(Global.Path.config, yamlConfigFiles[0])
+          await Bun.write(target, formatYamlConfig(result))
           await fs.unlink(legacy)
         })
         .catch(() => {})
@@ -1293,7 +1348,10 @@ export namespace Config {
 
       for (const match of fileMatches) {
         const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (lineIndex !== -1 && lines[lineIndex].trim().startsWith("//")) {
+        if (
+          lineIndex !== -1 &&
+          (lines[lineIndex].trim().startsWith("//") || lines[lineIndex].trim().startsWith("#"))
+        ) {
           continue // Skip if line is commented
         }
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
@@ -1323,9 +1381,22 @@ export namespace Config {
       }
     }
 
-    const errors: JsoncParseError[] = []
-    const data = parseJsonc(text, errors, { allowTrailingComma: true })
-    if (errors.length) {
+    const data = (() => {
+      if (isYamlPath(configFilepath)) {
+        try {
+          return YAML.parse(text) ?? {}
+        } catch (error) {
+          throw new JsonError({
+            path: configFilepath,
+            message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
+          })
+        }
+      }
+
+      const errors: JsoncParseError[] = []
+      const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
+      if (!errors.length) return parsed
+
       const lines = text.split("\n")
       const errorDetails = errors
         .map((e) => {
@@ -1345,14 +1416,15 @@ export namespace Config {
         path: configFilepath,
         message: `\n--- JSONC Input ---\n${text}\n--- Errors ---\n${errorDetails}\n--- End ---`,
       })
-    }
+    })()
 
     const parsed = Info.safeParse(data)
     if (parsed.success) {
       if (!parsed.data.$schema) {
-        parsed.data.$schema = "https://zeroxzero.ai/config.json"
-        // Write the $schema to the original text to preserve variables like {env:VAR}
-        const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://zeroxzero.ai/config.json",')
+        parsed.data.$schema = configSchemaURL
+        const updated = isYamlPath(configFilepath)
+          ? addYamlSchemaMetadata(original)
+          : original.replace(/^\s*\{/, `{\n  "$schema": "${configSchemaURL}",`)
         await Bun.write(configFilepath, updated).catch(() => {})
       }
       const data = parsed.data
@@ -1407,9 +1479,15 @@ export namespace Config {
   }
 
   export async function update(config: Info) {
-    const filepath = path.join(Instance.directory, "config.json")
+    const filepath =
+      [...configFiles, "config.json"]
+        .map((file) => path.join(Instance.directory, file))
+        .find((file) => existsSync(file)) ?? path.join(Instance.directory, yamlConfigFiles[0])
     const existing = await loadFile(filepath)
-    await Bun.write(filepath, JSON.stringify(mergeDeep(existing, config), null, 2))
+    const merged = mergeDeep(existing, config)
+    const current = await Bun.file(filepath).text().catch(() => "")
+    const output = isYamlPath(filepath) ? formatYamlConfig(merged, current) : JSON.stringify(merged, null, 2)
+    await Bun.write(filepath, output)
     await Instance.dispose()
   }
 
@@ -1443,6 +1521,26 @@ export namespace Config {
   }
 
   function parseConfig(text: string, filepath: string): Info {
+    if (isYamlPath(filepath)) {
+      let data: unknown
+      try {
+        data = YAML.parse(text) ?? {}
+      } catch (error) {
+        throw new JsonError({
+          path: filepath,
+          message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
+        })
+      }
+
+      const parsed = Info.safeParse(data)
+      if (parsed.success) return parsed.data
+
+      throw new InvalidError({
+        path: filepath,
+        issues: parsed.error.issues,
+      })
+    }
+
     const errors: JsoncParseError[] = []
     const data = parseJsonc(text, errors, { allowTrailingComma: true })
     if (errors.length) {
@@ -1486,6 +1584,13 @@ export namespace Config {
       })
 
     const next = await (async () => {
+      if (isYamlPath(filepath)) {
+        const existing = parseConfig(before, filepath)
+        const merged = mergeDeep(existing, config)
+        await Bun.write(filepath, formatYamlConfig(merged, before))
+        return merged
+      }
+
       if (!filepath.endsWith(".jsonc")) {
         const existing = parseConfig(before, filepath)
         const merged = mergeDeep(existing, config)

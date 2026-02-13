@@ -128,7 +128,7 @@ function App() {
   const command = useCommandDialog()
   const sdk = useSDK()
   const toast = useToast()
-  const { theme, mode, setMode } = useTheme()
+  const { theme, mode, setMode, defaultTintStrength } = useTheme()
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
@@ -187,6 +187,7 @@ function App() {
         kv,
         local,
         mode,
+        defaultTintStrength,
         promptRef,
         renderer,
         route,
@@ -236,8 +237,10 @@ function App() {
       <Show
         when={route.data.sessionID}
         fallback={
-          <box flexDirection="column" justifyContent="center" gap={1} padding={1}>
-            <Logo />
+          <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} paddingBottom={1}>
+            <box flexGrow={1} justifyContent="center" alignItems="center">
+              <Logo />
+            </box>
             <Prompt
               visible
               ref={(r) => {

@@ -7,6 +7,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
   useContext,
@@ -16,7 +17,7 @@ import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { tint, useTheme } from "@tui/context/theme"
-import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "@opentui/core"
+import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA, TextAttributes } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@0x0-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
@@ -81,6 +82,28 @@ function use() {
   return ctx
 }
 
+function normalizeReasoningText(text: string) {
+  return text.replace("[REDACTED]", "").trim()
+}
+
+function extractReasoningTitle(text: string) {
+  const content = normalizeReasoningText(text)
+  if (!content) return
+
+  const bold = content.match(/^\*\*(.+?)\*\*/)
+  if (bold?.[1]?.trim()) return bold[1].trim()
+
+  const heading = content.match(/^#{1,6}\s+(.+)$/)
+  if (heading?.[1]?.trim()) return heading[1].trim()
+
+  const firstLine = content.split(/\r?\n/, 1)[0]?.trim()
+  if (!firstLine) return
+
+  const normalizedLine = firstLine.replace(/^#{1,6}\s+/, "").trim()
+  const withoutPrefix = normalizedLine.replace(/^_?thinking:_?\s*/i, "").trim()
+  return withoutPrefix || normalizedLine
+}
+
 export function Session() {
   const routeContext = useRoute()
   const route = routeContext.data
@@ -110,6 +133,22 @@ export function Session() {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
   }
 
+  const thinkingTitle = createMemo(() => {
+    const pendingID = pending()
+    if (!pendingID) return
+
+    const parts = sync.data.part[pendingID] ?? []
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]
+      if (part?.type !== "reasoning") continue
+
+      const title = extractReasoningTitle(part.text)
+      if (!title) continue
+
+      return Locale.truncate(title, 72)
+    }
+  })
+
   const lastAssistant = () => {
     return messages().findLast((x) => x.role === "assistant")
   }
@@ -134,7 +173,7 @@ export function Session() {
     return false
   }
   const showTimestamps = () => timestamps() === "show"
-  const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0) - 4
+  const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0) - 2
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -271,6 +310,10 @@ export function Session() {
   }
 
   const local = useLocal()
+  const status = createMemo(() => sync.data.session_status?.[route.sessionID] ?? { type: "idle" })
+  const busy = () => status().type === "busy" || status().type === "retry"
+  const agent = () => local.agent.color(local.agent.current().name)
+  const [interrupt, setInterrupt] = createSignal(0)
 
   const command = useCommandDialog()
 
@@ -428,8 +471,8 @@ export function Session() {
         sync,
       }}
     >
-      <box flexDirection="row">
-        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
+      <box flexDirection="row" width={dimensions().width} height={dimensions().height}>
+        <box flexGrow={1} paddingLeft={1} paddingRight={1} gap={1}>
           <Show when={session()}>
             <scrollbox
               ref={(r) => (scroll = r)}
@@ -486,6 +529,15 @@ export function Session() {
               />
             </scrollbox>
             <box flexShrink={0}>
+              <Thinking
+                visible={busy}
+                color={agent}
+                interrupt={interrupt}
+                title={thinkingTitle}
+                text={theme.text}
+                textMuted={theme.textMuted}
+                primary={theme.primary}
+              />
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
               </Show>
@@ -494,6 +546,7 @@ export function Session() {
               </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
+                onInterruptChange={setInterrupt}
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
@@ -537,6 +590,83 @@ export function Session() {
         </Show>
       </box>
     </context.Provider>
+  )
+}
+
+function Thinking(props: {
+  visible: () => boolean
+  color: () => RGBA
+  interrupt: () => number
+  title: () => string | undefined
+  text: RGBA
+  textMuted: RGBA
+  primary: RGBA
+}) {
+  const [dots, setDots] = createSignal(Array.from({ length: 12 }, () => 0.45))
+  const animationDurationMs = 550
+
+  const dot = (opacity: number) => {
+    const color = props.color()
+    const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+    return RGBA.fromInts(Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255), alpha)
+  }
+
+  createEffect(() => {
+    if (!props.visible()) return
+
+    const random = (value: number) => {
+      const step = (Math.random() - 0.5) * 0.5
+      return Math.max(0.18, Math.min(0.82, value + step))
+    }
+
+    let current = Array.from({ length: 12 }, () => 0.45)
+    let start = [...current]
+    let target = current.map(random)
+    let started = Date.now()
+
+    const retarget = setInterval(() => {
+      current = [...target]
+      setDots(current)
+      start = [...current]
+      target = current.map(random)
+      started = Date.now()
+    }, animationDurationMs)
+
+    const frame = setInterval(() => {
+      const progress = Math.min(1, (Date.now() - started) / animationDurationMs)
+      current = start.map((value, index) => value + (target[index]! - value) * progress)
+      setDots(current)
+    }, 100)
+
+    onCleanup(() => {
+      clearInterval(frame)
+      clearInterval(retarget)
+    })
+  })
+
+  return (
+    <Show when={props.visible()}>
+      <box paddingBottom={1} flexDirection="row" justifyContent="space-between">
+        <box flexDirection="row" gap={1}>
+          <text>
+            <For each={[0, 1, 2, 3, 4, 5]}>
+              {(col) => (
+                <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>
+              )}
+            </For>
+          </text>
+          <text fg={props.textMuted} attributes={TextAttributes.DIM}>
+            {props.title() ?? "working on it..."}
+          </text>
+        </box>
+        <text fg={props.interrupt() > 0 ? props.primary : props.text}>
+          esc{" "}
+          <span style={{ fg: props.interrupt() > 0 ? props.primary : props.textMuted }}>
+            {props.interrupt() > 0 ? "again to interrupt" : "interrupt"}
+          </span>
+        </text>
+      </box>
+    </Show>
   )
 }
 
@@ -718,37 +848,8 @@ const PART_MAPPING = {
   reasoning: ReasoningPart,
 }
 
-function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
-  const { theme, subtleSyntax } = useTheme()
-  const ctx = use()
-  const content = () => {
-    // Filter out redacted reasoning chunks from OpenRouter
-    // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
-    return props.part.text.replace("[REDACTED]", "").trim()
-  }
-  return (
-    <Show when={content() && ctx.showThinking()}>
-      <box
-        id={"text-" + props.part.id}
-        paddingLeft={2}
-        marginTop={1}
-        flexDirection="column"
-        border={["left"]}
-        customBorderChars={SplitBorder.customBorderChars}
-        borderColor={theme.backgroundElement}
-      >
-        <code
-          filetype="markdown"
-          drawUnstyledText={false}
-          streaming={true}
-          syntaxStyle={subtleSyntax()}
-          content={"_Thinking:_ " + content()}
-          conceal={ctx.conceal()}
-          fg={theme.textMuted}
-        />
-      </box>
-    </Show>
-  )
+function ReasoningPart(_props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
+  return <></>
 }
 
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {

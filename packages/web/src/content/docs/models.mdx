@@ -51,7 +51,7 @@ Here are several models that work well with Terminal Agent, in no particular ord
 To set one of these as the default model, you can set the `model` key in your
 Terminal Agent config.
 
-```json title="0x0.json" {3}
+```yaml title="0x0.yaml" {3}
 {
   "$schema": "https://0x0.ai/config.json",
   "model": "lmstudio/google/gemma-3n-e4b"
@@ -68,7 +68,7 @@ If you've configured a [custom provider](/docs/providers#custom), the `provider_
 
 You can globally configure a model's options through the config.
 
-```jsonc title="0x0.jsonc" {7-12,19-24}
+```yaml title="0x0.yaml" {7-12,19-24}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -107,7 +107,7 @@ You can also configure these options for any agents that you are using. The agen
 
 You can also define custom variants that extend built-in ones. Variants let you configure different settings for the same model without creating duplicate entries:
 
-```jsonc title="0x0.jsonc" {6-21}
+```yaml title="0x0.yaml" {6-21}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -172,7 +172,7 @@ This list is not comprehensive. Many other providers have built-in defaults too.
 
 You can override existing variants or add your own:
 
-```jsonc title="0x0.jsonc" {7-18}
+```yaml title="0x0.yaml" {7-18}
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -209,7 +209,7 @@ When Terminal Agent starts up, it checks for models in the following priority or
 
 2. The model list in the Terminal Agent config.
 
-   ```json title="0x0.json"
+   ```yaml title="0x0.yaml"
    {
      "$schema": "https://0x0.ai/config.json",
      "model": "anthropic/claude-sonnet-4-20250514"

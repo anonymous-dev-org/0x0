@@ -13,7 +13,7 @@ export function Logo() {
   const { theme } = useTheme()
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
-    const shadow = tint(theme.background, fg, 0.25)
+    const shadow = tint(theme.background, fg, 0.32)
     const attrs = bold ? TextAttributes.BOLD : undefined
     const elements: JSX.Element[] = []
     let i = 0

@@ -22,6 +22,7 @@ export function registerAppCommands(props: {
   kv: ReturnType<typeof useKV>
   local: ReturnType<typeof useLocal>
   mode: Accessor<"dark" | "light">
+  defaultTintStrength: Accessor<number>
   promptRef: ReturnType<typeof usePromptRef>
   renderer: ReturnType<typeof useRenderer>
   route: RouteContext
@@ -234,6 +235,23 @@ export function registerAppCommands(props: {
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         props.setMode(props.mode() === "dark" ? "light" : "dark")
+        dialog.clear()
+      },
+      category: "System",
+    },
+    {
+      title: "Set tint strength",
+      value: "theme.tint.set",
+      slash: {
+        name: "tint",
+      },
+      onSelect: (dialog) => {
+        const value = props.defaultTintStrength().toFixed(2)
+        props.promptRef.current?.set({
+          input: `/tint ${value}`,
+          parts: [],
+        })
+        props.promptRef.current?.focus()
         dialog.clear()
       },
       category: "System",

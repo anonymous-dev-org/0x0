@@ -254,7 +254,7 @@ export namespace Agent {
     return pipe(
       await state(),
       values(),
-      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"]),
+      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "plan"), "desc"]),
     )
   }
 
@@ -268,6 +268,9 @@ export namespace Agent {
       if (agent.hidden === true) throw new Error(`default agent "${cfg.default_agent}" is hidden`)
       return agent.name
     }
+
+    const preferred = agents.plan
+    if (preferred && preferred.hidden !== true) return preferred.name
 
     const visible = Object.values(agents).find((a) => a.hidden !== true)
     if (!visible) throw new Error("no visible agent found")

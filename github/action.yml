@@ -10,7 +10,7 @@ inputs:
     required: true
 
   agent:
-    description: "Agent to use. Must be a primary agent. Falls back to default_agent from config or 'build' if not found."
+    description: "Agent to use. Must be a primary agent. Falls back to default_agent from config or 'plan' if not found."
     required: false
 
   share:

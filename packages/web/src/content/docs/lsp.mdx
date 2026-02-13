@@ -67,7 +67,7 @@ When 0x0 opens a file, it:
 
 You can customize LSP servers through the `lsp` section in your 0x0 config.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": {}
@@ -92,7 +92,7 @@ Let's look at some examples.
 
 Use the `env` property to set environment variables when starting the LSP server:
 
-```json title="0x0.json" {5-7}
+```yaml title="0x0.yaml" {5-7}
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": {
@@ -111,7 +111,7 @@ Use the `env` property to set environment variables when starting the LSP server
 
 Use the `initialization` property to pass initialization options to the LSP server. These are server-specific settings sent during the LSP `initialize` request:
 
-```json title="0x0.json" {5-9}
+```yaml title="0x0.yaml" {5-9}
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": {
@@ -136,7 +136,7 @@ Initialization options vary by LSP server. Check your LSP server's documentation
 
 To disable **all** LSP servers globally, set `lsp` to `false`:
 
-```json title="0x0.json" {3}
+```yaml title="0x0.yaml" {3}
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": false
@@ -145,7 +145,7 @@ To disable **all** LSP servers globally, set `lsp` to `false`:
 
 To disable a **specific** LSP server, set `disabled` to `true`:
 
-```json title="0x0.json" {5}
+```yaml title="0x0.yaml" {5}
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": {
@@ -162,7 +162,7 @@ To disable a **specific** LSP server, set `disabled` to `true`:
 
 You can add custom LSP servers by specifying the command and file extensions:
 
-```json title="0x0.json" {4-7}
+```yaml title="0x0.yaml" {4-7}
 {
   "$schema": "https://0x0.ai/config.json",
   "lsp": {

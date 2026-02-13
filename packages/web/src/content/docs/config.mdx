@@ -11,7 +11,7 @@ You can configure Terminal Agent using a JSON config file.
 
 Terminal Agent supports both **JSON** and **JSONC** (JSON with Comments) formats.
 
-```jsonc title="0x0.jsonc"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   // Theme configuration
@@ -43,9 +43,9 @@ For example, if your global config sets `theme: "0x0"` and `autoupdate: true`, a
 Config sources are loaded in this order (later sources override earlier ones):
 
 1. **Remote config** (from `.well-known/0x0`) - organizational defaults
-2. **Global config** (`~/.config/0x0/0x0.json`) - user preferences
+2. **Global config** (`~/.config/0x0/0x0.yaml`) - user preferences
 3. **Custom config** (`ZEROXZERO_CONFIG` env var) - custom overrides
-4. **Project config** (`0x0.json` in project) - project-specific settings
+4. **Project config** (`0x0.yaml` in project) - project-specific settings
 5. **`.0x0` directories** - agents, commands, plugins
 6. **Inline config** (`ZEROXZERO_CONFIG_CONTENT` env var) - runtime overrides
 
@@ -79,7 +79,7 @@ For example, if your organization provides MCP servers that are disabled by defa
 
 You can enable specific servers in your local config:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "mcp": {
     "jira": {
@@ -95,7 +95,7 @@ You can enable specific servers in your local config:
 
 ### Global
 
-Place your global Terminal Agent config in `~/.config/0x0/0x0.json`. Use global config for user-wide preferences like themes, providers, or keybinds.
+Place your global Terminal Agent config in `~/.config/0x0/0x0.yaml`. Use global config for user-wide preferences like themes, providers, or keybinds.
 
 Global config overrides remote organizational defaults.
 
@@ -103,7 +103,7 @@ Global config overrides remote organizational defaults.
 
 ### Per project
 
-Add `0x0.json` in your project root. Project config has the highest precedence among standard config files - it overrides both global and remote configs.
+Add `0x0.yaml` in your project root. Project config has the highest precedence among standard config files - it overrides both global and remote configs.
 
 :::tip
 Place project specific config in the root of your project.
@@ -120,7 +120,7 @@ This is also safe to be checked into Git and uses the same schema as the global 
 Specify a custom config file path using the `ZEROXZERO_CONFIG` environment variable.
 
 ```bash
-export ZEROXZERO_CONFIG=/path/to/my/custom-config.json
+export ZEROXZERO_CONFIG=/path/to/my/custom-config.yaml
 0x0 run "Hello world"
 ```
 
@@ -156,7 +156,7 @@ Your editor should be able to validate and autocomplete based on the schema.
 
 You can configure TUI-specific settings through the `tui` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "tui": {
@@ -183,7 +183,7 @@ Available options:
 
 You can configure server settings for the `0x0 serve` and `0x0 web` commands through the `server` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "server": {
@@ -212,7 +212,7 @@ Available options:
 
 You can manage the tools an LLM can use through the `tools` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "tools": {
@@ -230,7 +230,7 @@ You can manage the tools an LLM can use through the `tools` option.
 
 You can configure the providers and models you want to use in your Terminal Agent config through the `provider`, `model` and `small_model` options.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {},
@@ -243,7 +243,7 @@ The `small_model` option configures a separate model for lightweight tasks like 
 
 Provider options can include `timeout` and `setCacheKey`:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -272,7 +272,7 @@ Some providers support additional configuration options beyond the generic `time
 
 Amazon Bedrock supports AWS-specific configuration:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "provider": {
@@ -303,7 +303,7 @@ Bearer tokens (`AWS_BEARER_TOKEN_BEDROCK` or `/connect`) take precedence over pr
 
 You can configure the theme you want to use in your Terminal Agent config through the `theme` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "theme": ""
@@ -318,7 +318,7 @@ You can configure the theme you want to use in your Terminal Agent config throug
 
 You can configure specialized agents for specific tasks through the `agent` option.
 
-```jsonc title="0x0.jsonc"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "agent": {
@@ -344,7 +344,7 @@ You can also define agents using markdown files in `~/.config/0x0/agents/` or `.
 
 You can override built-in system prompts and runtime reminders through the `prompt` option.
 
-```jsonc title="0x0.jsonc"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "prompt": {
@@ -395,7 +395,7 @@ Placeholders supported in reminder templates:
 
 You can set the default agent using the `default_agent` option. This determines which agent is used when none is explicitly specified.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "default_agent": "plan"
@@ -412,7 +412,7 @@ This setting applies across all interfaces: TUI, CLI (`0x0 run`), desktop app, a
 
 You can configure the [share](/docs/share) feature through the `share` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "share": "manual"
@@ -433,7 +433,7 @@ By default, sharing is set to manual mode where you need to explicitly share con
 
 You can configure custom commands for repetitive tasks through the `command` option.
 
-```jsonc title="0x0.jsonc"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "command": {
@@ -459,7 +459,7 @@ You can also define commands using markdown files in `~/.config/0x0/commands/` o
 
 You can customize your keybinds through the `keybinds` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "keybinds": {}
@@ -474,7 +474,7 @@ You can customize your keybinds through the `keybinds` option.
 
 Terminal Agent will automatically download any new updates when it starts up. You can disable this with the `autoupdate` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "autoupdate": false
@@ -490,7 +490,7 @@ Notice that this only works if it was not installed using a package manager such
 
 You can configure code formatters through the `formatter` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "formatter": {
@@ -518,7 +518,7 @@ By default, 0x0 **allows all operations** without requiring explicit approval. Y
 
 For example, to ensure that the `edit` and `bash` tools require user approval:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "permission": {
@@ -536,7 +536,7 @@ For example, to ensure that the `edit` and `bash` tools require user approval:
 
 You can control context compaction behavior through the `compaction` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "compaction": {
@@ -555,7 +555,7 @@ You can control context compaction behavior through the `compaction` option.
 
 You can configure file watcher ignore patterns through the `watcher` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "watcher": {
@@ -572,7 +572,7 @@ Patterns follow glob syntax. Use this to exclude noisy directories from file wat
 
 You can configure MCP servers you want to use through the `mcp` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "mcp": {}
@@ -589,7 +589,7 @@ You can configure MCP servers you want to use through the `mcp` option.
 
 Place plugin files in `.0x0/plugins/` or `~/.config/0x0/plugins/`. You can also load plugins from npm through the `plugin` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "plugin": ["0x0-helicone-session", "@my-org/custom-plugin"]
@@ -604,7 +604,7 @@ Place plugin files in `.0x0/plugins/` or `~/.config/0x0/plugins/`. You can also 
 
 You can configure the instructions for the model you're using through the `instructions` option.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]
@@ -620,7 +620,7 @@ about rules here](/docs/rules).
 
 You can disable providers that are loaded automatically through the `disabled_providers` option. This is useful when you want to prevent certain providers from being loaded even if their credentials are available.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "disabled_providers": ["openai", "gemini"]
@@ -643,7 +643,7 @@ The `disabled_providers` option accepts an array of provider IDs. When a provide
 
 You can specify an allowlist of providers through the `enabled_providers` option. When set, only the specified providers will be enabled and all others will be ignored.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "enabled_providers": ["anthropic", "openai"]
@@ -664,7 +664,7 @@ If a provider appears in both `enabled_providers` and `disabled_providers`, the 
 
 The `experimental` key contains options that are under active development.
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "experimental": {}
@@ -687,7 +687,7 @@ You can use variable substitution in your config files to reference environment 
 
 Use `{env:VARIABLE_NAME}` to substitute environment variables:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "model": "{env:ZEROXZERO_MODEL}",
@@ -710,7 +710,7 @@ If the environment variable is not set, it will be replaced with an empty string
 
 Use `{file:path/to/file}` to substitute the contents of a file:
 
-```json title="0x0.json"
+```yaml title="0x0.yaml"
 {
   "$schema": "https://0x0.ai/config.json",
   "instructions": ["./custom-instructions.md"],

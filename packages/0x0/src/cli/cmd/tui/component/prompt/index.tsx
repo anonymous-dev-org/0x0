@@ -1,6 +1,5 @@
 import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, TextAttributes, t, dim, fg } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show } from "solid-js"
-import "opentui-spinner/solid"
+import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { tint, useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
@@ -20,14 +19,9 @@ import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@0x0-ai/sdk/v2"
 import { TuiEvent } from "../../event"
-import { Locale } from "@/util/locale"
-import { formatDuration } from "@/util/format"
-import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
-import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
-import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { usePromptCommands } from "./use-prompt-commands"
@@ -40,6 +34,7 @@ export type PromptProps = {
   disabled?: boolean
   onSubmit?: () => void
   onInputChange?: (value: string) => void
+  onInterruptChange?: (value: number) => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
@@ -74,8 +69,7 @@ export function Prompt(props: PromptProps) {
   const stash = usePromptStash()
   const command = useCommandDialog()
   const renderer = useRenderer()
-  const { theme, syntax } = useTheme()
-  const kv = useKV()
+  const { theme, syntax, setTintStrength } = useTheme()
 
   function promptModelWarning() {
     toast.show({
@@ -141,6 +135,11 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
+
+  const setInterrupt = (value: number) => {
+    setStore("interrupt", value)
+    props.onInterruptChange?.(value)
+  }
 
   // Initialize agent/model/variant from last user message when session changes
   let syncedSessionID: string | undefined
@@ -361,7 +360,7 @@ export function Prompt(props: PromptProps) {
     inputFocused: () => input.focused,
     autocompleteVisible: () => autocomplete.visible !== false,
     setMode: (mode: "normal" | "shell") => setStore("mode", mode),
-    setInterrupt: (value: number) => setStore("interrupt", value),
+    setInterrupt,
     abortSession: (sessionID: string) => {
       sdk.client.session.abort({ sessionID })
     },
@@ -376,6 +375,33 @@ export function Prompt(props: PromptProps) {
   })
 
   async function submit() {
+    const first = store.prompt.input.split("\n")[0]?.trim() ?? ""
+    if (first === "/tint" || first.startsWith("/tint ")) {
+      const value = first.slice(5).trim()
+      const num = Number(value)
+      if (!value || !Number.isFinite(num) || num < 0 || num > 1) {
+        toast.show({
+          variant: "warning",
+          message: "Usage: /tint <value between 0.00 and 1.00>",
+        })
+        return
+      }
+
+      setTintStrength(num)
+      toast.show({
+        variant: "info",
+        message: `Tint strength set to ${num.toFixed(2)}`,
+      })
+      input.extmarks.clear()
+      input.clear()
+      setStore("prompt", {
+        input: "",
+        parts: [],
+      })
+      setStore("extmarkToPartIndex", new Map())
+      return
+    }
+
     await submitPrompt({
       disabled: props.disabled,
       autocompleteVisible: autocomplete.visible !== false,
@@ -482,30 +508,10 @@ export function Prompt(props: PromptProps) {
   const line = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
-    return tint(theme.backgroundElement, agent(), 0.12)
+    return tint(theme.backgroundElement, agent(), 0.15)
   })
 
   const parsed = createMemo(() => local.model.parsed())
-  const activeStatus = createMemo(() => {
-    const type = status().type
-    return type === "busy" || type === "retry"
-  })
-  const [elapsed, setElapsed] = createSignal(0)
-
-  createEffect(() => {
-    if (!activeStatus()) {
-      setElapsed(0)
-      return
-    }
-    const started = Date.now()
-    setElapsed(0)
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - started) / 1000))
-    }, 1000)
-    onCleanup(() => {
-      clearInterval(timer)
-    })
-  })
 
   const showVariant = () => {
     const variants = local.model.variant.list()
@@ -513,26 +519,6 @@ export function Prompt(props: PromptProps) {
     const current = local.model.variant.current()
     return !!current
   }
-
-  const spinnerDef = createMemo(() => {
-    const color = local.agent.color(local.agent.current().name)
-    return {
-      frames: createFrames({
-        color,
-        style: "blocks",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
-      }),
-      color: createColors({
-        color,
-        style: "blocks",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
-      }),
-    }
-  })
 
   return (
     <>
@@ -564,18 +550,6 @@ export function Prompt(props: PromptProps) {
             backgroundColor={theme.backgroundElement}
             flexGrow={1}
           >
-            <Show when={store.mode === "normal" && parsed().reasoning}>
-              <box flexDirection="row" gap={1} paddingBottom={1}>
-                <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                  Thinking
-                </text>
-                <Show when={activeStatus()}>
-                  <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                    {elapsed()}s
-                  </text>
-                </Show>
-              </box>
-            </Show>
             <textarea
               placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
               textColor={keybind.leader ? theme.textMuted : theme.text}
@@ -762,7 +736,7 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+              <text fg={line()}>
                 {store.mode === "shell" ? "Shell" : local.agent.label(local.agent.current().name)}{" "}
               </text>
               <Show when={store.mode === "normal"}>
@@ -812,86 +786,6 @@ export function Prompt(props: PromptProps) {
             }
           />
         </box>
-        <Show when={status().type !== "idle"}>
-          <box
-            flexDirection="row"
-            gap={1}
-            flexGrow={1}
-            justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-          >
-            <box flexShrink={0} flexDirection="row" gap={1}>
-              <box marginLeft={1}>
-                <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                  <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                </Show>
-              </box>
-              <box flexDirection="row" gap={1} flexShrink={0}>
-                {(() => {
-                  const retry = createMemo(() => {
-                    const s = status()
-                    if (s.type !== "retry") return
-                    return s
-                  })
-                  const message = () => {
-                    const r = retry()
-                    if (!r) return
-                    if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                      return "gemini is way too hot right now"
-                    if (r.message.length > 80) return r.message.slice(0, 80) + "..."
-                    return r.message
-                  }
-                  const isTruncated = () => {
-                    const r = retry()
-                    if (!r) return false
-                    return r.message.length > 120
-                  }
-                  const [seconds, setSeconds] = createSignal(0)
-                  onMount(() => {
-                    const timer = setInterval(() => {
-                      const next = retry()?.next
-                      if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                    }, 1000)
-
-                    onCleanup(() => {
-                      clearInterval(timer)
-                    })
-                  })
-                  const handleMessageClick = () => {
-                    const r = retry()
-                    if (!r) return
-                    if (isTruncated()) {
-                      DialogAlert.show(dialog, "Retry Error", r.message)
-                    }
-                  }
-
-                  const retryText = () => {
-                    const r = retry()
-                    if (!r) return ""
-                    const baseMessage = message()
-                    const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                    const duration = formatDuration(seconds())
-                    const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                    return baseMessage + truncatedHint + retryInfo
-                  }
-
-                  return (
-                    <Show when={retry()}>
-                      <box onMouseUp={handleMessageClick}>
-                        <text fg={theme.error}>{retryText()}</text>
-                      </box>
-                    </Show>
-                  )
-                })()}
-              </box>
-            </box>
-            <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-              esc{" "}
-              <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-              </span>
-            </text>
-          </box>
-        </Show>
       </box>
     </>
   )
