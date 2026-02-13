@@ -4,10 +4,11 @@ import path from "path"
 import os from "os"
 
 const app = "zeroxzero"
+const config_app = "0x0"
 
 const data = path.join(xdgData!, app)
 const cache = path.join(xdgCache!, app)
-const config = path.join(xdgConfig!, app)
+const config = path.join(xdgConfig!, config_app)
 const state = path.join(xdgState!, app)
 
 export namespace Global {

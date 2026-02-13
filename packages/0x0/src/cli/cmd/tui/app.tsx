@@ -30,6 +30,7 @@ import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { useStartupNavigation } from "./app/use-startup-navigation"
 import { useAppEventHandlers } from "./app/use-app-event-handlers"
 import { Logo } from "./component/logo"
+import { DialogOnboarding } from "./component/dialog-onboarding"
 
 import type { EventSource } from "./context/sdk"
 
@@ -141,6 +142,53 @@ function App() {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const onboardingDone = () => kv.get("onboarding_v1_done", false)
+
+  const showOnboarding = () => {
+    dialog.replace(() => (
+      <DialogOnboarding
+        onKeepDefaults={async () => {
+          kv.set("onboarding_v1_done", true)
+          dialog.clear()
+        }}
+        onUseCustom={async () => {
+          const current = await sdk.client.global.config.get({ throwOnError: true })
+          const config = JSON.parse(JSON.stringify(current.data ?? {}))
+          config.agent = config.agent ?? {}
+
+          for (const name of ["build", "plan", "general", "explore"]) {
+            const current = config.agent[name] ?? {}
+            config.agent[name] = {
+              ...current,
+              disable: true,
+            }
+          }
+
+          const custom = sync.data.agent.find((item) => !item.native && item.hidden !== true)?.name ?? "my_agent"
+          config.agent[custom] = {
+            ...(config.agent[custom] ?? {}),
+            mode: "primary",
+            hidden: false,
+            description: config.agent[custom]?.description ?? "My custom agent",
+          }
+
+          if (["build", "plan", "general", "explore"].includes(config.default_agent)) {
+            config.default_agent = custom
+          }
+
+          await sdk.client.global.config.update({ config }, { throwOnError: true })
+          await sync.bootstrap()
+          kv.set("onboarding_v1_done", true)
+          toast.show({
+            message: `Custom agent setup enabled (${custom})`,
+            variant: "success",
+            duration: 3000,
+          })
+          dialog.clear()
+        }}
+      />
+    ))
+  }
 
   // Update terminal window title based on current route and session
   createEffect(() => {
@@ -167,11 +215,21 @@ function App() {
 
   createEffect(
     on(
-      () => sync.status === "complete" && sync.data.provider.length === 0,
+      () => sync.status === "complete" && sync.data.provider.length === 0 && onboardingDone(),
       (isEmpty, wasEmpty) => {
         // only trigger when we transition into an empty-provider state
         if (!isEmpty || wasEmpty) return
         dialog.replace(() => <DialogProviderList />)
+      },
+    ),
+  )
+
+  createEffect(
+    on(
+      () => sync.ready && kv.ready && !onboardingDone(),
+      (show, shown) => {
+        if (!show || shown) return
+        showOnboarding()
       },
     ),
   )
@@ -197,6 +255,7 @@ function App() {
         sync,
         terminalTitleEnabled,
         toast,
+        showOnboarding,
       })
     })
   })

@@ -72,83 +72,6 @@ export namespace Agent {
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
 
     const result: Record<string, Info> = {
-      build: {
-        name: "build",
-        description: "The default agent. Executes tools based on configured permissions.",
-        options: {},
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-      },
-      plan: {
-        name: "plan",
-        description: "Planning agent. Disallows all edit tools.",
-        options: {},
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            external_directory: {
-              [path.join(Global.Path.data, "plans", "*")]: "allow",
-            },
-            edit: {
-              "*": "deny",
-              [path.join(".zeroxzero", "plans", "*.md")]: "allow",
-              [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
-            },
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-      },
-      general: {
-        name: "general",
-        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            todoread: "deny",
-            todowrite: "deny",
-          }),
-          user,
-        ),
-        options: {},
-        mode: "primary",
-        native: true,
-      },
-      explore: {
-        name: "explore",
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-            grep: "allow",
-            glob: "allow",
-            list: "allow",
-            bash: "allow",
-            webfetch: "allow",
-            websearch: "allow",
-            codesearch: "allow",
-            read: "allow",
-            external_directory: {
-              [Truncate.GLOB]: "allow",
-            },
-          }),
-          user,
-        ),
-        description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
-        prompt: PROMPT_EXPLORE,
-        options: {},
-        mode: "primary",
-        native: true,
-      },
       compaction: {
         name: "compaction",
         mode: "primary",
@@ -197,6 +120,8 @@ export namespace Agent {
       },
     }
 
+    const native = new Set(["build", "plan", "general", "explore", "compaction", "title", "summary"])
+
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
       if (value.disable) {
         delete result[key]
@@ -209,8 +134,25 @@ export namespace Agent {
           mode: "all",
           permission: PermissionNext.merge(defaults, user),
           options: {},
-          native: false,
+          native: native.has(key),
         }
+
+      if (key === "plan") {
+        item.permission = PermissionNext.merge(
+          item.permission,
+          PermissionNext.fromConfig({
+            external_directory: {
+              [path.join(Global.Path.data, "plans", "*")]: "allow",
+            },
+            edit: {
+              [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
+            },
+          }),
+        )
+      }
+
+      if (key === "explore" && !value.prompt) item.prompt = PROMPT_EXPLORE
+
       if (value.model) item.model = Provider.parseModel(value.model)
       item.variant = value.variant ?? item.variant
       item.prompt = value.prompt ?? item.prompt

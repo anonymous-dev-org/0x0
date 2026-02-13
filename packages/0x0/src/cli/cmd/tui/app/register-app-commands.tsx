@@ -32,6 +32,7 @@ export function registerAppCommands(props: {
   sync: ReturnType<typeof useSync>
   terminalTitleEnabled: Accessor<boolean>
   toast: ReturnType<typeof useToast>
+  showOnboarding: () => void
 }) {
   const load = {
     session: () => import("@tui/component/dialog-session-list").then((x) => x.DialogSessionList),
@@ -263,6 +264,18 @@ export function registerAppCommands(props: {
         name: "help",
       },
       onSelect: show("help", load.help),
+      category: "System",
+    },
+    {
+      title: "Show onboarding",
+      value: "onboarding.show",
+      slash: {
+        name: "onboarding",
+        aliases: ["welcome", "intro", "tutorial"],
+      },
+      onSelect: () => {
+        props.showOnboarding()
+      },
       category: "System",
     },
     {

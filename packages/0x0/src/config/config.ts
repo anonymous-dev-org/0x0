@@ -104,6 +104,57 @@ export namespace Config {
     return output
   }
 
+  function defaultConfig(): Info {
+    return {
+      $schema: configSchemaURL,
+      agent: {
+        build: {
+          mode: "primary",
+          description: "The default agent. Executes tools based on configured permissions.",
+          permission: {
+            question: "allow",
+          },
+        },
+        plan: {
+          mode: "primary",
+          description: "Planning agent. Disallows all edit tools.",
+          permission: {
+            question: "allow",
+            edit: {
+              "*": "deny",
+              ".zeroxzero/plans/*.md": "allow",
+            },
+          },
+        },
+        general: {
+          mode: "primary",
+          description:
+            "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.",
+          permission: {
+            todoread: "deny",
+            todowrite: "deny",
+          },
+        },
+        explore: {
+          mode: "primary",
+          description:
+            'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
+          permission: {
+            "*": "deny",
+            grep: "allow",
+            glob: "allow",
+            list: "allow",
+            bash: "allow",
+            webfetch: "allow",
+            websearch: "allow",
+            codesearch: "allow",
+            read: "allow",
+          },
+        },
+      },
+    }
+  }
+
   async function ensureDefaultGlobalConfigFile() {
     const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
     for (const candidate of candidates) {
@@ -111,7 +162,7 @@ export namespace Config {
     }
 
     const defaultPath = path.join(Global.Path.config, yamlConfigFiles[0])
-    const defaultText = `${yamlLanguageServerSchema}\n$schema: ${configSchemaURL}\n`
+    const defaultText = formatYamlConfig(defaultConfig())
     await Bun.write(defaultPath, defaultText)
   }
 
@@ -120,7 +171,7 @@ export namespace Config {
 
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
     // 1) Remote .well-known/zeroxzero (org defaults)
-    // 2) Global config (~/.config/zeroxzero/0x0.yaml)
+    // 2) Global config (~/.config/0x0/0x0.yaml)
     // 3) Custom config (ZEROXZERO_CONFIG)
     // 4) Project config (0x0.yaml or zeroxzero.yaml)
     // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.yaml)
@@ -1159,26 +1210,9 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
-      mode: z
-        .object({
-          build: Agent.optional(),
-          plan: Agent.optional(),
-        })
-        .catchall(Agent)
-        .optional()
-        .describe("@deprecated Use `agent` field instead."),
+      mode: z.record(z.string(), Agent).optional().describe("@deprecated Use `agent` field instead."),
       agent: z
-        .object({
-          plan: Agent.optional(),
-          build: Agent.optional(),
-          general: Agent.optional(),
-          explore: Agent.optional(),
-          // specialized
-          title: Agent.optional(),
-          summary: Agent.optional(),
-          compaction: Agent.optional(),
-        })
-        .catchall(Agent)
+        .record(z.string(), Agent)
         .optional()
         .describe("Agent configuration, see https://zeroxzero.ai/docs/agents"),
       provider: z
@@ -1348,10 +1382,7 @@ export namespace Config {
 
       for (const match of fileMatches) {
         const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (
-          lineIndex !== -1 &&
-          (lines[lineIndex].trim().startsWith("//") || lines[lineIndex].trim().startsWith("#"))
-        ) {
+        if (lineIndex !== -1 && (lines[lineIndex].trim().startsWith("//") || lines[lineIndex].trim().startsWith("#"))) {
           continue // Skip if line is commented
         }
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
@@ -1485,7 +1516,9 @@ export namespace Config {
         .find((file) => existsSync(file)) ?? path.join(Instance.directory, yamlConfigFiles[0])
     const existing = await loadFile(filepath)
     const merged = mergeDeep(existing, config)
-    const current = await Bun.file(filepath).text().catch(() => "")
+    const current = await Bun.file(filepath)
+      .text()
+      .catch(() => "")
     const output = isYamlPath(filepath) ? formatYamlConfig(merged, current) : JSON.stringify(merged, null, 2)
     await Bun.write(filepath, output)
     await Instance.dispose()

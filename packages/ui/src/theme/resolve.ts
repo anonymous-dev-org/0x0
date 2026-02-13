@@ -217,10 +217,10 @@ export function resolveThemeVariant(variant: ThemeVariant, isDark: boolean): Res
   tokens["icon-on-brand-selected"] = neutralAlpha[11]
   tokens["icon-on-interactive-base"] = isDark ? neutral[11] : neutral[0]
 
-  tokens["icon-agent-plan-base"] = info[8]
-  tokens["icon-agent-docs-base"] = warning[8]
-  tokens["icon-agent-ask-base"] = interactive[8]
-  tokens["icon-agent-build-base"] = interactive[isDark ? 10 : 8]
+  tokens["icon-agent-plan-base"] = info[10]
+  tokens["icon-agent-docs-base"] = warning[10]
+  tokens["icon-agent-ask-base"] = interactive[10]
+  tokens["icon-agent-build-base"] = interactive[10]
 
   tokens["icon-on-success-base"] = withAlpha(success[8], 0.9) as ColorValue
   tokens["icon-on-success-hover"] = withAlpha(success[9], 0.9) as ColorValue
