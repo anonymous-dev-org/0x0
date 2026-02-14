@@ -100,7 +100,7 @@ describe("session.llm.hasToolCalls", () => {
 })
 
 describe("session.llm.composeSystemParts", () => {
-  test("composes base, agent, model, and custom layers in order", async () => {
+  test("composes base, agent, and first non-empty skill layer", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -127,15 +127,14 @@ describe("session.llm.composeSystemParts", () => {
         const parts = await LLM.composeSystemParts({
           model,
           agent,
-          system: ["CALL_LAYER"],
+          system: ["", "CALL_LAYER", "SECOND_LAYER"],
           user,
         })
 
         expect(parts[0]).toBe(await SystemPrompt.instructions())
         expect(parts[1]).toBe("AGENT_LAYER")
-        expect(parts[2]).toBe((await SystemPrompt.model(model))[0])
-        expect(parts[3]).toBe("CALL_LAYER")
-        expect(parts[4]).toBe("USER_LAYER")
+        expect(parts[2]).toBe("CALL_LAYER")
+        expect(parts[3]).toBeUndefined()
       },
     })
   })

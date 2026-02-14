@@ -14,7 +14,6 @@ import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
-import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
@@ -62,6 +61,19 @@ export namespace SessionPrompt {
 
   function render(template: string, vars: Record<string, string>) {
     return Object.entries(vars).reduce((acc, [key, value]) => acc.replaceAll(`{{${key}}}`, value), template)
+  }
+
+  function skill(messages: MessageV2.WithParts[]) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      for (let j = msg.parts.length - 1; j >= 0; j--) {
+        const part = msg.parts[j]
+        if (part.type !== "tool" || part.tool !== "skill" || part.state.status !== "completed") continue
+        if (part.state.time.compacted) continue
+        if (!part.state.output.trim()) continue
+        return part.state.output
+      }
+    }
   }
 
   const state = Instance.state(
@@ -598,6 +610,10 @@ export namespace SessionPrompt {
       }
 
       const sessionMessages = clone(msgs)
+      const skillPrompt = skill(sessionMessages)
+      for (const msg of sessionMessages) {
+        msg.parts = msg.parts.filter((part) => !(part.type === "tool" && part.tool === "skill"))
+      }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
       if (step > 1 && lastFinished) {
@@ -622,7 +638,7 @@ export namespace SessionPrompt {
         agent,
         abort,
         sessionID,
-        system: [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())],
+        system: skillPrompt ? [skillPrompt] : [],
         messages: [
           ...MessageV2.toModelMessages(sessionMessages, model),
           ...(isLastStep

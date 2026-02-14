@@ -45,12 +45,12 @@ export namespace Config {
   const projectConfigDirs = ["", ".0x0"] as const
   const LEGACY_TOOL_KEYS = {
     patch: "apply_patch",
-    glob: "search (mode: \"files\")",
-    grep: "search (mode: \"content\")",
-    list: "search (mode: \"files\")",
-    webfetch: "search_remote (mode: \"fetch\")",
-    websearch: "search_remote (mode: \"web\")",
-    codesearch: "search_remote (mode: \"code\")",
+    glob: 'search (mode: "files")',
+    grep: 'search (mode: "content")',
+    list: 'search (mode: "files")',
+    webfetch: 'search_remote (mode: "fetch")',
+    websearch: 'search_remote (mode: "web")',
+    codesearch: 'search_remote (mode: "code")',
   } as const
 
   function legacyToolIssue(tool: string) {
@@ -62,7 +62,7 @@ export namespace Config {
 
   function legacyPermissionIssue(permission: string) {
     if (permission === "patch") {
-      return "Legacy permission key \"patch\" is no longer supported. Use \"edit\" instead."
+      return 'Legacy permission key "patch" is no longer supported. Use "edit" instead.'
     }
     const replacement = LEGACY_TOOL_KEYS[permission as keyof typeof LEGACY_TOOL_KEYS]
     return replacement
@@ -154,27 +154,6 @@ export namespace Config {
               "*": "deny",
               ".zeroxzero/plans/*.md": "allow",
             },
-          },
-        },
-        general: {
-          mode: "primary",
-          description:
-            "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.",
-          permission: {
-            todoread: "deny",
-            todowrite: "deny",
-          },
-        },
-        explore: {
-          mode: "primary",
-          description:
-            'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
-          permission: {
-            "*": "deny",
-            search: "allow",
-            search_remote: "allow",
-            bash: "allow",
-            read: "allow",
           },
         },
       },
@@ -1262,6 +1241,7 @@ export namespace Config {
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),
+      system_prompt: z.string().optional().describe("Override the global base system prompt"),
       prompt: Prompt.optional().describe("Override built-in system prompts and reminders"),
       server: Server.optional().describe("Server configuration for zeroxzero serve and web commands"),
       command: z

@@ -49,11 +49,8 @@ export namespace LLM {
     system: string[]
     user: MessageV2.User
   }) {
-    return [
-      ...(await SystemPrompt.compose({ model: input.model, agent: input.agent.prompt })),
-      ...input.system,
-      ...(input.user.system ? [input.user.system] : []),
-    ].filter((item): item is string => !!item)
+    const skill = input.system.find((item) => !!item?.trim())
+    return SystemPrompt.compose({ agent: input.agent.prompt, skill })
   }
 
   export async function stream(input: StreamInput) {

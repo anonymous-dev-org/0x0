@@ -37,8 +37,6 @@ test("loads config with defaults when no files exist", async () => {
       expect(config.username).toBeDefined()
       expect(config.agent?.build?.mode).toBe("primary")
       expect(config.agent?.plan?.mode).toBe("primary")
-      expect(config.agent?.general?.mode).toBe("primary")
-      expect(config.agent?.explore?.mode).toBe("primary")
     },
   })
 })
@@ -59,6 +57,24 @@ test("loads JSON config file", async () => {
       const config = await Config.get()
       expect(config.model).toBe("test/model")
       expect(config.username).toBe("testuser")
+    },
+  })
+})
+
+test("loads top-level system_prompt", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://zeroxzero.ai/config.json",
+        system_prompt: "BASE_SYSTEM_PROMPT",
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.system_prompt).toBe("BASE_SYSTEM_PROMPT")
     },
   })
 })
