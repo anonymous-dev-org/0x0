@@ -14,6 +14,17 @@ import type { Hooks } from "@0x0-ai/plugin"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
+function getAuthPlugin(plugins: Hooks[], provider: string) {
+  return plugins.findLast((plugin) => plugin.auth?.provider === provider)
+}
+
+function hasAntigravityGoogleAuth(plugins: Hooks[]) {
+  return plugins
+    .filter((plugin) => plugin.auth?.provider === "google")
+    .flatMap((plugin) => plugin.auth?.methods ?? [])
+    .some((method) => method.type === "oauth" && method.label.toLowerCase().includes("antigravity"))
+}
+
 /**
  * Handle plugin-based authentication flow.
  * Returns true if auth was handled, false if it should fall through to default handling.
@@ -268,6 +279,9 @@ export const AuthLoginCommand = cmd({
           return filtered
         })
 
+        const plugins = await Plugin.list()
+        const antigravity = hasAntigravityGoogleAuth(plugins)
+
         const priority: Record<string, number> = {
           zeroxzero: 0,
           anthropic: 1,
@@ -307,9 +321,13 @@ export const AuthLoginCommand = cmd({
 
         if (prompts.isCancel(provider)) throw new UI.CancelledError()
 
-        const plugin = await Plugin.list().then((x) => x.findLast((x) => x.auth?.provider === provider))
+        const plugin = getAuthPlugin(plugins, provider)
         if (plugin && plugin.auth) {
-          const handled = await handlePluginAuth({ auth: plugin.auth }, provider)
+          const methods =
+            provider === "google" && antigravity && !plugin.auth.methods.some((method) => method.type === "api")
+              ? [...plugin.auth.methods, { type: "api", label: "API key" } as const]
+              : plugin.auth.methods
+          const handled = await handlePluginAuth({ auth: { ...plugin.auth, methods } as PluginAuth }, provider)
           if (handled) return
         }
 
@@ -323,7 +341,7 @@ export const AuthLoginCommand = cmd({
           if (prompts.isCancel(provider)) throw new UI.CancelledError()
 
           // Check if a plugin provides auth for this custom provider
-          const customPlugin = await Plugin.list().then((x) => x.findLast((x) => x.auth?.provider === provider))
+          const customPlugin = getAuthPlugin(plugins, provider)
           if (customPlugin && customPlugin.auth) {
             const handled = await handlePluginAuth({ auth: customPlugin.auth }, provider)
             if (handled) return

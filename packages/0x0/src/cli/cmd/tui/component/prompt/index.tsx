@@ -508,7 +508,9 @@ export function Prompt(props: PromptProps) {
   const line = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
-    return tint(theme.backgroundElement, agent(), 0.15)
+    const dark = theme.text.r * 0.299 + theme.text.g * 0.587 + theme.text.b * 0.114 > 0.5
+    if (dark) return agent()
+    return tint(theme.text, agent(), 0.52)
   })
 
   const parsed = createMemo(() => local.model.parsed())

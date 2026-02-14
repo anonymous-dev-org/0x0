@@ -16,7 +16,7 @@ import { Dynamic } from "solid-js/web"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
-import { useTheme } from "@tui/context/theme"
+import { tint, useTheme } from "@tui/context/theme"
 import {
   ScrollBoxRenderable,
   addDefaultParsers,
@@ -79,6 +79,7 @@ const context = createContext<{
   showThinking: () => boolean
   showTimestamps: () => boolean
   showDetails: () => boolean
+  showAssistantMetadata: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
 }>()
@@ -140,11 +141,60 @@ export function Session() {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
   }
 
-  const thinkingTitle = createMemo(() => {
+  const latestToolPart = (sessionID: string, runningOnly: boolean) => {
+    const sessionMessages = sync.data.message[sessionID] ?? []
+    for (let mi = sessionMessages.length - 1; mi >= 0; mi--) {
+      const message = sessionMessages[mi]
+      if (!message || message.role !== "assistant") continue
+
+      const parts = sync.data.part[message.id] ?? []
+      for (let pi = parts.length - 1; pi >= 0; pi--) {
+        const part = parts[pi]
+        if (!part || part.type !== "tool") continue
+
+        const tool = part as ToolPart
+        if (runningOnly && tool.state.status !== "running") continue
+        if (!runningOnly && tool.state.status === "pending") continue
+        return tool
+      }
+    }
+  }
+
+  const toolStatus = (part: ToolPart, seen = new Set<string>()) => {
+    if (part.tool === "task" && part.state.status !== "pending") {
+      const sessionId =
+        part.state.metadata && typeof part.state.metadata.sessionId === "string"
+          ? part.state.metadata.sessionId
+          : undefined
+      if (sessionId && !seen.has(sessionId)) {
+        seen.add(sessionId)
+        const nested = latestToolPart(sessionId, true) ?? latestToolPart(sessionId, false)
+        if (nested) return toolStatus(nested, seen)
+      }
+    }
+
+    const name = Locale.titlecase(part.tool.replaceAll("_", " "))
+    if (part.state.status !== "pending") {
+      const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title.trim() : ""
+      if (title) return `Using ${name} · ${Locale.truncate(title, 56)}`
+    }
+
+    return `Using ${name}`
+  }
+
+  const thinkingStatus = createMemo(() => {
     const pendingID = pending()
     if (!pendingID) return
 
     const parts = sync.data.part[pendingID] ?? []
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]
+      if (!part || part.type !== "tool") continue
+      const tool = part as ToolPart
+      if (tool.state.status !== "running") continue
+      return toolStatus(tool)
+    }
+
     for (let i = parts.length - 1; i >= 0; i--) {
       const part = parts[i]
       if (part?.type !== "reasoning") continue
@@ -154,11 +204,15 @@ export function Session() {
 
       return Locale.truncate(title, 72)
     }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]
+      if (!part || part.type !== "tool") continue
+      const tool = part as ToolPart
+      if (tool.state.status === "pending") continue
+      return toolStatus(tool)
+    }
+    return "Thinking"
   })
-
-  const lastAssistant = () => {
-    return messages().findLast((x) => x.role === "assistant")
-  }
 
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
@@ -474,6 +528,7 @@ export function Session() {
         showThinking,
         showTimestamps,
         showDetails,
+        showAssistantMetadata,
         diffWrapMode,
         sync,
       }}
@@ -527,11 +582,7 @@ export function Session() {
                   />
                 )}
                 renderAssistant={(message) => (
-                  <AssistantMessage
-                    last={lastAssistant()?.id === message.id}
-                    message={message}
-                    parts={sync.data.part[message.id] ?? []}
-                  />
+                  <AssistantMessage message={message} parts={sync.data.part[message.id] ?? []} />
                 )}
               />
             </scrollbox>
@@ -540,7 +591,7 @@ export function Session() {
                 visible={busy}
                 color={agent}
                 interrupt={interrupt}
-                title={thinkingTitle}
+                title={thinkingStatus}
                 text={theme.text}
                 textMuted={theme.textMuted}
                 primary={theme.primary}
@@ -661,7 +712,7 @@ function Thinking(props: {
             </For>
           </text>
           <text fg={props.textMuted} attributes={TextAttributes.DIM}>
-            {props.title() ?? "working on it..."}
+            {props.title() ?? "Thinking"}
           </text>
         </box>
         <text fg={props.interrupt() > 0 ? props.primary : props.text}>
@@ -774,7 +825,8 @@ function UserMessage(props: {
   )
 }
 
-function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
+function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
+  const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
@@ -783,16 +835,17 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     const color = local.agent.color(props.message.agent)
     return RGBA.fromInts(Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255), 255)
   })
-  const color = () => {
-    if (props.message.error?.name === "MessageAbortedError") return theme.textMuted
-    return agentColor()
-  }
 
   const final = () => {
     return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
   }
 
-  const rail = createMemo(() => agentColor())
+  const rail = createMemo(() => {
+    const color = agentColor()
+    const dark = theme.text.r * 0.299 + theme.text.g * 0.587 + theme.text.b * 0.114 > 0.5
+    if (dark) return color
+    return tint(theme.text, color, 0.52)
+  })
 
   const duration = () => {
     if (!final()) return 0
@@ -802,10 +855,20 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return props.message.time.completed - user.time.created
   }
 
-  const showFooter = () => props.last && final()
-
   return (
     <box border={["left"]} customBorderChars={SplitBorder.customBorderChars} borderColor={rail()}>
+      <Show when={ctx.showAssistantMetadata() && final()}>
+        <box paddingLeft={3} marginTop={1}>
+          <text>
+            <span style={{ fg: rail() }}>▣ </span>
+            <span style={{ fg: rail() }}>{local.agent.label(props.message.agent)}</span>
+            <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
+            <Show when={duration()}>
+              <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+            </Show>
+          </text>
+        </box>
+      </Show>
       <For each={props.parts}>
         {(part, index) => {
           const component = () => PART_MAPPING[part.type as keyof typeof PART_MAPPING]
@@ -833,18 +896,6 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           borderColor={theme.error}
         >
           <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
-        </box>
-      </Show>
-      <Show when={showFooter()}>
-        <box paddingLeft={3}>
-          <text marginTop={1}>
-            <span style={{ fg: color() }}>▣ </span>{" "}
-            <span style={{ fg: color() }}>{local.agent.label(props.message.agent)}</span>
-            <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
-            <Show when={duration()}>
-              <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
-            </Show>
-          </text>
         </box>
       </Show>
     </box>

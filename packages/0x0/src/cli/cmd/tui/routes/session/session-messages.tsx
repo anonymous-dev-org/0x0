@@ -9,7 +9,7 @@ export function SessionMessages(props: {
   fallback: JSX.Element
   renderRevertMarker: () => JSX.Element
   renderUser: (message: UserMessage, index: number) => JSX.Element
-  renderAssistant: (message: AssistantMessage) => JSX.Element
+  renderAssistant: (message: AssistantMessage, index: number) => JSX.Element
 }) {
   return (
     <Show when={props.messages.length > 0} fallback={props.fallback}>
@@ -23,7 +23,7 @@ export function SessionMessages(props: {
                 <></>
               </Match>
               <Match when={message.role === "user"}>{props.renderUser(message as UserMessage, i)}</Match>
-              <Match when={message.role === "assistant"}>{props.renderAssistant(message as AssistantMessage)}</Match>
+              <Match when={message.role === "assistant"}>{props.renderAssistant(message as AssistantMessage, i)}</Match>
             </Switch>
           )
         }}

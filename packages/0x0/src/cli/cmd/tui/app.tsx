@@ -156,7 +156,7 @@ function App() {
           const config = JSON.parse(JSON.stringify(current.data ?? {}))
           config.agent = config.agent ?? {}
 
-          for (const name of ["build", "plan", "general", "explore"]) {
+          for (const name of ["build", "plan"]) {
             const current = config.agent[name] ?? {}
             config.agent[name] = {
               ...current,
@@ -172,7 +172,7 @@ function App() {
             description: config.agent[custom]?.description ?? "My custom agent",
           }
 
-          if (["build", "plan", "general", "explore"].includes(config.default_agent)) {
+          if (["build", "plan"].includes(config.default_agent)) {
             config.default_agent = custom
           }
 
@@ -207,7 +207,7 @@ function App() {
 
     // Truncate title to 40 chars max
     const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-    renderer.setTerminalTitle(`OC | ${title}`)
+    renderer.setTerminalTitle(`0x0 | ${title}`)
   })
 
   const args = useArgs()

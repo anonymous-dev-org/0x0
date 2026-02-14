@@ -20,8 +20,6 @@ test("returns default native agents when no config", async () => {
       const names = agents.map((a) => a.name)
       expect(names).toContain("build")
       expect(names).toContain("plan")
-      expect(names).toContain("general")
-      expect(names).toContain("explore")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
       expect(names).toContain("summary")
@@ -60,7 +58,22 @@ test("plan agent denies edits except .zeroxzero/plans/*", async () => {
 })
 
 test("explore agent denies edit and write", async () => {
-  await using tmp = await tmpdir()
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        explore: {
+          mode: "primary",
+          permission: {
+            "*": "deny",
+            search: "allow",
+            search_remote: "allow",
+            bash: "allow",
+            read: "allow",
+          },
+        },
+      },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -76,7 +89,19 @@ test("explore agent denies edit and write", async () => {
 })
 
 test("general agent denies todo tools", async () => {
-  await using tmp = await tmpdir()
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        general: {
+          mode: "primary",
+          permission: {
+            todoread: "deny",
+            todowrite: "deny",
+          },
+        },
+      },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -600,6 +625,11 @@ test("defaultAgent allows default_agent explore", async () => {
   await using tmp = await tmpdir({
     config: {
       default_agent: "explore",
+      agent: {
+        explore: {
+          mode: "primary",
+        },
+      },
     },
   })
   await Instance.provide({
@@ -668,8 +698,7 @@ test("defaultAgent falls back to first visible agent when build and plan are dis
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build and plan are disabled, so the first remaining visible agent is used
-      await expect(Agent.defaultAgent()).resolves.toBe("general")
+      await expect(Agent.defaultAgent()).rejects.toThrow("no visible agent found")
     },
   })
 })

@@ -22,12 +22,17 @@ const PROVIDER_PRIORITY: Record<string, number> = {
   google: 4,
 }
 
+function hasAntigravityGoogleAuth(methods: Array<{ type: string; label: string }> | undefined) {
+  return (methods ?? []).some((method) => method.type === "oauth" && method.label.toLowerCase().includes("antigravity"))
+}
+
 export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
   const connected = createMemo(() => new Set(sync.data.provider_next.connected))
   const options = createMemo(() => {
+    const antigravity = hasAntigravityGoogleAuth(sync.data.provider_auth.google)
     return pipe(
       sync.data.provider_next.all,
       sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
@@ -44,12 +49,19 @@ export function createDialogProviderOptions() {
           category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
           footer: isConnected ? "Connected" : undefined,
           async onSelect() {
-            const methods = sync.data.provider_auth[provider.id] ?? [
-              {
-                type: "api",
-                label: "API key",
-              },
-            ]
+            const pluginMethods = sync.data.provider_auth[provider.id]
+            const methods =
+              provider.id === "google" &&
+              antigravity &&
+              pluginMethods &&
+              !pluginMethods.some((method) => method.type === "api")
+                ? [...pluginMethods, { type: "api" as const, label: "API key" }]
+                : pluginMethods ?? [
+                    {
+                      type: "api" as const,
+                      label: "API key",
+                    },
+                  ]
             let index: number | null = 0
             if (methods.length > 1) {
               index = await new Promise<number | null>((resolve) => {
