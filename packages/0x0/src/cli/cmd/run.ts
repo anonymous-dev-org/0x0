@@ -12,19 +12,15 @@ import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { PermissionNext } from "../../permission/next"
 import { Tool } from "../../tool/tool"
-import { GlobTool } from "../../tool/glob"
-import { GrepTool } from "../../tool/grep"
-import { ListTool } from "../../tool/ls"
 import { ReadTool } from "../../tool/read"
-import { WebFetchTool } from "../../tool/webfetch"
-import { EditTool } from "../../tool/edit"
-import { WriteTool } from "../../tool/write"
-import { CodeSearchTool } from "../../tool/codesearch"
-import { WebSearchTool } from "../../tool/websearch"
 import { TaskTool } from "../../tool/task"
-import { SkillTool } from "../../tool/skill"
 import { BashTool } from "../../tool/bash"
 import { TodoWriteTool } from "../../tool/todo"
+import { SearchTool } from "../../tool/search"
+import { SearchRemoteTool } from "../../tool/search_remote"
+import { ApplyPatchTool } from "../../tool/apply_patch"
+import { QuestionTool } from "../../tool/question"
+import { LspTool } from "../../tool/lsp"
 import { Locale } from "../../util/locale"
 
 type ToolProps<T extends Tool.Info> = {
@@ -73,39 +69,34 @@ function fallback(part: ToolPart) {
   })
 }
 
-function glob(info: ToolProps<typeof GlobTool>) {
+function search(info: ToolProps<typeof SearchTool>) {
   const root = info.input.path ?? ""
-  const title = `Glob "${info.input.pattern}"`
   const suffix = root ? `in ${normalizePath(root)}` : ""
-  const num = info.metadata.count
-  const description =
-    num === undefined ? suffix : `${suffix}${suffix ? " · " : ""}${num} ${num === 1 ? "match" : "matches"}`
+
+  if (info.input.mode === "files") {
+    const count = info.metadata.count
+    const description =
+      count === undefined ? suffix : `${suffix}${suffix ? " · " : ""}${count} ${count === 1 ? "match" : "matches"}`
+    inline({
+      icon: "✱",
+      title: `Search files "${info.input.pattern}"`,
+      ...(description && { description }),
+    })
+    return
+  }
+
+  const include = info.input.include ? `include=${info.input.include}` : ""
+  const matches = info.metadata.matches
+  const parts = [suffix, include].filter(Boolean)
+  if (matches !== undefined) {
+    parts.push(`${matches} ${matches === 1 ? "match" : "matches"}`)
+  }
+  const description = parts.join(" · ")
+
   inline({
     icon: "✱",
-    title,
+    title: `Search content "${info.input.pattern}"`,
     ...(description && { description }),
-  })
-}
-
-function grep(info: ToolProps<typeof GrepTool>) {
-  const root = info.input.path ?? ""
-  const title = `Grep "${info.input.pattern}"`
-  const suffix = root ? `in ${normalizePath(root)}` : ""
-  const num = info.metadata.matches
-  const description =
-    num === undefined ? suffix : `${suffix}${suffix ? " · " : ""}${num} ${num === 1 ? "match" : "matches"}`
-  inline({
-    icon: "✱",
-    title,
-    ...(description && { description }),
-  })
-}
-
-function list(info: ToolProps<typeof ListTool>) {
-  const dir = info.input.path ? normalizePath(info.input.path) : ""
-  inline({
-    icon: "→",
-    title: dir ? `List ${dir}` : "List",
   })
 }
 
@@ -123,46 +114,50 @@ function read(info: ToolProps<typeof ReadTool>) {
   })
 }
 
-function write(info: ToolProps<typeof WriteTool>) {
+function searchRemote(info: ToolProps<typeof SearchRemoteTool>) {
+  if (info.input.mode === "fetch") {
+    inline({
+      icon: "%",
+      title: `Fetch ${info.input.url}`,
+    })
+    return
+  }
+
+  if (info.input.mode === "web") {
+    inline({
+      icon: "◈",
+      title: `Web search "${info.input.query}"`,
+    })
+    return
+  }
+
+  inline({
+    icon: "◇",
+    title: `Code search "${info.input.query}"`,
+  })
+}
+
+function applyPatch(info: ToolProps<typeof ApplyPatchTool>) {
   block(
     {
       icon: "←",
-      title: `Write ${normalizePath(info.input.filePath)}`,
+      title: "Apply Patch",
     },
     info.part.state.status === "completed" ? info.part.state.output : undefined,
   )
 }
 
-function webfetch(info: ToolProps<typeof WebFetchTool>) {
+function question(info: ToolProps<typeof QuestionTool>) {
   inline({
-    icon: "%",
-    title: `WebFetch ${info.input.url}`,
+    icon: "?",
+    title: `${info.input.questions.length} question${info.input.questions.length === 1 ? "" : "s"}`,
   })
 }
 
-function edit(info: ToolProps<typeof EditTool>) {
-  const title = normalizePath(info.input.filePath)
-  const diff = info.metadata.diff
-  block(
-    {
-      icon: "←",
-      title: `Edit ${title}`,
-    },
-    diff,
-  )
-}
-
-function codesearch(info: ToolProps<typeof CodeSearchTool>) {
+function lsp(info: ToolProps<typeof LspTool>) {
   inline({
-    icon: "◇",
-    title: `Exa Code Search "${info.input.query}"`,
-  })
-}
-
-function websearch(info: ToolProps<typeof WebSearchTool>) {
-  inline({
-    icon: "◈",
-    title: `Exa Web Search "${info.input.query}"`,
+    icon: "λ",
+    title: `${info.input.operation} ${normalizePath(info.input.filePath)}:${info.input.line}:${info.input.character}`,
   })
 }
 
@@ -175,13 +170,6 @@ function task(info: ToolProps<typeof TaskTool>) {
     icon: started ? "•" : "✓",
     title: name,
     description: desc ? `${agent} Agent` : undefined,
-  })
-}
-
-function skill(info: ToolProps<typeof SkillTool>) {
-  inline({
-    icon: "→",
-    title: `Skill "${info.input.name}"`,
   })
 }
 
@@ -381,18 +369,14 @@ export const RunCommand = cmd({
     async function execute(sdk: ZeroxzeroClient) {
       function tool(part: ToolPart) {
         if (part.tool === "bash") return bash(props<typeof BashTool>(part))
-        if (part.tool === "glob") return glob(props<typeof GlobTool>(part))
-        if (part.tool === "grep") return grep(props<typeof GrepTool>(part))
-        if (part.tool === "list") return list(props<typeof ListTool>(part))
+        if (part.tool === "question") return question(props<typeof QuestionTool>(part))
+        if (part.tool === "search") return search(props<typeof SearchTool>(part))
+        if (part.tool === "search_remote") return searchRemote(props<typeof SearchRemoteTool>(part))
         if (part.tool === "read") return read(props<typeof ReadTool>(part))
-        if (part.tool === "write") return write(props<typeof WriteTool>(part))
-        if (part.tool === "webfetch") return webfetch(props<typeof WebFetchTool>(part))
-        if (part.tool === "edit") return edit(props<typeof EditTool>(part))
-        if (part.tool === "codesearch") return codesearch(props<typeof CodeSearchTool>(part))
-        if (part.tool === "websearch") return websearch(props<typeof WebSearchTool>(part))
+        if (part.tool === "apply_patch") return applyPatch(props<typeof ApplyPatchTool>(part))
+        if (part.tool === "lsp") return lsp(props<typeof LspTool>(part))
         if (part.tool === "task") return task(props<typeof TaskTool>(part))
         if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part))
-        if (part.tool === "skill") return skill(props<typeof SkillTool>(part))
         return fallback(part)
       }
 

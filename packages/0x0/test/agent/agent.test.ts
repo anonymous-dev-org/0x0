@@ -393,13 +393,13 @@ test("default permission includes doom_loop and external_directory as ask", asyn
   })
 })
 
-test("webfetch is allowed by default", async () => {
+test("search_remote is allowed by default", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const build = await Agent.get("build")
-      expect(evalPerm(build, "webfetch")).toBe("allow")
+      expect(evalPerm(build, "search_remote")).toBe("allow")
     },
   })
 })
@@ -427,7 +427,7 @@ test("legacy tools config converts to permissions", async () => {
   })
 })
 
-test("legacy tools config maps write/edit/patch/multiedit to edit permission", async () => {
+test("legacy tools config maps write/edit/apply_patch/multiedit to edit permission", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {

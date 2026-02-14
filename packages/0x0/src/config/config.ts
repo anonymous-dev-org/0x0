@@ -43,6 +43,32 @@ export namespace Config {
   const legacyConfigFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
   const configFiles = [...yamlConfigFiles, ...legacyConfigFiles] as const
   const projectConfigDirs = ["", ".0x0"] as const
+  const LEGACY_TOOL_KEYS = {
+    patch: "apply_patch",
+    glob: "search (mode: \"files\")",
+    grep: "search (mode: \"content\")",
+    list: "search (mode: \"files\")",
+    webfetch: "search_remote (mode: \"fetch\")",
+    websearch: "search_remote (mode: \"web\")",
+    codesearch: "search_remote (mode: \"code\")",
+  } as const
+
+  function legacyToolIssue(tool: string) {
+    const replacement = LEGACY_TOOL_KEYS[tool as keyof typeof LEGACY_TOOL_KEYS]
+    return replacement
+      ? `Legacy tool key \"${tool}\" is no longer supported in tools config. Use \"${replacement}\" instead.`
+      : undefined
+  }
+
+  function legacyPermissionIssue(permission: string) {
+    if (permission === "patch") {
+      return "Legacy permission key \"patch\" is no longer supported. Use \"edit\" instead."
+    }
+    const replacement = LEGACY_TOOL_KEYS[permission as keyof typeof LEGACY_TOOL_KEYS]
+    return replacement
+      ? `Legacy permission key \"${permission}\" is no longer supported. Use \"${replacement}\" instead.`
+      : undefined
+  }
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
@@ -145,13 +171,9 @@ export namespace Config {
             'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.',
           permission: {
             "*": "deny",
-            grep: "allow",
-            glob: "allow",
-            list: "allow",
+            search: "allow",
+            search_remote: "allow",
             bash: "allow",
-            webfetch: "allow",
-            websearch: "allow",
-            codesearch: "allow",
             read: "allow",
           },
         },
@@ -361,8 +383,15 @@ export namespace Config {
     if (result.tools) {
       const perms: Record<string, Config.PermissionAction> = {}
       for (const [tool, enabled] of Object.entries(result.tools)) {
+        const legacy = legacyToolIssue(tool)
+        if (legacy) {
+          throw new InvalidError({
+            path: "tools",
+            message: legacy,
+          })
+        }
         const action: Config.PermissionAction = enabled ? "allow" : "deny"
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
+        if (tool === "write" || tool === "edit" || tool === "apply_patch" || tool === "multiedit") {
           perms.edit = action
           continue
         }
@@ -784,18 +813,14 @@ export namespace Config {
           __originalKeys: z.string().array().optional(),
           read: PermissionRule.optional(),
           edit: PermissionRule.optional(),
-          glob: PermissionRule.optional(),
-          grep: PermissionRule.optional(),
-          list: PermissionRule.optional(),
+          search: PermissionRule.optional(),
+          search_remote: PermissionRule.optional(),
           bash: PermissionRule.optional(),
           task: PermissionRule.optional(),
           external_directory: PermissionRule.optional(),
           todowrite: PermissionAction.optional(),
           todoread: PermissionAction.optional(),
           question: PermissionAction.optional(),
-          webfetch: PermissionAction.optional(),
-          websearch: PermissionAction.optional(),
-          codesearch: PermissionAction.optional(),
           lsp: PermissionRule.optional(),
           doom_loop: PermissionAction.optional(),
           skill: PermissionRule.optional(),
@@ -803,6 +828,19 @@ export namespace Config {
         .catchall(PermissionRule)
         .or(PermissionAction),
     )
+    .superRefine((value, ctx) => {
+      if (typeof value === "string") return
+      for (const key of Object.keys(value)) {
+        if (key === "__originalKeys") continue
+        const message = legacyPermissionIssue(key)
+        if (!message) continue
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message,
+        })
+      }
+    })
     .transform(permissionTransform)
     .meta({
       ref: "PermissionConfig",
@@ -837,7 +875,22 @@ export namespace Config {
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       prompt: z.string().optional(),
-      tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
+      tools: z
+        .record(z.string(), z.boolean())
+        .optional()
+        .superRefine((value, ctx) => {
+          if (!value) return
+          for (const tool of Object.keys(value)) {
+            const message = legacyToolIssue(tool)
+            if (!message) continue
+            ctx.addIssue({
+              code: "custom",
+              path: [tool],
+              message,
+            })
+          }
+        })
+        .describe("@deprecated Use 'permission' field instead"),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
       mode: z.enum(["primary", "all"]).optional(),
@@ -890,8 +943,8 @@ export namespace Config {
       const permission: Permission = {}
       for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
         const action = enabled ? "allow" : "deny"
-        // write, edit, patch, multiedit all map to edit permission
-        if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
+        // write, edit, apply_patch, multiedit all map to edit permission
+        if (tool === "write" || tool === "edit" || tool === "apply_patch" || tool === "multiedit") {
           permission.edit = action
         } else {
           permission[tool] = action
@@ -1338,7 +1391,21 @@ export namespace Config {
         .describe("Project-specific knowledge snippets injected into all agents"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
-      tools: z.record(z.string(), z.boolean()).optional(),
+      tools: z
+        .record(z.string(), z.boolean())
+        .optional()
+        .superRefine((value, ctx) => {
+          if (!value) return
+          for (const tool of Object.keys(value)) {
+            const message = legacyToolIssue(tool)
+            if (!message) continue
+            ctx.addIssue({
+              code: "custom",
+              path: [tool],
+              message,
+            })
+          }
+        }),
       enterprise: z
         .object({
           url: z.string().optional().describe("Enterprise URL"),

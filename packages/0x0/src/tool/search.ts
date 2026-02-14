@@ -15,19 +15,23 @@ type Metadata = {
   truncated: boolean
 }
 
-const Schema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("files"),
-    pattern: z.string().describe("Glob pattern to match files (for mode=files)"),
+const Schema = z
+  .object({
+    mode: z.enum(["files", "content"]),
+    pattern: z.string().describe('Search pattern. Use glob for mode="files" and regex for mode="content".'),
+    include: z.string().optional().describe('Optional file filter glob (only for mode="content").'),
     path: z.string().optional().describe("Directory root to search in. Defaults to current working directory."),
-  }),
-  z.object({
-    mode: z.literal("content"),
-    pattern: z.string().describe("Regex pattern to search file contents (for mode=content)"),
-    include: z.string().optional().describe('Optional file filter glob (e.g. "*.ts", "*.{js,tsx}")'),
-    path: z.string().optional().describe("Directory root to search in. Defaults to current working directory."),
-  }),
-])
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.mode === "files" && value.include !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["include"],
+        message: "include is only valid when mode is \"content\"",
+      })
+    }
+  })
 
 export const SearchTool = Tool.define<typeof Schema, Metadata>("search", {
   description: DESCRIPTION,
@@ -37,7 +41,7 @@ export const SearchTool = Tool.define<typeof Schema, Metadata>("search", {
 
     if (params.mode === "files") {
       await ctx.ask({
-        permission: "glob",
+        permission: "search",
         patterns: [params.pattern],
         always: ["*"],
         metadata: {
@@ -88,7 +92,7 @@ export const SearchTool = Tool.define<typeof Schema, Metadata>("search", {
     }
 
     await ctx.ask({
-      permission: "grep",
+      permission: "search",
       patterns: [params.pattern],
       always: ["*"],
       metadata: {

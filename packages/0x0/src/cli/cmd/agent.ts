@@ -16,15 +16,13 @@ type AgentMode = "all" | "primary"
 const AVAILABLE_TOOLS = [
   "bash",
   "read",
-  "write",
-  "edit",
-  "list",
-  "glob",
-  "grep",
-  "webfetch",
+  "search",
+  "search_remote",
+  "apply_patch",
   "task",
   "todowrite",
-  "todoread",
+  "question",
+  "lsp",
 ]
 
 const AgentCreateCommand = cmd({

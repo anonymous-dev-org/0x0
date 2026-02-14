@@ -718,7 +718,13 @@ export namespace SessionPrompt {
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
     )) {
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      const json = z.toJSONSchema(item.parameters)
+      if (json.type !== "object") {
+        throw new Error(
+          `Invalid schema for tool "${item.id}": schema must be a JSON Schema object, got ${JSON.stringify(json.type ?? null)}.`,
+        )
+      }
+      const schema = ProviderTransform.schema(input.model, json)
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,

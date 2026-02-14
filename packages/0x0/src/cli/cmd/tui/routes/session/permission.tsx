@@ -182,6 +182,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   <Match when={props.request.permission === "read"}>
                     <TextBody icon="→" title={`Read ` + normalizePath(input().filePath as string)} />
                   </Match>
+                  <Match when={props.request.permission === "search"}>
+                    {(() => {
+                      const mode = input().mode as string | undefined
+                      if (mode === "files") {
+                        return <TextBody icon="✱" title={`Search files "` + (input().pattern ?? "") + `"`} />
+                      }
+                      return <TextBody icon="✱" title={`Search content "` + (input().pattern ?? "") + `"`} />
+                    })()}
+                  </Match>
                   <Match when={props.request.permission === "glob"}>
                     <TextBody icon="✱" title={`Glob "` + (input().pattern ?? "") + `"`} />
                   </Match>
@@ -204,6 +213,18 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                       title={`${Locale.titlecase((input().agent as string) ?? "Unknown")} Task`}
                       description={"◉ " + input().description}
                     />
+                  </Match>
+                  <Match when={props.request.permission === "search_remote"}>
+                    {(() => {
+                      const mode = input().mode as string | undefined
+                      if (mode === "fetch") {
+                        return <TextBody icon="%" title={`Fetch ` + (input().url ?? "")} />
+                      }
+                      if (mode === "web") {
+                        return <TextBody icon="◈" title={`Web search "` + (input().query ?? "") + `"`} />
+                      }
+                      return <TextBody icon="◇" title={`Code search "` + (input().query ?? "") + `"`} />
+                    })()}
                   </Match>
                   <Match when={props.request.permission === "webfetch"}>
                     <TextBody icon="%" title={`WebFetch ` + (input().url ?? "")} />
@@ -235,6 +256,9 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   </Match>
                   <Match when={props.request.permission === "doom_loop"}>
                     <TextBody icon="⟳" title="Continue after repeated failures" />
+                  </Match>
+                  <Match when={props.request.permission === "lsp"}>
+                    <TextBody icon="λ" title={`LSP ` + normalizePath(input().filePath as string)} />
                   </Match>
                   <Match when={true}>
                     <TextBody icon="⚙" title={`Call tool ` + props.request.permission} />

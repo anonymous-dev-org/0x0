@@ -195,7 +195,7 @@ export namespace ACP {
                     status: "pending",
                     title: permission.permission,
                     rawInput: permission.metadata,
-                    kind: toToolKind(permission.permission),
+                    kind: toToolKind(permission.permission, permission.metadata),
                     locations: toLocations(permission.permission, permission.metadata),
                   },
                   options: this.permissionOptions,
@@ -295,7 +295,7 @@ export namespace ACP {
                       sessionUpdate: "tool_call",
                       toolCallId: part.callID,
                       title: part.tool,
-                      kind: toToolKind(part.tool),
+                      kind: toToolKind(part.tool, part.state.input),
                       status: "pending",
                       locations: [],
                       rawInput: {},
@@ -314,7 +314,7 @@ export namespace ACP {
                       sessionUpdate: "tool_call_update",
                       toolCallId: part.callID,
                       status: "in_progress",
-                      kind: toToolKind(part.tool),
+                      kind: toToolKind(part.tool, part.state.input),
                       title: part.tool,
                       locations: toLocations(part.tool, part.state.input),
                       rawInput: part.state.input,
@@ -326,7 +326,7 @@ export namespace ACP {
                 return
 
               case "completed": {
-                const kind = toToolKind(part.tool)
+                const kind = toToolKind(part.tool, part.state.input)
                 const content: ToolCallContent[] = [
                   {
                     type: "content",
@@ -338,21 +338,7 @@ export namespace ACP {
                 ]
 
                 if (kind === "edit") {
-                  const input = part.state.input
-                  const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
-                  const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
-                  const newText =
-                    typeof input["newString"] === "string"
-                      ? input["newString"]
-                      : typeof input["content"] === "string"
-                        ? input["content"]
-                        : ""
-                  content.push({
-                    type: "diff",
-                    path: filePath,
-                    oldText,
-                    newText,
-                  })
+                  content.push(...editDiffContent(part.tool, part.state.input, part.state.metadata))
                 }
 
                 if (part.tool === "todowrite") {
@@ -412,7 +398,7 @@ export namespace ACP {
                       sessionUpdate: "tool_call_update",
                       toolCallId: part.callID,
                       status: "failed",
-                      kind: toToolKind(part.tool),
+                      kind: toToolKind(part.tool, part.state.input),
                       title: part.tool,
                       rawInput: part.state.input,
                       content: [
@@ -795,7 +781,7 @@ export namespace ACP {
                     sessionUpdate: "tool_call",
                     toolCallId: part.callID,
                     title: part.tool,
-                    kind: toToolKind(part.tool),
+                    kind: toToolKind(part.tool, part.state.input),
                     status: "pending",
                     locations: [],
                     rawInput: {},
@@ -813,7 +799,7 @@ export namespace ACP {
                     sessionUpdate: "tool_call_update",
                     toolCallId: part.callID,
                     status: "in_progress",
-                    kind: toToolKind(part.tool),
+                    kind: toToolKind(part.tool, part.state.input),
                     title: part.tool,
                     locations: toLocations(part.tool, part.state.input),
                     rawInput: part.state.input,
@@ -824,7 +810,7 @@ export namespace ACP {
                 })
               break
             case "completed":
-              const kind = toToolKind(part.tool)
+              const kind = toToolKind(part.tool, part.state.input)
               const content: ToolCallContent[] = [
                 {
                   type: "content",
@@ -836,21 +822,7 @@ export namespace ACP {
               ]
 
               if (kind === "edit") {
-                const input = part.state.input
-                const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
-                const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
-                const newText =
-                  typeof input["newString"] === "string"
-                    ? input["newString"]
-                    : typeof input["content"] === "string"
-                      ? input["content"]
-                      : ""
-                content.push({
-                  type: "diff",
-                  path: filePath,
-                  oldText,
-                  newText,
-                })
+                content.push(...editDiffContent(part.tool, part.state.input, part.state.metadata))
               }
 
               if (part.tool === "todowrite") {
@@ -909,7 +881,7 @@ export namespace ACP {
                     sessionUpdate: "tool_call_update",
                     toolCallId: part.callID,
                     status: "failed",
-                    kind: toToolKind(part.tool),
+                    kind: toToolKind(part.tool, part.state.input),
                     title: part.tool,
                     rawInput: part.state.input,
                     content: [
@@ -1479,27 +1451,40 @@ export namespace ACP {
     }
   }
 
-  function toToolKind(toolName: string): ToolKind {
+  function toToolKind(toolName: string, input?: Record<string, any>): ToolKind {
     const tool = toolName.toLocaleLowerCase()
     switch (tool) {
       case "bash":
         return "execute"
-      case "webfetch":
-        return "fetch"
 
-      case "edit":
-      case "patch":
-      case "write":
-        return "edit"
+      case "search_remote":
+        if (input?.["mode"] === "fetch") return "fetch"
+        return "search"
 
-      case "grep":
-      case "glob":
+      case "search":
+      case "lsp":
       case "context7_resolve_library_id":
       case "context7_get_library_docs":
         return "search"
 
-      case "list":
+      case "edit":
+      case "apply_patch":
+      case "multiedit":
+        return "edit"
+
       case "read":
+        return "read"
+
+      // Legacy tool names may still appear in older ACP session history.
+      case "webfetch":
+        return "fetch"
+      case "patch":
+      case "write":
+        return "edit"
+      case "grep":
+      case "glob":
+        return "search"
+      case "list":
         return "read"
 
       default:
@@ -1507,23 +1492,124 @@ export namespace ACP {
     }
   }
 
-  function toLocations(toolName: string, input: Record<string, any>): { path: string }[] {
+  function toLocations(toolName: string, input?: Record<string, any>): { path: string }[] {
     const tool = toolName.toLocaleLowerCase()
+    const data = input ?? {}
     switch (tool) {
       case "read":
-      case "edit":
+      case "lsp":
+        return typeof data["filePath"] === "string" ? [{ path: data["filePath"] }] : []
+
+      case "search":
+        return typeof data["path"] === "string" ? [{ path: data["path"] }] : []
+
+      case "apply_patch":
+        return applyPatchPaths(data).map((path) => ({ path }))
+
+      case "edit": {
+        const direct = typeof data["filePath"] === "string" ? [data["filePath"]] : []
+        const patch = applyPatchPaths(data)
+        return Array.from(new Set([...direct, ...patch])).map((path) => ({ path }))
+      }
+
+      // Legacy tool names may still appear in older ACP session history.
       case "write":
-        return input["filePath"] ? [{ path: input["filePath"] }] : []
+        return typeof data["filePath"] === "string" ? [{ path: data["filePath"] }] : []
       case "glob":
       case "grep":
-        return input["path"] ? [{ path: input["path"] }] : []
-      case "bash":
-        return []
       case "list":
-        return input["path"] ? [{ path: input["path"] }] : []
+        return typeof data["path"] === "string" ? [{ path: data["path"] }] : []
+
+      case "bash":
+      case "search_remote":
+        return []
+
       default:
         return []
     }
+  }
+
+  function editDiffContent(
+    toolName: string,
+    input: Record<string, any>,
+    metadata: Record<string, any> | undefined,
+  ): ToolCallContent[] {
+    if (toolName.toLocaleLowerCase() === "apply_patch") {
+      const files = Array.isArray(metadata?.["files"]) ? (metadata["files"] as Record<string, any>[]) : []
+      const diff: ToolCallContent[] = []
+      for (const file of files) {
+        const filePath =
+          typeof file["relativePath"] === "string"
+            ? file["relativePath"]
+            : typeof file["filePath"] === "string"
+              ? file["filePath"]
+              : ""
+        if (!filePath) continue
+        diff.push({
+          type: "diff",
+          path: filePath,
+          oldText: typeof file["before"] === "string" ? file["before"] : "",
+          newText: typeof file["after"] === "string" ? file["after"] : "",
+        })
+      }
+      return diff
+    }
+
+    const filePath = typeof input["filePath"] === "string" ? input["filePath"] : ""
+    if (!filePath) return []
+
+    const oldText = typeof input["oldString"] === "string" ? input["oldString"] : ""
+    const newText =
+      typeof input["newString"] === "string"
+        ? input["newString"]
+        : typeof input["content"] === "string"
+          ? input["content"]
+          : ""
+
+    return [
+      {
+        type: "diff",
+        path: filePath,
+        oldText,
+        newText,
+      },
+    ]
+  }
+
+  function applyPatchPaths(input: Record<string, any>): string[] {
+    const result = new Set<string>()
+
+    if (typeof input["filepath"] === "string") {
+      for (const item of input["filepath"].split(",")) {
+        const path = item.trim()
+        if (path) result.add(path)
+      }
+    }
+
+    if (Array.isArray(input["files"])) {
+      for (const file of input["files"] as Record<string, any>[]) {
+        const filePath =
+          typeof file["relativePath"] === "string"
+            ? file["relativePath"]
+            : typeof file["filePath"] === "string"
+              ? file["filePath"]
+              : ""
+        if (filePath) result.add(filePath)
+      }
+    }
+
+    if (typeof input["patchText"] === "string") {
+      const prefixes = ["*** Add File: ", "*** Update File: ", "*** Delete File: ", "*** Move to: "]
+      for (const line of input["patchText"].split(/\r?\n/)) {
+        for (const prefix of prefixes) {
+          if (!line.startsWith(prefix)) continue
+          const path = line.slice(prefix.length).trim()
+          if (path) result.add(path)
+        }
+      }
+    }
+
+    return [...result]
   }
 
   async function defaultModel(config: ACPConfig, cwd?: string) {

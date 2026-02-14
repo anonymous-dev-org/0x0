@@ -11,32 +11,117 @@ const MAX_TIMEOUT = 120 * 1000
 const EXA_URL = "https://mcp.exa.ai/mcp"
 const EXA_RESULTS = 8
 
-const Schema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("fetch"),
-    url: z.string().describe("URL to fetch (must start with http:// or https://)"),
-    format: z.enum(["text", "markdown", "html"]).default("markdown").describe("Response format (default: markdown)"),
-    timeout: z.number().optional().describe("Timeout in seconds (max: 120)"),
-  }),
-  z.object({
-    mode: z.literal("web"),
-    query: z.string().describe("Web search query"),
-    numResults: z.number().optional().describe("Number of search results (default: 8)"),
-    livecrawl: z.enum(["fallback", "preferred"]).optional().describe("Live crawl mode"),
-    type: z.enum(["auto", "fast", "deep"]).optional().describe("Search strategy"),
-    contextMaxCharacters: z.number().optional().describe("Maximum context length in characters"),
-  }),
-  z.object({
-    mode: z.literal("code"),
-    query: z.string().describe("Code search query for APIs/libraries/docs"),
+const Schema = z
+  .object({
+    mode: z.enum(["fetch", "web", "code"]),
+    url: z.string().optional().describe("URL to fetch (required for mode=fetch, must start with http:// or https://)"),
+    format: z.enum(["text", "markdown", "html"]).optional().describe("Response format for mode=fetch (default: markdown)"),
+    timeout: z.number().optional().describe("Timeout in seconds for mode=fetch (max: 120)"),
+    query: z.string().optional().describe("Search query (required for mode=web and mode=code)"),
+    numResults: z.number().optional().describe("Number of search results for mode=web (default: 8)"),
+    livecrawl: z.enum(["fallback", "preferred"]).optional().describe("Live crawl mode for mode=web"),
+    type: z.enum(["auto", "fast", "deep"]).optional().describe("Search strategy for mode=web"),
+    contextMaxCharacters: z.number().optional().describe("Maximum context length in characters for mode=web"),
     tokensNum: z
       .number()
       .min(1000)
       .max(50000)
-      .default(5000)
-      .describe("Context token budget (1000-50000, default: 5000)"),
-  }),
-])
+      .optional()
+      .describe("Context token budget for mode=code (1000-50000, default: 5000)"),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.mode === "fetch") {
+      if (!value.url) {
+        ctx.addIssue({ code: "custom", path: ["url"], message: "url is required when mode is \"fetch\"" })
+      }
+      if (value.query !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["query"], message: "query is not valid when mode is \"fetch\"" })
+      }
+      if (value.numResults !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["numResults"],
+          message: "numResults is not valid when mode is \"fetch\"",
+        })
+      }
+      if (value.livecrawl !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["livecrawl"],
+          message: "livecrawl is not valid when mode is \"fetch\"",
+        })
+      }
+      if (value.type !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["type"], message: "type is not valid when mode is \"fetch\"" })
+      }
+      if (value.contextMaxCharacters !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["contextMaxCharacters"],
+          message: "contextMaxCharacters is not valid when mode is \"fetch\"",
+        })
+      }
+      if (value.tokensNum !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tokensNum"],
+          message: "tokensNum is not valid when mode is \"fetch\"",
+        })
+      }
+      return
+    }
+
+    if (!value.query) {
+      ctx.addIssue({ code: "custom", path: ["query"], message: `query is required when mode is \"${value.mode}\"` })
+    }
+
+    if (value.mode === "web") {
+      if (value.url !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["url"], message: "url is not valid when mode is \"web\"" })
+      }
+      if (value.format !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["format"], message: "format is not valid when mode is \"web\"" })
+      }
+      if (value.timeout !== undefined) {
+        ctx.addIssue({ code: "custom", path: ["timeout"], message: "timeout is not valid when mode is \"web\"" })
+      }
+      if (value.tokensNum !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tokensNum"],
+          message: "tokensNum is not valid when mode is \"web\"",
+        })
+      }
+      return
+    }
+
+    if (value.url !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["url"], message: "url is not valid when mode is \"code\"" })
+    }
+    if (value.format !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["format"], message: "format is not valid when mode is \"code\"" })
+    }
+    if (value.timeout !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["timeout"], message: "timeout is not valid when mode is \"code\"" })
+    }
+    if (value.numResults !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["numResults"], message: "numResults is not valid when mode is \"code\"" })
+    }
+    if (value.livecrawl !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["livecrawl"], message: "livecrawl is not valid when mode is \"code\"" })
+    }
+    if (value.type !== undefined) {
+      ctx.addIssue({ code: "custom", path: ["type"], message: "type is not valid when mode is \"code\"" })
+    }
+    if (value.contextMaxCharacters !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["contextMaxCharacters"],
+        message: "contextMaxCharacters is not valid when mode is \"code\"",
+      })
+    }
+  })
 
 type Metadata = { mode: "fetch" | "web" | "code" }
 
@@ -48,18 +133,20 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
     parameters: Schema,
     async execute(params, ctx) {
       if (params.mode === "fetch") {
-        if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
+        const url = params.url!
+        const format = params.format ?? "markdown"
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
           throw new Error("URL must start with http:// or https://")
         }
 
         await ctx.ask({
-          permission: "webfetch",
-          patterns: [params.url],
+          permission: "search_remote",
+          patterns: [url],
           always: ["*"],
           metadata: {
             mode: params.mode,
-            url: params.url,
-            format: params.format,
+            url,
+            format,
             timeout: params.timeout,
           },
         })
@@ -70,14 +157,14 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         const headers = {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-          Accept: accept(params.format),
+          Accept: accept(format),
           "Accept-Language": "en-US,en;q=0.9",
         }
 
-        const initial = await fetch(params.url, { signal, headers })
+        const initial = await fetch(url, { signal, headers })
         const response =
           initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge"
-            ? await fetch(params.url, { signal, headers: { ...headers, "User-Agent": "zeroxzero" } })
+            ? await fetch(url, { signal, headers: { ...headers, "User-Agent": "zeroxzero" } })
             : initial
 
         clearTimeout()
@@ -95,15 +182,15 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
 
         const content = new TextDecoder().decode(bytes)
         const contentType = response.headers.get("content-type") || ""
-        const title = `${params.url} (${contentType})`
-        if (params.format === "markdown" && contentType.includes("text/html")) {
+        const title = `${url} (${contentType})`
+        if (format === "markdown" && contentType.includes("text/html")) {
           return {
             output: markdown(content),
             title,
             metadata: { mode: params.mode },
           }
         }
-        if (params.format === "text" && contentType.includes("text/html")) {
+        if (format === "text" && contentType.includes("text/html")) {
           return {
             output: await text(content),
             title,
@@ -124,13 +211,14 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
       }
 
       if (params.mode === "web") {
+        const query = params.query!
         await ctx.ask({
-          permission: "websearch",
-          patterns: [params.query],
+          permission: "search_remote",
+          patterns: [query],
           always: ["*"],
           metadata: {
             mode: params.mode,
-            query: params.query,
+            query,
             numResults: params.numResults,
             livecrawl: params.livecrawl,
             type: params.type,
@@ -153,7 +241,7 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
               params: {
                 name: "web_search_exa",
                 arguments: {
-                  query: params.query,
+                  query,
                   type: params.type || "auto",
                   numResults: params.numResults || EXA_RESULTS,
                   livecrawl: params.livecrawl || "fallback",
@@ -175,13 +263,13 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
           if (parsed) {
             return {
               output: parsed,
-              title: `Web search: ${params.query}`,
+              title: `Web search: ${query}`,
               metadata: { mode: params.mode },
             }
           }
           return {
             output: "No search results found. Please try a different query.",
-            title: `Web search: ${params.query}`,
+            title: `Web search: ${query}`,
             metadata: { mode: params.mode },
           }
         } catch (error) {
@@ -193,14 +281,16 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         }
       }
 
+      const query = params.query!
+      const tokensNum = params.tokensNum ?? 5000
       await ctx.ask({
-        permission: "codesearch",
-        patterns: [params.query],
+        permission: "search_remote",
+        patterns: [query],
         always: ["*"],
         metadata: {
           mode: params.mode,
-          query: params.query,
-          tokensNum: params.tokensNum,
+          query,
+          tokensNum,
         },
       })
 
@@ -219,8 +309,8 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
             params: {
               name: "get_code_context_exa",
               arguments: {
-                query: params.query,
-                tokensNum: params.tokensNum,
+                query,
+                tokensNum,
               },
             },
           }),
@@ -238,14 +328,14 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         if (parsed) {
           return {
             output: parsed,
-            title: `Code search: ${params.query}`,
+            title: `Code search: ${query}`,
             metadata: { mode: params.mode },
           }
         }
         return {
           output:
             "No code snippets or documentation found. Please try a different query, be more specific about the library or programming concept, or check the spelling of framework names.",
-          title: `Code search: ${params.query}`,
+          title: `Code search: ${query}`,
           metadata: { mode: params.mode },
         }
       } catch (error) {
@@ -262,15 +352,21 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
 function parseSSE(input: string) {
   for (const line of input.split("\n")) {
     if (!line.startsWith("data: ")) continue
-    const json = JSON.parse(line.slice(6)) as {
-      result?: {
-        content?: {
-          text?: string
-        }[]
+    const payload = line.slice(6).trim()
+    if (!payload || payload === "[DONE]") continue
+    try {
+      const json = JSON.parse(payload) as {
+        result?: {
+          content?: {
+            text?: string
+          }[]
+        }
       }
+      const text = json.result?.content?.[0]?.text
+      if (text) return text
+    } catch {
+      continue
     }
-    const text = json.result?.content?.[0]?.text
-    if (text) return text
   }
 }
 

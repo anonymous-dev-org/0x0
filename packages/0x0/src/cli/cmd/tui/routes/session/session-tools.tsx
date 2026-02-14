@@ -7,6 +7,8 @@ import type { Tool } from "@/tool/tool"
 import type { ReadTool } from "@/tool/read"
 import type { WriteTool } from "@/tool/write"
 import { BashTool } from "@/tool/bash"
+import type { SearchTool } from "@/tool/search"
+import type { SearchRemoteTool } from "@/tool/search_remote"
 import type { GlobTool } from "@/tool/glob"
 import { TodoWriteTool } from "@/tool/todo"
 import type { GrepTool } from "@/tool/grep"
@@ -17,6 +19,7 @@ import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
 import type { QuestionTool } from "@/tool/question"
 import type { SkillTool } from "@/tool/skill"
+import type { LspTool } from "@/tool/lsp"
 import type { AssistantMessage, ToolPart } from "@0x0-ai/sdk/v2"
 import { useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
@@ -55,6 +58,9 @@ export function SessionTool(props: ToolProps<Tool.Info>) {
       <Match when={props.tool === "bash"}>
         <Bash {...props} />
       </Match>
+      <Match when={props.tool === "search"}>
+        <Search {...props} />
+      </Match>
       <Match when={props.tool === "glob"}>
         <Glob {...props} />
       </Match>
@@ -69,6 +75,9 @@ export function SessionTool(props: ToolProps<Tool.Info>) {
       </Match>
       <Match when={props.tool === "webfetch"}>
         <WebFetch {...props} />
+      </Match>
+      <Match when={props.tool === "search_remote"}>
+        <SearchRemote {...props} />
       </Match>
       <Match when={props.tool === "codesearch"}>
         <CodeSearch {...props} />
@@ -93,6 +102,9 @@ export function SessionTool(props: ToolProps<Tool.Info>) {
       </Match>
       <Match when={props.tool === "question"}>
         <Question {...props} />
+      </Match>
+      <Match when={props.tool === "lsp"}>
+        <Lsp {...props} />
       </Match>
       <Match when={props.tool === "skill"}>
         <Skill {...props} />
@@ -365,6 +377,36 @@ function Glob(props: ToolProps<typeof GlobTool>) {
   )
 }
 
+function Search(props: ToolProps<typeof SearchTool>) {
+  const mode = props.input.mode
+  if (mode === "files") {
+    return (
+      <InlineTool icon="✱" pending="Finding files..." complete={props.input.pattern} part={props.part} ctx={props.ctx}>
+        Search files "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
+        <Show when={props.metadata.count !== undefined}>
+          ({props.metadata.count} {props.metadata.count === 1 ? "match" : "matches"})
+        </Show>
+      </InlineTool>
+    )
+  }
+
+  return (
+    <InlineTool
+      icon="✱"
+      pending="Searching content..."
+      complete={props.input.pattern}
+      part={props.part}
+      ctx={props.ctx}
+    >
+      Search content "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
+      <Show when={props.input.include}>include={props.input.include} </Show>
+      <Show when={props.metadata.matches !== undefined}>
+        ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
+      </Show>
+    </InlineTool>
+  )
+}
+
 function Read(props: ToolProps<typeof ReadTool>) {
   const { theme } = useTheme()
   const loaded = createMemo(() => {
@@ -434,6 +476,20 @@ function WebFetch(props: ToolProps<typeof WebFetchTool>) {
   return (
     <InlineTool icon="%" pending="Fetching from the web..." complete={url} part={props.part} ctx={props.ctx}>
       WebFetch {url}
+    </InlineTool>
+  )
+}
+
+function SearchRemote(props: ToolProps<typeof SearchRemoteTool>) {
+  const mode = props.input.mode
+  const complete = mode === "fetch" ? props.input.url : props.input.query
+
+  return (
+    <InlineTool icon="◈" pending="Searching remote..." complete={complete} part={props.part} ctx={props.ctx}>
+      <Show when={mode === "fetch"}>Fetch {props.input.url}</Show>
+      <Show when={mode === "web"}>Web search "{props.input.query}"</Show>
+      <Show when={mode === "code"}>Code search "{props.input.query}"</Show>
+      <Show when={!mode}>Search remote</Show>
     </InlineTool>
   )
 }
@@ -718,6 +774,20 @@ function Question(props: ToolProps<typeof QuestionTool>) {
         </InlineTool>
       </Match>
     </Switch>
+  )
+}
+
+function Lsp(props: ToolProps<typeof LspTool>) {
+  return (
+    <InlineTool
+      icon="λ"
+      pending="Querying language server..."
+      complete={props.input.operation}
+      part={props.part}
+      ctx={props.ctx}
+    >
+      {props.input.operation} {normalizePath(props.input.filePath)}:{props.input.line}:{props.input.character}
+    </InlineTool>
   )
 }
 

@@ -1079,7 +1079,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
             test: {
               tools: {
                 bash: false,
-                webfetch: false,
+                search_remote: false,
               },
             },
           },
@@ -1093,7 +1093,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
       const config = await Config.get()
       expect(config.agent?.["test"]?.permission).toEqual({
         bash: "deny",
-        webfetch: "deny",
+        search_remote: "deny",
       })
     },
   })
@@ -1237,7 +1237,7 @@ test("migrates legacy edit tool to edit permission", async () => {
   })
 })
 
-test("migrates legacy patch tool to edit permission", async () => {
+test("migrates apply_patch tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -1247,7 +1247,7 @@ test("migrates legacy patch tool to edit permission", async () => {
           agent: {
             test: {
               tools: {
-                patch: true,
+                apply_patch: true,
               },
             },
           },
@@ -1308,7 +1308,7 @@ test("migrates mixed legacy tools config", async () => {
                 bash: true,
                 write: true,
                 read: false,
-                webfetch: true,
+                search_remote: true,
               },
             },
           },
@@ -1324,8 +1324,58 @@ test("migrates mixed legacy tools config", async () => {
         bash: "allow",
         edit: "allow",
         read: "deny",
-        webfetch: "allow",
+        search_remote: "allow",
       })
+    },
+  })
+})
+
+test("fails on removed legacy tools keys in tools config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "zeroxzero.json"),
+        JSON.stringify({
+          $schema: "https://zeroxzero.ai/config.json",
+          agent: {
+            test: {
+              tools: {
+                webfetch: true,
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("ConfigInvalidError")
+    },
+  })
+})
+
+test("fails on removed legacy permission keys", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "zeroxzero.json"),
+        JSON.stringify({
+          $schema: "https://zeroxzero.ai/config.json",
+          permission: {
+            glob: "allow",
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow("ConfigInvalidError")
     },
   })
 })
@@ -1340,7 +1390,7 @@ test("merges legacy tools with existing permission config", async () => {
           agent: {
             test: {
               permission: {
-                glob: "allow",
+                search: "allow",
               },
               tools: {
                 bash: true,
@@ -1356,7 +1406,7 @@ test("merges legacy tools with existing permission config", async () => {
     fn: async () => {
       const config = await Config.get()
       expect(config.agent?.["test"]?.permission).toEqual({
-        glob: "allow",
+        search: "allow",
         bash: "allow",
       })
     },

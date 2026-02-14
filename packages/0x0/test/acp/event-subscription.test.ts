@@ -345,6 +345,89 @@ describe("acp.agent event subscription", () => {
     })
   })
 
+  test("permission.asked maps search_remote fetch mode to fetch kind", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const permissionCalls: RequestPermissionParams[] = []
+        const { agent, controller, connection, stop } = createFakeAgent()
+
+        connection.requestPermission = async (params: RequestPermissionParams): Promise<RequestPermissionResult> => {
+          permissionCalls.push(params)
+          return { outcome: { outcome: "selected", optionId: "once" } } as RequestPermissionResult
+        }
+
+        const cwd = "/tmp/zeroxzero-acp-test"
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+
+        controller.push({
+          directory: cwd,
+          payload: {
+            type: "permission.asked",
+            properties: {
+              id: "perm_fetch",
+              sessionID: sessionId,
+              permission: "search_remote",
+              patterns: ["https://example.com"],
+              metadata: { mode: "fetch", url: "https://example.com" },
+              always: [],
+            },
+          },
+        } as any)
+
+        await new Promise((r) => setTimeout(r, 20))
+
+        expect(permissionCalls.length).toBe(1)
+        expect(permissionCalls[0]?.toolCall.kind).toBe("fetch")
+
+        stop()
+      },
+    })
+  })
+
+  test("permission.asked maps edit metadata from apply_patch to ACP locations", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const permissionCalls: RequestPermissionParams[] = []
+        const { agent, controller, connection, stop } = createFakeAgent()
+
+        connection.requestPermission = async (params: RequestPermissionParams): Promise<RequestPermissionResult> => {
+          permissionCalls.push(params)
+          return { outcome: { outcome: "selected", optionId: "once" } } as RequestPermissionResult
+        }
+
+        const cwd = "/tmp/zeroxzero-acp-test"
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+
+        controller.push({
+          directory: cwd,
+          payload: {
+            type: "permission.asked",
+            properties: {
+              id: "perm_edit",
+              sessionID: sessionId,
+              permission: "edit",
+              patterns: ["src/a.ts", "src/b.ts"],
+              metadata: { filepath: "src/a.ts, src/b.ts" },
+              always: [],
+            },
+          },
+        } as any)
+
+        await new Promise((r) => setTimeout(r, 20))
+
+        expect(permissionCalls.length).toBe(1)
+        expect(permissionCalls[0]?.toolCall.kind).toBe("edit")
+        expect(permissionCalls[0]?.toolCall.locations).toEqual([{ path: "src/a.ts" }, { path: "src/b.ts" }])
+
+        stop()
+      },
+    })
+  })
+
   test("permission prompt on session A does not block message updates for session B", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
