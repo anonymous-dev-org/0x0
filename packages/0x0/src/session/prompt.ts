@@ -387,6 +387,7 @@ export namespace SessionPrompt {
           state: {
             status: "running",
             input: {
+              mode: "subtask",
               prompt: task.prompt,
               description: task.description,
               agent: task.agent,
@@ -398,6 +399,7 @@ export namespace SessionPrompt {
           },
         })) as MessageV2.ToolPart
         const taskArgs = {
+          mode: "subtask" as const,
           prompt: task.prompt,
           description: task.description,
           agent: task.agent,

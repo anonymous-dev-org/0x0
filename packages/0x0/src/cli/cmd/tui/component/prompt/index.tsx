@@ -421,6 +421,13 @@ export function Prompt(props: PromptProps) {
       setExtmarkToPartIndex: (map) => setStore("extmarkToPartIndex", map),
       onPromptModelWarning: promptModelWarning,
       onSubmit: props.onSubmit,
+      onSubmitError: (message) => {
+        toast.show({
+          variant: "error",
+          message: `Failed to submit prompt. ${message}`,
+          duration: 5000,
+        })
+      },
       exit,
     })
   }

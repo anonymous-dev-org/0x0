@@ -2805,7 +2805,20 @@ export class Tui extends HeyApiClient {
   public executeCommand<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      command?: string
+      command?:
+        | "session_new"
+        | "session_share"
+        | "session_interrupt"
+        | "session_compact"
+        | "messages_page_up"
+        | "messages_page_down"
+        | "messages_line_up"
+        | "messages_line_down"
+        | "messages_half_page_up"
+        | "messages_half_page_down"
+        | "messages_first"
+        | "messages_last"
+        | "agent_cycle"
     },
     options?: Options<never, ThrowOnError>,
   ) {

@@ -45,6 +45,7 @@ export namespace SessionProcessor {
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
         needsCompaction = false
+        let handoffRequested = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         while (true) {
           try {
@@ -172,6 +173,14 @@ export namespace SessionProcessor {
                 case "tool-result": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    const handoffMetadata =
+                      value.output.metadata && typeof value.output.metadata === "object"
+                        ? (value.output.metadata as { handoff?: { switched?: boolean } })
+                        : undefined
+                    if (match.tool === "task" && handoffMetadata?.handoff?.switched === true) {
+                      handoffRequested = true
+                    }
+
                     await Session.updatePart({
                       ...match,
                       state: {
@@ -334,7 +343,7 @@ export namespace SessionProcessor {
                   })
                   continue
               }
-              if (needsCompaction) break
+              if (needsCompaction || handoffRequested) break
             }
           } catch (e: any) {
             log.error("process", {
@@ -392,6 +401,9 @@ export namespace SessionProcessor {
                 },
               })
             }
+          }
+          if (handoffRequested && !input.assistantMessage.finish) {
+            input.assistantMessage.finish = "tool-calls"
           }
           input.assistantMessage.time.completed = Date.now()
           await Session.updateMessage(input.assistantMessage)

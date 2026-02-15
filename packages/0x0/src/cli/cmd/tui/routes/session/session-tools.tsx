@@ -518,6 +518,19 @@ function Task(props: ToolProps<typeof TaskTool>) {
   const { theme } = useTheme()
   const { navigate } = useRoute()
   const sync = useSync()
+  const mode = () => props.input.mode
+  const handoff = () =>
+    (
+      props.metadata as {
+        handoff?: {
+          switched?: boolean
+          sourceAgent?: string
+          targetAgent?: string
+          reason?: string
+        }
+      }
+    ).handoff
+  const targetAgent = () => handoff()?.targetAgent ?? props.input.agent
 
   const tools = createMemo(() => {
     const sessionID = props.metadata.sessionId
@@ -537,7 +550,11 @@ function Task(props: ToolProps<typeof TaskTool>) {
     <Switch>
       <Match when={props.input.description || props.input.agent}>
         <BlockTool
-          title={"# " + Locale.titlecase(props.input.agent ?? "unknown") + " Task"}
+          title={
+            mode() === "handoff"
+              ? "# Handoff to " + Locale.titlecase(targetAgent() ?? "unknown")
+              : "# " + Locale.titlecase(props.input.agent ?? "unknown") + " Task"
+          }
           onClick={
             props.metadata.sessionId
               ? () => navigate({ type: "session", sessionID: props.metadata.sessionId! })
@@ -547,10 +564,22 @@ function Task(props: ToolProps<typeof TaskTool>) {
           spinner={isRunning()}
         >
           <box>
-            <text style={{ fg: theme.textMuted }}>
-              {props.input.description} ({tools().length} toolcalls)
-            </text>
-            <Show when={current()}>
+            <Show
+              when={mode() === "handoff"}
+              fallback={
+                <text style={{ fg: theme.textMuted }}>
+                  {props.input.description} ({tools().length} toolcalls)
+                </text>
+              }
+            >
+              <text style={{ fg: theme.textMuted }}>
+                ↪ Handed off to {Locale.titlecase(targetAgent() ?? "unknown")}
+              </text>
+              <Show when={handoff()?.reason ?? props.input.description}>
+                <text style={{ fg: theme.textMuted }}>◉ {handoff()?.reason ?? props.input.description}</text>
+              </Show>
+            </Show>
+            <Show when={mode() !== "handoff" && current()}>
               {(item) => {
                 const state = item().state
                 const title =
@@ -569,7 +598,16 @@ function Task(props: ToolProps<typeof TaskTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="#" pending="Delegating..." complete={props.input.agent} part={props.part} ctx={props.ctx}>
-          {props.input.agent} Task {props.input.description}
+          <Show
+            when={mode() === "handoff"}
+            fallback={
+              <>
+                {props.input.agent} Task {props.input.description}
+              </>
+            }
+          >
+            Handoff to {props.input.agent} {props.input.description}
+          </Show>
         </InlineTool>
       </Match>
     </Switch>

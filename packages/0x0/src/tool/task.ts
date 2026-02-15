@@ -6,12 +6,16 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { SessionCompaction } from "../session/compaction"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
 
-const parameters = z.object({
+const subtaskParameters = z.object({
+  mode: z
+    .literal("subtask")
+    .describe("Use subtask mode when you need to delegate work and then return to the current agent"),
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
   agent: z.string().describe("The agent to use for this task"),
@@ -23,6 +27,16 @@ const parameters = z.object({
     .optional(),
   command: z.string().describe("The command that triggered this task").optional(),
 })
+
+const handoffParameters = z.object({
+  mode: z
+    .literal("handoff")
+    .describe("Use handoff mode when you need to permanently transfer control to another agent"),
+  description: z.string().describe("A short description of what the target agent should do next"),
+  agent: z.string().describe("The target agent to hand off to"),
+})
+
+const parameters = z.discriminatedUnion("mode", [subtaskParameters, handoffParameters])
 
 export const TaskTool = Tool.define("task", async (ctx) => {
   const agents = await Agent.list().then((x) => x.filter((a) => !a.hidden))
@@ -45,6 +59,83 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     async execute(params: z.infer<typeof parameters>, ctx) {
       const config = await Config.get()
 
+      const agent = await Agent.get(params.agent)
+      if (!agent) throw new Error(`Unknown agent: ${params.agent} is not a valid agent`)
+
+      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
+
+      const model = agent.model ?? {
+        modelID: msg.info.modelID,
+        providerID: msg.info.providerID,
+      }
+
+      if (params.mode === "handoff") {
+        if (!ctx.extra?.bypassAgentCheck && ctx.agent !== params.agent) {
+          await ctx.ask({
+            permission: "task_handoff",
+            patterns: [params.agent],
+            always: [],
+            metadata: {
+              sourceAgent: ctx.agent,
+              targetAgent: params.agent,
+              reason: params.description,
+            },
+          })
+        }
+
+        const lastUser = [...ctx.messages].reverse().find((item) => item.info.role === "user")?.info
+        if (!lastUser || lastUser.role !== "user") {
+          throw new Error("Unable to handoff: missing user message context")
+        }
+
+        const compacted = await SessionCompaction.process({
+          parentID: lastUser.id,
+          messages: ctx.messages,
+          sessionID: ctx.sessionID,
+          abort: ctx.abort,
+          auto: false,
+        })
+        if (compacted === "stop") {
+          throw new Error("Unable to handoff: compaction failed")
+        }
+
+        const handoffMessage = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: ctx.sessionID,
+          role: "user",
+          time: {
+            created: Date.now(),
+          },
+          agent: agent.name,
+          model,
+        })
+
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: handoffMessage.id,
+          sessionID: ctx.sessionID,
+          type: "text",
+          synthetic: true,
+          text: [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`].join("\n"),
+        } satisfies MessageV2.TextPart)
+
+        return {
+          title: `Handoff to ${agent.name}`,
+          metadata: {
+            sessionId: ctx.sessionID,
+            model,
+            handoff: {
+              switched: true,
+              sourceAgent: ctx.agent,
+              targetAgent: agent.name,
+              reason: params.description,
+            },
+          },
+          output: ["<handoff_result>", `Handed off to @${agent.name}`, "</handoff_result>"].join("\n"),
+        }
+      }
+
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {
         await ctx.ask({
@@ -57,9 +148,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           },
         })
       }
-
-      const agent = await Agent.get(params.agent)
-      if (!agent) throw new Error(`Unknown agent: ${params.agent} is not a valid agent`)
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
 
@@ -100,13 +188,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           ],
         })
       })
-      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
-      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
-
-      const model = agent.model ?? {
-        modelID: msg.info.modelID,
-        providerID: msg.info.providerID,
-      }
 
       ctx.metadata({
         title: params.description,
@@ -157,6 +238,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         metadata: {
           sessionId: session.id,
           model,
+          handoff: {
+            switched: false,
+            sourceAgent: ctx.agent,
+            targetAgent: agent.name,
+            reason: params.description,
+          },
         },
         output,
       }

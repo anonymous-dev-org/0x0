@@ -162,14 +162,15 @@ function lsp(info: ToolProps<typeof LspTool>) {
 }
 
 function task(info: ToolProps<typeof TaskTool>) {
+  const mode = info.input.mode
   const agent = Locale.titlecase(info.input.agent)
   const desc = info.input.description
   const started = info.part.state.status === "running"
-  const name = desc ?? `${agent} Task`
+  const name = mode === "handoff" ? `Handoff to ${agent}` : (desc ?? `${agent} Task`)
   inline({
     icon: started ? "•" : "✓",
     title: name,
-    description: desc ? `${agent} Agent` : undefined,
+    description: mode === "handoff" ? desc : desc ? `${agent} Agent` : undefined,
   })
 }
 

@@ -171,6 +171,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       </Match>
       <Match when={store.stage === "permission"}>
         {(() => {
+          const options: Record<string, string> =
+            props.request.permission === "task_handoff"
+              ? { once: "Allow once", reject: "Deny" }
+              : { once: "Allow once", always: "Allow always", reject: "Reject" }
+
           const body = (
             <Prompt
               title="Permission required"
@@ -213,6 +218,24 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                       title={`${Locale.titlecase((input().agent as string) ?? "Unknown")} Task`}
                       description={"◉ " + input().description}
                     />
+                  </Match>
+                  <Match when={props.request.permission === "task_handoff"}>
+                    {(() => {
+                      const target =
+                        (props.request.metadata?.targetAgent as string | undefined) ??
+                        (input().agent as string | undefined) ??
+                        "Unknown"
+                      const reason =
+                        (props.request.metadata?.reason as string | undefined) ??
+                        (input().description as string | undefined)
+                      return (
+                        <TextBody
+                          icon="↪"
+                          title={`Allow handoff to ${target}`}
+                          description={reason ? "◉ " + reason : undefined}
+                        />
+                      )
+                    })()}
                   </Match>
                   <Match when={props.request.permission === "search_remote"}>
                     {(() => {
@@ -265,7 +288,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   </Match>
                 </Switch>
               }
-              options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+              options={options}
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {

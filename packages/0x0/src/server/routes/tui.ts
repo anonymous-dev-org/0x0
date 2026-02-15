@@ -13,6 +13,38 @@ const TuiRequest = z.object({
   body: z.any(),
 })
 
+const TuiExecuteCommandAlias = z.enum([
+  "session_new",
+  "session_share",
+  "session_interrupt",
+  "session_compact",
+  "messages_page_up",
+  "messages_page_down",
+  "messages_line_up",
+  "messages_line_down",
+  "messages_half_page_up",
+  "messages_half_page_down",
+  "messages_first",
+  "messages_last",
+  "agent_cycle",
+])
+
+const tuiExecuteCommandMap: Record<z.infer<typeof TuiExecuteCommandAlias>, string> = {
+  session_new: "session.new",
+  session_share: "session.share",
+  session_interrupt: "session.interrupt",
+  session_compact: "session.compact",
+  messages_page_up: "session.page.up",
+  messages_page_down: "session.page.down",
+  messages_line_up: "session.line.up",
+  messages_line_down: "session.line.down",
+  messages_half_page_up: "session.half.page.up",
+  messages_half_page_down: "session.half.page.down",
+  messages_first: "session.first",
+  messages_last: "session.last",
+  agent_cycle: "agent.cycle",
+}
+
 type TuiRequest = z.infer<typeof TuiRequest>
 
 const request = new AsyncQueue<TuiRequest>()
@@ -168,7 +200,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
+          command: "theme.switch",
         })
         return c.json(true)
       },
@@ -263,26 +295,20 @@ export const TuiRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("json", z.object({ command: z.string() })),
+      validator("json", z.object({ command: TuiExecuteCommandAlias })),
       async (c) => {
         const command = c.req.valid("json").command
+        const mapped = tuiExecuteCommandMap[command]
+        if (!mapped) {
+          return c.json(
+            {
+              message: `Unknown command alias: ${command}`,
+            },
+            400,
+          )
+        }
         await Bus.publish(TuiEvent.CommandExecute, {
-          // @ts-expect-error
-          command: {
-            session_new: "session.new",
-            session_share: "session.share",
-            session_interrupt: "session.interrupt",
-            session_compact: "session.compact",
-            messages_page_up: "session.page.up",
-            messages_page_down: "session.page.down",
-            messages_line_up: "session.line.up",
-            messages_line_down: "session.line.down",
-            messages_half_page_up: "session.half.page.up",
-            messages_half_page_down: "session.half.page.down",
-            messages_first: "session.first",
-            messages_last: "session.last",
-            agent_cycle: "agent.cycle",
-          }[command],
+          command: mapped,
         })
         return c.json(true)
       },

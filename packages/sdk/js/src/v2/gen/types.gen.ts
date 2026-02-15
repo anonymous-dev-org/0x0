@@ -588,6 +588,42 @@ export type EventQuestionRejected = {
   }
 }
 
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
+  }
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -627,42 +663,6 @@ export type EventFileEdited = {
   type: "file.edited"
   properties: {
     file: string
-  }
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
   }
 }
 
@@ -903,12 +903,12 @@ export type Event =
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
-  | EventTodoUpdated
-  | EventFileWatcherUpdated
-  | EventFileEdited
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
+  | EventTodoUpdated
+  | EventFileWatcherUpdated
+  | EventFileEdited
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -2150,9 +2150,9 @@ export type Agent = {
     [key: string]: unknown
   }
   steps?: number
-  toolsAllowed: Array<string>
+  toolsAllowed?: Array<string>
   thinkingEffort?: string
-  knowledgeBase: Array<string>
+  knowledgeBase?: Array<string>
 }
 
 export type LspStatus = {
@@ -4617,7 +4617,20 @@ export type TuiClearPromptResponse = TuiClearPromptResponses[keyof TuiClearPromp
 
 export type TuiExecuteCommandData = {
   body?: {
-    command: string
+    command:
+      | "session_new"
+      | "session_share"
+      | "session_interrupt"
+      | "session_compact"
+      | "messages_page_up"
+      | "messages_page_down"
+      | "messages_line_up"
+      | "messages_line_down"
+      | "messages_half_page_up"
+      | "messages_half_page_down"
+      | "messages_first"
+      | "messages_last"
+      | "agent_cycle"
   }
   path?: never
   query?: {
