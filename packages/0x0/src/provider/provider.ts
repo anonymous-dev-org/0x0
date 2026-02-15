@@ -246,7 +246,7 @@ export namespace Provider {
           }
 
           // Region resolution precedence (highest to lowest):
-          // 1. options.region from 0x0.yaml provider config
+          // 1. options.region from config.yaml provider config
           // 2. defaultRegion from AWS_REGION environment variable
           // 3. Default "us-east-1" (baked into defaultRegion)
           const region = options?.region ?? defaultRegion
@@ -966,6 +966,51 @@ export namespace Provider {
       log.info("found", { providerID })
     }
 
+    function ensureConfiguredModel(path: string, model: string) {
+      const parsed = parseModel(model)
+      if (!parsed.providerID || !parsed.modelID) {
+        throw new ConfiguredModelError({
+          path,
+          model,
+          message: `Invalid model format \"${model}\". Expected provider/model.`,
+        })
+      }
+
+      const provider = providers[parsed.providerID]
+      if (!provider) {
+        throw new ConfiguredModelError({
+          path,
+          model,
+          message: `Configured provider \"${parsed.providerID}\" does not exist.`,
+          suggestions: fuzzysort
+            .go(parsed.providerID, Object.keys(providers), { limit: 5, threshold: -10000 })
+            .map((item) => item.target),
+        })
+      }
+
+      if (provider.models[parsed.modelID]) return
+
+      throw new ConfiguredModelError({
+        path,
+        model,
+        message: `Configured model \"${model}\" does not exist.`,
+        suggestions: fuzzysort
+          .go(parsed.modelID, Object.keys(provider.models), { limit: 5, threshold: -10000 })
+          .map((item) => `${parsed.providerID}/${item.target}`),
+      })
+    }
+
+    if (config.model) {
+      ensureConfiguredModel("model", config.model)
+    }
+    if (config.small_model) {
+      ensureConfiguredModel("small_model", config.small_model)
+    }
+    for (const [agentID, agent] of Object.entries(config.agent ?? {})) {
+      if (!agent.model) continue
+      ensureConfiguredModel(`agent.${agentID}.model`, agent.model)
+    }
+
     return {
       models: languages,
       providers,
@@ -1257,6 +1302,16 @@ export namespace Provider {
     "ProviderInitError",
     z.object({
       providerID: z.string(),
+    }),
+  )
+
+  export const ConfiguredModelError = NamedError.create(
+    "ProviderConfiguredModelError",
+    z.object({
+      path: z.string(),
+      model: z.string(),
+      message: z.string(),
+      suggestions: z.array(z.string()).optional(),
     }),
   )
 }

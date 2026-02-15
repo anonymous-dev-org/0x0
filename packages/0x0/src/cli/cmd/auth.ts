@@ -11,7 +11,7 @@ import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
 import { Antigravity } from "../../antigravity"
-import { write as writeProvider } from "../../config/providers"
+import { writeTemplate } from "../../config/providers"
 import type { Hooks } from "@0x0-ai/plugin"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
@@ -111,10 +111,10 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
           })
         }
         if (method.label.toLowerCase().includes("antigravity")) {
-          await writeProvider("antigravity")
+          await writeTemplate("antigravity")
         }
         if (method.label.toLowerCase().includes("chatgpt")) {
-          await writeProvider("codex")
+          await writeTemplate("codex")
         }
         spinner.stop("Login successful")
       }
@@ -149,10 +149,10 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
           })
         }
         if (method.label.toLowerCase().includes("antigravity")) {
-          await writeProvider("antigravity")
+          await writeTemplate("antigravity")
         }
         if (method.label.toLowerCase().includes("chatgpt")) {
-          await writeProvider("codex")
+          await writeTemplate("codex")
         }
         prompts.log.success("Login successful")
       }
@@ -367,7 +367,7 @@ export const AuthLoginCommand = cmd({
           }
 
           prompts.log.warn(
-            `This only stores a credential for ${provider} - you will need configure it in 0x0.yaml, check the docs for examples.`,
+            `This only stores a credential for ${provider} - configure it in .0x0/config.yaml, check the docs for examples.`,
           )
         }
 
@@ -376,7 +376,7 @@ export const AuthLoginCommand = cmd({
             "Amazon Bedrock authentication priority:\n" +
               "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
               "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
-              "Configure via 0x0.yaml options (profile, region, endpoint) or\n" +
+              "Configure via .0x0/config.yaml options (profile, region, endpoint) or\n" +
               "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
           )
         }

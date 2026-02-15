@@ -3,6 +3,7 @@ import * as fs from "fs/promises"
 import os from "os"
 import path from "path"
 import type { Config } from "../../src/config/config"
+import YAML from "yaml"
 
 // Strip null bytes from paths (defensive fix for CI environment issues)
 function sanitizePath(p: string): string {
@@ -18,14 +19,17 @@ type TmpDirOptions<T> = {
 export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   const dirpath = sanitizePath(path.join(os.tmpdir(), "zeroxzero-test-" + Math.random().toString(36).slice(2)))
   await fs.mkdir(dirpath, { recursive: true })
+  await fs.mkdir(path.join(dirpath, ".0x0"), { recursive: true })
   if (options?.git) {
     await $`git init`.cwd(dirpath).quiet()
     await $`git commit --allow-empty -m "root commit ${dirpath}"`.cwd(dirpath).quiet()
   }
   if (options?.config) {
+    const configDir = path.join(dirpath, ".0x0")
+    await fs.mkdir(configDir, { recursive: true })
     await Bun.write(
-      path.join(dirpath, "zeroxzero.json"),
-      JSON.stringify({
+      path.join(configDir, "config.yaml"),
+      YAML.stringify({
         $schema: "https://zeroxzero.ai/config.json",
         ...options.config,
       }),

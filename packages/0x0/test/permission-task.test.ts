@@ -139,7 +139,7 @@ describe("PermissionNext.disabled for task tool", () => {
 
 // Integration tests that load permissions from real config files
 describe("permission.task with real config files", () => {
-  test("loads task permissions from zeroxzero.json config", async () => {
+  test("loads task permissions from config.yaml config", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {

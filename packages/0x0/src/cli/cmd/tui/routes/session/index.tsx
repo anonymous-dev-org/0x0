@@ -374,6 +374,16 @@ export function Session() {
   const status = createMemo(() => sync.data.session_status?.[route.sessionID] ?? { type: "idle" })
   const busy = () => status().type === "busy" || status().type === "retry"
   const agent = () => local.agent.color(local.agent.current().name)
+  const thinkingAgent = createMemo(() => {
+    const pendingID = pending()
+    if (!pendingID) return
+
+    const message = messages().find((entry) => entry.id === pendingID)
+    if (!message || message.role !== "assistant") return
+
+    return message.agent
+  })
+  const thinkingColor = createMemo(() => local.agent.color(thinkingAgent() ?? local.agent.current().name))
   const [interrupt, setInterrupt] = createSignal(0)
 
   const command = useCommandDialog()
@@ -589,7 +599,7 @@ export function Session() {
             <box flexShrink={0}>
               <Thinking
                 visible={busy}
-                color={agent}
+                color={thinkingColor}
                 interrupt={interrupt}
                 title={thinkingStatus}
                 text={theme.text}

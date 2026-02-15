@@ -13,7 +13,7 @@ export function FormatError(input: unknown) {
       `Model not found: ${providerID}/${modelID}`,
       ...(Array.isArray(suggestions) && suggestions.length ? ["Did you mean: " + suggestions.join(", ")] : []),
       `Try: \`zeroxzero models\` to list available models`,
-      `Or check your config (0x0.yaml) provider/model names`,
+      `Or check your config (.0x0/config.yaml) provider/model names`,
     ].join("\n")
   }
   if (Provider.InitError.isInstance(input)) {

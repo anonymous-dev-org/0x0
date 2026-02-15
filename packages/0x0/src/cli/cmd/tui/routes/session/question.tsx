@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store"
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
-import type { TextareaRenderable } from "@opentui/core"
+import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useKeybind } from "../../context/keybind"
 import { selectedForeground, tint, useTheme } from "../../context/theme"
 import type { QuestionAnswer, QuestionRequest } from "@0x0-ai/sdk/v2"
@@ -9,12 +9,16 @@ import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
+import { useLocal } from "../../context/local"
+import { useSync } from "../../context/sync"
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
   const sdk = useSDK()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const bindings = useTextareaKeybindings()
+  const local = useLocal()
+  const sync = useSync()
 
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
@@ -29,6 +33,37 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   })
 
   let textarea: TextareaRenderable | undefined
+  let tabsScroll: ScrollBoxRenderable | undefined
+
+  const issuingAgent = createMemo(() => {
+    const messageID = props.request.tool?.messageID
+    if (!messageID) return local.agent.current().name
+    const sessionMessages = sync.data.message[props.request.sessionID] ?? []
+    const inSession = sessionMessages.find((message) => message.id === messageID)
+    if (inSession?.agent) return inSession.agent
+
+    const allMessages = Object.values(sync.data.message).flat()
+    const anySession = allMessages.find((message) => message.id === messageID)
+    return anySession?.agent ?? local.agent.current().name
+  })
+  const accent = createMemo(() => local.agent.color(issuingAgent()))
+
+  const tabID = (index: number | "confirm") => (index === "confirm" ? "question-tab-confirm" : `question-tab-${index}`)
+
+  function ensureTabVisible(index: number | "confirm") {
+    if (!tabsScroll) return
+    const target = tabsScroll.getChildren().find((child) => child.id === tabID(index))
+    if (!target) return
+    const x = target.x - tabsScroll.x
+    const overflowRight = x + target.width - tabsScroll.width
+    if (x < 0) {
+      tabsScroll.scrollBy({ x, y: 0 })
+      return
+    }
+    if (overflowRight > 0) {
+      tabsScroll.scrollBy({ x: overflowRight, y: 0 })
+    }
+  }
 
   const question = createMemo(() => questions()[store.tab])
   const confirm = createMemo(() => !single() && store.tab === questions().length)
@@ -95,7 +130,18 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   function selectTab(index: number) {
     setStore("tab", index)
     setStore("selected", 0)
+    queueMicrotask(() => {
+      ensureTabVisible(index === questions().length ? "confirm" : index)
+    })
   }
+
+  createEffect(() => {
+    if (single()) return
+    const index = confirm() ? "confirm" : store.tab
+    queueMicrotask(() => {
+      ensureTabVisible(index)
+    })
+  })
 
   function selectOption() {
     if (other()) {
@@ -254,61 +300,70 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     <box
       backgroundColor={theme.backgroundPanel}
       border={["left"]}
-      borderColor={theme.accent}
+      borderColor={accent()}
       customBorderChars={SplitBorder.customBorderChars}
     >
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1}>
         <Show when={!single()}>
-          <box flexDirection="row" gap={1} paddingLeft={1}>
-            <For each={questions()}>
-              {(q, index) => {
-                const isActive = () => index() === store.tab
-                const isAnswered = () => {
-                  return (store.answers[index()]?.length ?? 0) > 0
-                }
-                return (
-                  <box
-                    paddingLeft={1}
-                    paddingRight={1}
-                    backgroundColor={
-                      isActive()
-                        ? theme.accent
-                        : tabHover() === index()
-                          ? theme.backgroundElement
-                          : theme.backgroundPanel
-                    }
-                    onMouseOver={() => setTabHover(index())}
-                    onMouseOut={() => setTabHover(null)}
-                    onMouseUp={() => selectTab(index())}
-                  >
-                    <text
-                      fg={
-                        isActive()
-                          ? selectedForeground(theme, theme.accent)
-                          : isAnswered()
-                            ? theme.text
-                            : theme.textMuted
+          <scrollbox
+            ref={(r) => {
+              tabsScroll = r
+              queueMicrotask(() => {
+                const index = confirm() ? "confirm" : store.tab
+                ensureTabVisible(index)
+              })
+            }}
+            scrollX={true}
+            scrollY={false}
+            scrollbarOptions={{ visible: false }}
+            horizontalScrollbarOptions={{ visible: false }}
+            paddingLeft={1}
+          >
+            <box flexDirection="row" gap={1}>
+              <For each={questions()}>
+                {(q, index) => {
+                  const isActive = () => index() === store.tab
+                  const isAnswered = () => {
+                    return (store.answers[index()]?.length ?? 0) > 0
+                  }
+                  return (
+                    <box
+                      id={tabID(index())}
+                      paddingLeft={1}
+                      paddingRight={1}
+                      backgroundColor={
+                        isActive() ? accent() : tabHover() === index() ? theme.backgroundElement : theme.backgroundPanel
                       }
+                      onMouseOver={() => setTabHover(index())}
+                      onMouseOut={() => setTabHover(null)}
+                      onMouseUp={() => selectTab(index())}
                     >
-                      {q.header}
-                    </text>
-                  </box>
-                )
-              }}
-            </For>
-            <box
-              paddingLeft={1}
-              paddingRight={1}
-              backgroundColor={
-                confirm() ? theme.accent : tabHover() === "confirm" ? theme.backgroundElement : theme.backgroundPanel
-              }
-              onMouseOver={() => setTabHover("confirm")}
-              onMouseOut={() => setTabHover(null)}
-              onMouseUp={() => selectTab(questions().length)}
-            >
-              <text fg={confirm() ? selectedForeground(theme, theme.accent) : theme.textMuted}>Confirm</text>
+                      <text
+                        fg={
+                          isActive() ? selectedForeground(theme, accent()) : isAnswered() ? theme.text : theme.textMuted
+                        }
+                      >
+                        {q.header}
+                      </text>
+                    </box>
+                  )
+                }}
+              </For>
+              <box
+                id={tabID("confirm")}
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={
+                  confirm() ? accent() : tabHover() === "confirm" ? theme.backgroundElement : theme.backgroundPanel
+                }
+                onMouseOver={() => setTabHover("confirm")}
+                onMouseOut={() => setTabHover(null)}
+                onMouseUp={() => selectTab(questions().length)}
+              >
+                <text fg={confirm() ? selectedForeground(theme, accent()) : theme.textMuted}>Confirm</text>
+              </box>
             </box>
-          </box>
+          </scrollbox>
         </Show>
 
         <Show when={!confirm()}>

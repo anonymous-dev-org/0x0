@@ -5,17 +5,28 @@ import { Instance } from "../../src/project/instance"
 import { Config } from "../../src/config/config"
 import { Agent as AgentSvc } from "../../src/agent/agent"
 import { Color } from "../../src/util/color"
+import YAML from "yaml"
 
 test("agent color parsed from project config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "zeroxzero.json"),
-        JSON.stringify({
+        path.join(dir, ".0x0", "config.yaml"),
+        YAML.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           agent: {
-            build: { color: "#FFA500" },
-            plan: { color: "primary" },
+            build: {
+              name: "Build",
+              color: "#FFA500",
+              tools_allowed: ["read"],
+              thinking_effort: "medium",
+            },
+            plan: {
+              name: "Plan",
+              color: "#7C3AED",
+              tools_allowed: ["read"],
+              thinking_effort: "high",
+            },
           },
         }),
       )
@@ -26,7 +37,7 @@ test("agent color parsed from project config", async () => {
     fn: async () => {
       const cfg = await Config.get()
       expect(cfg.agent?.["build"]?.color).toBe("#FFA500")
-      expect(cfg.agent?.["plan"]?.color).toBe("primary")
+      expect(cfg.agent?.["plan"]?.color).toBe("#7C3AED")
     },
   })
 })
@@ -35,12 +46,22 @@ test("Agent.get includes color from config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
-        path.join(dir, "zeroxzero.json"),
-        JSON.stringify({
+        path.join(dir, ".0x0", "config.yaml"),
+        YAML.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           agent: {
-            plan: { color: "#A855F7" },
-            build: { color: "accent" },
+            plan: {
+              name: "Plan",
+              color: "#A855F7",
+              tools_allowed: ["read"],
+              thinking_effort: "high",
+            },
+            build: {
+              name: "Build",
+              color: "#2563EB",
+              tools_allowed: ["read"],
+              thinking_effort: "medium",
+            },
           },
         }),
       )
@@ -52,7 +73,7 @@ test("Agent.get includes color from config", async () => {
       const plan = await AgentSvc.get("plan")
       expect(plan?.color).toBe("#A855F7")
       const build = await AgentSvc.get("build")
-      expect(build?.color).toBe("accent")
+      expect(build?.color).toBe("#2563EB")
     },
   })
 })

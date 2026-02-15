@@ -12,13 +12,6 @@ import { lazy } from "../util/lazy"
 import { NamedError } from "@0x0-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
-import {
-  type ParseError as JsoncParseError,
-  applyEdits,
-  modify,
-  parse as parseJsonc,
-  printParseErrorCode,
-} from "jsonc-parser"
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
@@ -41,9 +34,7 @@ export namespace Config {
   const log = Log.create({ service: "config" })
   const configSchemaURL = "https://zeroxzero.ai/config.json"
   const yamlLanguageServerSchema = `# yaml-language-server: $schema=${configSchemaURL}`
-  const yamlConfigFiles = ["0x0.yaml", "0x0.yml", "zeroxzero.yaml", "zeroxzero.yml"] as const
-  const legacyConfigFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
-  const configFiles = [...yamlConfigFiles, ...legacyConfigFiles] as const
+  const configFiles = ["config.yaml"] as const
   const projectConfigDirs = [".0x0"] as const
   const LEGACY_TOOL_KEYS = {
     patch: "apply_patch",
@@ -152,7 +143,6 @@ export namespace Config {
       agent: {
         builder: {
           name: "Builder",
-          model: "openai/gpt-5.3-codex",
           color: "#2563EB",
           thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
@@ -162,7 +152,6 @@ export namespace Config {
         },
         planner: {
           name: "Planner",
-          model: "google/antigravity-claude-opus-4-6-thinking",
           color: "#7C3AED",
           thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
@@ -184,13 +173,13 @@ export namespace Config {
     }
     if (existing.length === 1) return
 
-    const defaultPath = path.join(Global.Path.config, yamlConfigFiles[0])
+    const defaultPath = path.join(Global.Path.config, configFiles[0])
     const defaultText = formatYamlConfig(defaultConfig())
     await Bun.write(defaultPath, defaultText)
   }
 
   async function discoverGlobalConfigFiles() {
-    const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
+    const candidates = configFiles.map((file) => path.join(Global.Path.config, file))
     const existing = await Promise.all(
       candidates.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)),
     )
@@ -236,11 +225,12 @@ export namespace Config {
 
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
     // 1) Remote .well-known/zeroxzero (org defaults)
-    // 2) Global config (~/.config/0x0/0x0.yaml)
-    // 3) Provider configs (~/.config/0x0/providers/*.json)
+    // 2) Global config (~/.config/0x0/config.yaml)
+    // 3) Global provider configs (~/.config/0x0/providers/*.yaml)
     // 4) Custom config (ZEROXZERO_CONFIG)
-    // 5) Project config (.0x0/0x0.yaml)
-    // 6) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.yaml)
+    // 5) Project config (.0x0/config.yaml)
+    // 6) Project provider configs (.0x0/providers/*.yaml)
+    // 7) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
     // 7) Inline config (ZEROXZERO_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
@@ -258,7 +248,7 @@ export namespace Config {
         if (!remoteConfig.$schema) remoteConfig.$schema = configSchemaURL
         result = mergeConfigConcatArrays(
           result,
-          await load(JSON.stringify(remoteConfig), `${key}/.well-known/zeroxzero`),
+          await load(YAML.stringify(remoteConfig), `${key}/.well-known/zeroxzero.yaml`),
         )
         log.debug("loaded remote config from well-known", { url: key })
       }
@@ -267,9 +257,9 @@ export namespace Config {
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())
 
-    // Provider configs (~/.config/0x0/providers/*.json) override global config.
-    const { loadAll } = await import("./providers")
-    for (const providerConfig of await loadAll(loadFile)) {
+    // Global provider configs (~/.config/0x0/providers/*.yaml) override global config.
+    const { loadGlobalProviders, loadProjectProviders } = await import("./providers")
+    for (const providerConfig of await loadGlobalProviders()) {
       result = mergeConfigConcatArrays(result, providerConfig)
     }
 
@@ -284,6 +274,9 @@ export namespace Config {
       const projectFiles = await discoverProjectConfigFiles(Instance.directory, Instance.worktree)
       for (const resolved of projectFiles) {
         result = mergeConfigConcatArrays(result, await loadFile(resolved))
+      }
+      for (const providerConfig of await loadProjectProviders(Instance.worktree)) {
+        result = mergeConfigConcatArrays(result, providerConfig)
       }
     }
 
@@ -609,9 +602,9 @@ export namespace Config {
    * Deduplicates plugins by name, with later entries (higher priority) winning.
    * Priority order (highest to lowest):
    * 1. Local plugin/ directory
-   * 2. Local 0x0.yaml
+   * 2. Local .0x0/config.yaml
    * 3. Global plugin/ directory
-   * 4. Global 0x0.yaml
+   * 4. Global ~/.config/0x0/config.yaml
    *
    * Since plugins are added in low-to-high priority order,
    * we reverse, deduplicate (keeping first occurrence), then restore order.
@@ -1290,25 +1283,6 @@ export namespace Config {
       result = mergeDeep(result, await loadFile(files[0]))
     }
 
-    const legacy = path.join(Global.Path.config, "config")
-    if (existsSync(legacy)) {
-      await import(pathToFileURL(legacy).href, {
-        with: {
-          type: "toml",
-        },
-      })
-        .then(async (mod) => {
-          const { provider, model, ...rest } = mod.default
-          if (provider && model) result.model = `${provider}/${model}`
-          result["$schema"] = configSchemaURL
-          result = mergeDeep(result, rest)
-          const target = path.join(Global.Path.config, yamlConfigFiles[0])
-          await Bun.write(target, formatYamlConfig(result))
-          await fs.unlink(legacy)
-        })
-        .catch(() => {})
-    }
-
     return result
   })
 
@@ -1325,6 +1299,12 @@ export namespace Config {
   }
 
   async function load(text: string, configFilepath: string) {
+    if (!isYamlPath(configFilepath)) {
+      throw new InvalidError({
+        path: configFilepath,
+        message: "Only YAML config is supported. Use config.yaml.",
+      })
+    }
     const original = text
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
       return process.env[varName] || ""
@@ -1368,49 +1348,21 @@ export namespace Config {
     }
 
     const data = (() => {
-      if (isYamlPath(configFilepath)) {
-        try {
-          return YAML.parse(text) ?? {}
-        } catch (error) {
-          throw new JsonError({
-            path: configFilepath,
-            message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
-          })
-        }
-      }
-
-      const errors: JsoncParseError[] = []
-      const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
-      if (!errors.length) return parsed
-
-      const lines = text.split("\n")
-      const errorDetails = errors
-        .map((e) => {
-          const beforeOffset = text.substring(0, e.offset).split("\n")
-          const line = beforeOffset.length
-          const column = beforeOffset[beforeOffset.length - 1].length + 1
-          const problemLine = lines[line - 1]
-
-          const error = `${printParseErrorCode(e.error)} at line ${line}, column ${column}`
-          if (!problemLine) return error
-
-          return `${error}\n   Line ${line}: ${problemLine}\n${"".padStart(column + 9)}^`
+      try {
+        return YAML.parse(text) ?? {}
+      } catch (error) {
+        throw new JsonError({
+          path: configFilepath,
+          message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
         })
-        .join("\n")
-
-      throw new JsonError({
-        path: configFilepath,
-        message: `\n--- JSONC Input ---\n${text}\n--- Errors ---\n${errorDetails}\n--- End ---`,
-      })
+      }
     })()
 
     const parsed = Info.safeParse(data)
     if (parsed.success) {
       if (!parsed.data.$schema) {
         parsed.data.$schema = configSchemaURL
-        const updated = isYamlPath(configFilepath)
-          ? addYamlSchemaMetadata(original)
-          : original.replace(/^\s*\{/, `{\n  "$schema": "${configSchemaURL}",`)
+        const updated = addYamlSchemaMetadata(original)
         await Bun.write(configFilepath, updated).catch(() => {})
       }
       const data = parsed.data
@@ -1473,16 +1425,15 @@ export namespace Config {
   }
 
   export async function update(config: Info) {
-    const filepath =
-      [...configFiles, "config.json"]
-        .map((file) => path.join(Instance.directory, file))
-        .find((file) => existsSync(file)) ?? path.join(Instance.directory, yamlConfigFiles[0])
+    const dir = path.join(Instance.worktree, ".0x0")
+    await fs.mkdir(dir, { recursive: true })
+    const filepath = path.join(dir, configFiles[0])
     const existing = await loadFile(filepath)
     const merged = mergeDeep(existing, config)
     const current = await Bun.file(filepath)
       .text()
       .catch(() => "")
-    const output = isYamlPath(filepath) ? formatYamlConfig(merged, current) : JSON.stringify(merged, null, 2)
+    const output = formatYamlConfig(merged, current)
     await Bun.write(filepath, output)
     await Instance.dispose()
   }
@@ -1490,7 +1441,7 @@ export namespace Config {
   export async function updateProject(config: Info) {
     const dir = path.join(Instance.worktree, ".0x0")
     await fs.mkdir(dir, { recursive: true })
-    const filepath = path.join(dir, yamlConfigFiles[0])
+    const filepath = path.join(dir, configFiles[0])
     const existing = await loadFile(filepath)
     const merged = mergeDeep(existing, config)
     const current = await Bun.file(filepath)
@@ -1502,80 +1453,25 @@ export namespace Config {
   }
 
   export async function getProject() {
-    return loadFile(path.join(Instance.worktree, ".0x0", yamlConfigFiles[0]))
+    return loadFile(path.join(Instance.worktree, ".0x0", configFiles[0]))
   }
 
   function globalConfigFile() {
-    const candidates = [...configFiles, "config.json"].map((file) => path.join(Global.Path.config, file))
+    const candidates = configFiles.map((file) => path.join(Global.Path.config, file))
     for (const file of candidates) {
       if (existsSync(file)) return file
     }
     return candidates[0]
   }
 
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === "object" && !Array.isArray(value)
-  }
-
-  function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
-    if (!isRecord(patch)) {
-      const edits = modify(input, path, patch, {
-        formattingOptions: {
-          insertSpaces: true,
-          tabSize: 2,
-        },
-      })
-      return applyEdits(input, edits)
-    }
-
-    return Object.entries(patch).reduce((result, [key, value]) => {
-      if (value === undefined) return result
-      return patchJsonc(result, value, [...path, key])
-    }, input)
-  }
-
   function parseConfig(text: string, filepath: string): Info {
-    if (isYamlPath(filepath)) {
-      let data: unknown
-      try {
-        data = YAML.parse(text) ?? {}
-      } catch (error) {
-        throw new JsonError({
-          path: filepath,
-          message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
-        })
-      }
-
-      const parsed = Info.safeParse(data)
-      if (parsed.success) return parsed.data
-
-      throw new InvalidError({
-        path: filepath,
-        issues: parsed.error.issues,
-      })
-    }
-
-    const errors: JsoncParseError[] = []
-    const data = parseJsonc(text, errors, { allowTrailingComma: true })
-    if (errors.length) {
-      const lines = text.split("\n")
-      const errorDetails = errors
-        .map((e) => {
-          const beforeOffset = text.substring(0, e.offset).split("\n")
-          const line = beforeOffset.length
-          const column = beforeOffset[beforeOffset.length - 1].length + 1
-          const problemLine = lines[line - 1]
-
-          const error = `${printParseErrorCode(e.error)} at line ${line}, column ${column}`
-          if (!problemLine) return error
-
-          return `${error}\n   Line ${line}: ${problemLine}\n${"".padStart(column + 9)}^`
-        })
-        .join("\n")
-
+    let data: unknown
+    try {
+      data = YAML.parse(text) ?? {}
+    } catch (error) {
       throw new JsonError({
         path: filepath,
-        message: `\n--- JSONC Input ---\n${text}\n--- Errors ---\n${errorDetails}\n--- End ---`,
+        message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
       })
     }
 
@@ -1593,30 +1489,13 @@ export namespace Config {
     const before = await Bun.file(filepath)
       .text()
       .catch((err) => {
-        if (err.code === "ENOENT") return "{}"
+        if (err.code === "ENOENT") return ""
         throw new JsonError({ path: filepath }, { cause: err })
       })
 
-    const next = await (async () => {
-      if (isYamlPath(filepath)) {
-        const existing = parseConfig(before, filepath)
-        const merged = mergeDeep(existing, config)
-        await Bun.write(filepath, formatYamlConfig(merged, before))
-        return merged
-      }
-
-      if (!filepath.endsWith(".jsonc")) {
-        const existing = parseConfig(before, filepath)
-        const merged = mergeDeep(existing, config)
-        await Bun.write(filepath, JSON.stringify(merged, null, 2))
-        return merged
-      }
-
-      const updated = patchJsonc(before, config)
-      const merged = parseConfig(updated, filepath)
-      await Bun.write(filepath, updated)
-      return merged
-    })()
+    const existing = before.trim().length > 0 ? parseConfig(before, filepath) : ({ $schema: configSchemaURL } as Info)
+    const next = mergeDeep(existing, config)
+    await Bun.write(filepath, formatYamlConfig(next, before))
 
     global.reset()
 

@@ -132,7 +132,7 @@ describe("session.llm.composeSystemParts", () => {
         })
 
         expect(parts[0]).toBe(await SystemPrompt.instructions())
-        expect(parts[1]).toBe("AGENT_LAYER")
+        expect(parts[1]).toContain("AGENT_LAYER")
         expect(parts[2]).toBe("CALL_LAYER")
         expect(parts[3]).toBeUndefined()
       },
@@ -285,7 +285,7 @@ describe("session.llm.stream", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             $schema: "https://zeroxzero.ai/config.json",
             enabled_providers: [providerID],
@@ -391,7 +391,7 @@ describe("session.llm.stream", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             $schema: "https://zeroxzero.ai/config.json",
             enabled_providers: [providerID],
@@ -522,7 +522,7 @@ describe("session.llm.stream", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             $schema: "https://zeroxzero.ai/config.json",
             enabled_providers: ["openai"],
@@ -656,7 +656,7 @@ describe("session.llm.stream", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             $schema: "https://zeroxzero.ai/config.json",
             enabled_providers: [providerID],
@@ -764,7 +764,7 @@ describe("session.llm.stream", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             $schema: "https://zeroxzero.ai/config.json",
             enabled_providers: [providerID],

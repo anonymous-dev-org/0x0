@@ -22,7 +22,7 @@ Prompt composition follows this order only:
 2. The selected agent's `prompt`
 3. One active skill prompt (latest loaded skill)
 
-Example `0x0.yaml`:
+Example `.0x0/config.yaml`:
 
 ```yaml
 system_prompt: |

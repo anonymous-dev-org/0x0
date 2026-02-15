@@ -44,7 +44,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns true when token count exceeds usable context", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -60,7 +60,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when token count within usable context", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -76,7 +76,7 @@ describe("session.compaction.isOverflow", () => {
   test("includes cache.read in token count", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -92,7 +92,7 @@ describe("session.compaction.isOverflow", () => {
   test("respects input limit for input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -108,7 +108,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when input/output are within input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -124,7 +124,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when output within limit with input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -140,7 +140,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when model context limit is 0", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
       },
     })
     await Instance.provide({
@@ -157,7 +157,7 @@ describe("session.compaction.isOverflow", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(
-          path.join(dir, "zeroxzero.json"),
+          path.join(dir, ".0x0", "config.yaml"),
           JSON.stringify({
             compaction: { auto: false },
           }),

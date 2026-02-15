@@ -11,9 +11,10 @@ import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
 import { Installation } from "../../installation"
 import path from "path"
+import fs from "fs/promises"
 import { Global } from "../../global"
-import { modify, applyEdits } from "jsonc-parser"
 import { Bus } from "../../bus"
+import YAML from "yaml"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -161,7 +162,7 @@ export const McpAuthCommand = cmd({
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")
-          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in 0x0.yaml:")
+          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in .0x0/config.yaml:")
           prompts.log.info(`
 mcp:
   my-server:
@@ -378,56 +379,25 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files, including .zeroxzero/ subdirectory
-  const candidates = [
-    path.join(baseDir, "0x0.yaml"),
-    path.join(baseDir, "0x0.yml"),
-    path.join(baseDir, "zeroxzero.yaml"),
-    path.join(baseDir, "zeroxzero.yml"),
-    path.join(baseDir, "0x0.json"),
-    path.join(baseDir, "0x0.jsonc"),
-    path.join(baseDir, "zeroxzero.json"),
-    path.join(baseDir, "zeroxzero.jsonc"),
-  ]
-
-  if (!global) {
-    candidates.push(
-      path.join(baseDir, ".zeroxzero", "0x0.yaml"),
-      path.join(baseDir, ".zeroxzero", "0x0.yml"),
-      path.join(baseDir, ".zeroxzero", "zeroxzero.yaml"),
-      path.join(baseDir, ".zeroxzero", "zeroxzero.yml"),
-      path.join(baseDir, ".zeroxzero", "0x0.json"),
-      path.join(baseDir, ".zeroxzero", "0x0.jsonc"),
-      path.join(baseDir, ".zeroxzero", "zeroxzero.json"),
-      path.join(baseDir, ".zeroxzero", "zeroxzero.jsonc"),
-    )
-  }
-
-  for (const candidate of candidates) {
-    if (await Bun.file(candidate).exists()) {
-      return candidate
-    }
-  }
-
-  // Default to 0x0.yaml if none exist
-  return candidates[0]
+  const filepath = global ? path.join(baseDir, "config.yaml") : path.join(baseDir, ".0x0", "config.yaml")
+  return filepath
 }
 
 async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
   const file = Bun.file(configPath)
-
-  let text = "{}"
-  if (await file.exists()) {
-    text = await file.text()
+  const text = (await file.exists()) ? await file.text() : ""
+  const data = text.trim().length > 0 ? ((YAML.parse(text) ?? {}) as Config.Info) : ({} as Config.Info)
+  const nextMcp = {
+    ...(data.mcp ?? {}),
+    [name]: mcpConfig,
+  }
+  const next = {
+    ...data,
+    mcp: nextMcp,
   }
 
-  // Use jsonc-parser to modify while preserving comments
-  const edits = modify(text, ["mcp", name], mcpConfig, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
-  })
-  const result = applyEdits(text, edits)
-
-  await Bun.write(configPath, result)
+  await fs.mkdir(path.dirname(configPath), { recursive: true })
+  await Bun.write(configPath, YAML.stringify(next))
 
   return configPath
 }
