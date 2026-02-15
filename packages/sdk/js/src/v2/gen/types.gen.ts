@@ -1773,13 +1773,17 @@ export type Config = {
   }
   compaction?: {
     /**
-     * Enable automatic compaction when context is full
+     * Automatically compact when history word count exceeds this value
      */
-    auto?: boolean
+    max_words_before_compact?: number
     /**
-     * Enable pruning of old tool outputs
+     * Provider used for compaction model
      */
-    prune?: boolean
+    provider?: string
+    /**
+     * Model used for compaction
+     */
+    model?: string
     /**
      * Prompt used for session compaction
      */

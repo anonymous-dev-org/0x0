@@ -529,7 +529,13 @@ export namespace SessionPrompt {
           sessionID,
           auto: task.auto,
         })
-        if (result === "stop") break
+        if (result === "stop") {
+          if (task.auto) {
+            log.warn("auto compaction failed, continuing normal processing", { sessionID })
+            continue
+          }
+          break
+        }
         continue
       }
 
@@ -537,7 +543,7 @@ export namespace SessionPrompt {
       if (
         lastFinished &&
         lastFinished.summary !== true &&
-        (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
+        (await SessionCompaction.shouldCompact({ sessionID, messages: msgs }))
       ) {
         await SessionCompaction.create({
           sessionID,
@@ -667,7 +673,6 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID })
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []

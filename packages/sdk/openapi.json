@@ -9904,13 +9904,19 @@
           "compaction": {
             "type": "object",
             "properties": {
-              "auto": {
-                "description": "Enable automatic compaction when context is full",
-                "type": "boolean"
+              "max_words_before_compact": {
+                "description": "Automatically compact when history word count exceeds this value",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
               },
-              "prune": {
-                "description": "Enable pruning of old tool outputs",
-                "type": "boolean"
+              "provider": {
+                "description": "Provider used for compaction model",
+                "type": "string"
+              },
+              "model": {
+                "description": "Model used for compaction",
+                "type": "string"
               },
               "prompt": {
                 "description": "Prompt used for session compaction",

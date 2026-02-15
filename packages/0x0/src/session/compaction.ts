@@ -6,8 +6,6 @@ import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
 import { MessageV2 } from "./message-v2"
 import z from "zod"
-import { SessionPrompt } from "./prompt"
-import { Token } from "../util/token"
 import { Log } from "../util/log"
 import { SessionProcessor } from "./processor"
 import { fn } from "@/util/fn"
@@ -27,66 +25,66 @@ export namespace SessionCompaction {
     ),
   }
 
-  export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
-    const config = await Config.get()
-    if (config.compaction?.auto !== true) return false
-    const context = input.model.limit.context
-    if (context === 0) return false
-    const count = input.tokens.input + input.tokens.cache.read + input.tokens.output
-    const output = Math.min(input.model.limit.output, SessionPrompt.OUTPUT_TOKEN_MAX) || SessionPrompt.OUTPUT_TOKEN_MAX
-    const usable = input.model.limit.input || context - output
-    return count > usable
+  function words(text: string) {
+    const normalized = text.trim()
+    if (!normalized) return 0
+    return normalized.split(/\s+/).length
   }
 
-  export const PRUNE_MINIMUM = 20_000
-  export const PRUNE_PROTECT = 40_000
+  function text(part: MessageV2.Part) {
+    if (part.type === "text" && !part.ignored) return part.text
+    if (part.type === "reasoning") return part.text
+    if (part.type === "tool" && part.state.status === "completed") return part.state.output
+    if (part.type === "tool" && part.state.status === "error") return part.state.error
+    return ""
+  }
 
-  const PRUNE_PROTECTED_TOOLS = ["skill"]
+  function history(messages: MessageV2.WithParts[]) {
+    const lines = messages
+      .map((message) => {
+        const content = message.parts
+          .map((part) => text(part))
+          .filter(Boolean)
+          .join("\n")
+          .trim()
+        if (!content) return ""
+        return `${message.info.role}: ${content}`
+      })
+      .filter(Boolean)
 
-  // goes backwards through parts until there are 40_000 tokens worth of tool
-  // calls. then erases output of previous tool calls. idea is to throw away old
-  // tool calls that are no longer relevant.
-  export async function prune(input: { sessionID: string }) {
+    const formatted = lines.join("\n\n")
+    return {
+      formatted,
+      totalWords: words(formatted),
+    }
+  }
+
+  export async function shouldCompact(input: { sessionID: string; messages?: MessageV2.WithParts[] }) {
     const config = await Config.get()
-    if (config.compaction?.prune !== true) return
-    log.info("pruning")
-    const msgs = await Session.messages({ sessionID: input.sessionID })
-    let total = 0
-    let pruned = 0
-    const toPrune = []
-    let turns = 0
+    const threshold = config.compaction?.max_words_before_compact
+    if (!threshold) return false
+    const messages = input.messages ?? (await MessageV2.filterCompacted(MessageV2.stream(input.sessionID)))
+    const count = history(messages).totalWords
+    if (count <= threshold) return false
+    log.info("compaction threshold exceeded", {
+      sessionID: input.sessionID,
+      words: count,
+      threshold,
+    })
+    return true
+  }
 
-    loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
-      const msg = msgs[msgIndex]
-      if (msg.info.role === "user") turns++
-      if (turns < 2) continue
-      if (msg.info.role === "assistant" && msg.info.summary) break loop
-      for (let partIndex = msg.parts.length - 1; partIndex >= 0; partIndex--) {
-        const part = msg.parts[partIndex]
-        if (part.type === "tool")
-          if (part.state.status === "completed") {
-            if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
-
-            if (part.state.time.compacted) break loop
-            const estimate = Token.estimate(part.state.output)
-            total += estimate
-            if (total > PRUNE_PROTECT) {
-              pruned += estimate
-              toPrune.push(part)
-            }
-          }
-      }
-    }
-    log.info("found", { pruned, total })
-    if (pruned > PRUNE_MINIMUM) {
-      for (const part of toPrune) {
-        if (part.state.status === "completed") {
-          part.state.time.compacted = Date.now()
-          await Session.updatePart(part)
-        }
-      }
-      log.info("pruned", { count: toPrune.length })
-    }
+  export async function isOverflow(input: {
+    sessionID?: string
+    messages?: MessageV2.WithParts[]
+    tokens: MessageV2.Assistant["tokens"]
+    model: Provider.Model
+  }) {
+    if (!input.sessionID) return false
+    return shouldCompact({
+      sessionID: input.sessionID,
+      messages: input.messages,
+    })
   }
 
   export async function process(input: {
@@ -98,10 +96,11 @@ export namespace SessionCompaction {
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
     const agent = await Agent.get("compaction")
-    const model = agent.model
-      ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
-      : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
     const config = await Config.get()
+    const model =
+      config.compaction?.provider && config.compaction.model
+        ? await Provider.getModel(config.compaction.provider, config.compaction.model)
+        : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
     // Allow plugins to inject additional compaction context
     const compacting = await Plugin.trigger(
       "experimental.session.compacting",
@@ -113,6 +112,7 @@ export namespace SessionCompaction {
       log.info("skipping compaction, missing compaction.prompt")
       return "stop"
     }
+    const context = history(input.messages).formatted
 
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
@@ -146,7 +146,7 @@ export namespace SessionCompaction {
       model,
       abort: input.abort,
     })
-    const promptText = [prompt, ...(compacting?.context ?? [])]
+    const promptText = ["Conversation history:", context, ...(compacting?.context ?? [])]
       .filter((item): item is string => Boolean(item))
       .join("\n\n")
     const result = await processor.process({
@@ -155,9 +155,8 @@ export namespace SessionCompaction {
       abort: input.abort,
       sessionID: input.sessionID,
       tools: {},
-      system: [],
+      system: [prompt],
       messages: [
-        ...MessageV2.toModelMessages(input.messages, model),
         {
           role: "user",
           content: [
@@ -170,6 +169,11 @@ export namespace SessionCompaction {
       ],
       model,
     })
+
+    if (result === "stop" && input.auto) {
+      log.warn("auto compaction failed, continuing", { sessionID: input.sessionID })
+      return "continue"
+    }
 
     if (result === "continue" && input.auto) {
       const continueMsg = await Session.updateMessage({

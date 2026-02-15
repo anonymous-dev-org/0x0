@@ -135,8 +135,7 @@ export namespace Config {
       $schema: configSchemaURL,
       system_prompt: PROMPT_DEFAULT.trim(),
       compaction: {
-        auto: true,
-        prune: true,
+        max_words_before_compact: 12_000,
         prompt: COMPACTION_PROMPT_DEFAULT,
       },
       knowledge_base: [],
@@ -367,14 +366,6 @@ export namespace Config {
     }
 
     if (!result.keybinds) result.keybinds = Info.shape.keybinds.parse({})
-
-    // Apply flag overrides for compaction settings
-    if (Flag.ZEROXZERO_DISABLE_AUTOCOMPACT) {
-      result.compaction = { ...result.compaction, auto: false }
-    }
-    if (Flag.ZEROXZERO_DISABLE_PRUNE) {
-      result.compaction = { ...result.compaction, prune: false }
-    }
 
     result.plugin = deduplicatePlugins(result.plugin ?? [])
 
@@ -1234,10 +1225,26 @@ export namespace Config {
         .optional(),
       compaction: z
         .object({
-          auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
-          prune: z.boolean().optional().describe("Enable pruning of old tool outputs"),
+          max_words_before_compact: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Automatically compact when history word count exceeds this value"),
+          provider: z.string().optional().describe("Provider used for compaction model"),
+          model: z.string().optional().describe("Model used for compaction"),
           prompt: z.string().optional().describe("Prompt used for session compaction"),
         })
+        .refine(
+          (value) => {
+            const hasProvider = value.provider !== undefined
+            const hasModel = value.model !== undefined
+            return hasProvider === hasModel
+          },
+          {
+            error: "compaction.provider and compaction.model must be set together",
+          },
+        )
         .optional(),
       experimental: z
         .object({
