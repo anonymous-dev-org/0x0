@@ -11,8 +11,6 @@ import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 
-type AgentMode = "all" | "primary"
-
 const AVAILABLE_TOOLS = [
   "bash",
   "read",
@@ -38,11 +36,6 @@ const AgentCreateCommand = cmd({
         type: "string",
         describe: "what the agent should do",
       })
-      .option("mode", {
-        type: "string",
-        describe: "agent mode",
-        choices: ["all", "primary"] as const,
-      })
       .option("tools", {
         type: "string",
         describe: `comma-separated list of tools to enable (default: all). Available: "${AVAILABLE_TOOLS.join(", ")}"`,
@@ -58,10 +51,9 @@ const AgentCreateCommand = cmd({
       async fn() {
         const cliPath = args.path
         const cliDescription = args.description
-        const cliMode = args.mode as AgentMode | undefined
         const cliTools = args.tools
 
-        const isFullyNonInteractive = cliPath && cliDescription && cliMode && cliTools !== undefined
+        const isFullyNonInteractive = cliPath && cliDescription && cliTools !== undefined
 
         if (!isFullyNonInteractive) {
           UI.empty()
@@ -143,50 +135,19 @@ const AgentCreateCommand = cmd({
           selectedTools = result
         }
 
-        // Get mode
-        let mode: AgentMode
-        if (cliMode) {
-          mode = cliMode
-        } else {
-          const modeResult = await prompts.select({
-            message: "Agent mode",
-            options: [
-              {
-                label: "All",
-                value: "all" as const,
-                hint: "Can be used in any agent context",
-              },
-              {
-                label: "Primary",
-                value: "primary" as const,
-                hint: "Acts as a top-level selectable agent",
-              },
-            ],
-            initialValue: "all" as const,
-          })
-          if (prompts.isCancel(modeResult)) throw new UI.CancelledError()
-          mode = modeResult
-        }
-
-        // Build tools config
-        const tools: Record<string, boolean> = {}
-        for (const tool of AVAILABLE_TOOLS) {
-          if (!selectedTools.includes(tool)) {
-            tools[tool] = false
-          }
-        }
-
         // Build frontmatter
         const frontmatter: {
+          name: string
+          color: string
+          tools_allowed: string[]
+          thinking_effort: string
           description: string
-          mode: AgentMode
-          tools?: Record<string, boolean>
         } = {
+          name: generated.identifier,
+          color: "#2563EB",
+          tools_allowed: selectedTools,
+          thinking_effort: "medium",
           description: generated.whenToUse,
-          mode,
-        }
-        if (Object.keys(tools).length > 0) {
-          frontmatter.tools = tools
         }
 
         // Write file

@@ -151,7 +151,8 @@ export const dict = {
 
   "download.title": "Terminal Agent | Pobieranie",
 
-  "zen.title": "Terminal Agent Zen | Wyselekcjonowany zestaw niezawodnych, zoptymalizowanych modeli dla agentow kodowania",
+  "zen.title":
+    "Terminal Agent Zen | Wyselekcjonowany zestaw niezawodnych, zoptymalizowanych modeli dla agentow kodowania",
   "zen.hero.title": "Uzyskaj dostep do niezawodnych, zoptymalizowanych modeli dla agentow kodowania",
   "zen.hero.body":
     "Zen daje dostep do wyselekcjonowanego zestawu modeli AI, ktore Terminal Agent przetestowal i zbenchmarkowal specjalnie dla agentow kodowania. Nie musisz martwic sie o niespojne wyniki i jakosc miedzy dostawcami - uzywaj zweryfikowanych modeli, ktore dzialaja.",
@@ -457,7 +458,8 @@ export const dict = {
   "workspace.black.subscription.resetsIn": "Resetuje się",
   "workspace.black.subscription.useBalance": "Wykorzystaj dostępne saldo po osiągnięciu limitów wykorzystania",
   "workspace.black.waitlist.title": "Lista oczekujących",
-  "workspace.black.waitlist.joined": "Jesteś na liście oczekujących na plan ${{plan}} miesięcznie Terminal Agent Black.",
+  "workspace.black.waitlist.joined":
+    "Jesteś na liście oczekujących na plan ${{plan}} miesięcznie Terminal Agent Black.",
   "workspace.black.waitlist.ready":
     "Jesteśmy gotowi zapisać Cię do planu Black o wartości {{plan}} miesięcznie Terminal Agent.",
   "workspace.black.waitlist.leave": "Opuść listę oczekujących",

@@ -138,7 +138,8 @@ export const dict = {
     "Zen\u306e\u5229\u7528\u3092\u63a8\u5968\u3057\u3066\u3044\u307e\u3059\u304c\u3001Terminal Agent\u306fOpenAI\u3001Anthropic\u3001xAI\u306a\u3069\u306e\u4e3b\u8981\u30d7\u30ed\u30d0\u30a4\u30c0\u306b\u3082\u5bfe\u5fdc\u3057\u3066\u3044\u307e\u3059\u3002",
   "home.faq.a3.p4.beforeLocal": "\u3055\u3089\u306b\u3001",
   "home.faq.a3.p4.localLink": "\u30ed\u30fc\u30ab\u30eb\u30e2\u30c7\u30eb",
-  "home.faq.q4": "\u65e2\u5b58\u306eAI\u30b5\u30d6\u30b9\u30af\u3092Terminal Agent\u3067\u4f7f\u3048\u307e\u3059\u304b\uff1f",
+  "home.faq.q4":
+    "\u65e2\u5b58\u306eAI\u30b5\u30d6\u30b9\u30af\u3092Terminal Agent\u3067\u4f7f\u3048\u307e\u3059\u304b\uff1f",
   "home.faq.a4.p1":
     "\u306f\u3044\u3002Terminal Agent\u306f\u4e3b\u8981\u30d7\u30ed\u30d0\u30a4\u30c0\u306e\u30b5\u30d6\u30b9\u30af\u306b\u5bfe\u5fdc\u3057\u3066\u3044\u307e\u3059\u3002Claude Pro/Max\u3001ChatGPT Plus/Pro\u3001GitHub Copilot\u3092\u5229\u7528\u3067\u304d\u307e\u3059\u3002",
   "home.faq.q5": "\u30bf\u30fc\u30df\u30ca\u30eb\u3060\u3051\u3067\u4f7f\u3048\u307e\u3059\u304b\uff1f",
@@ -225,7 +226,8 @@ export const dict = {
   "zen.problem.item2": "プロバイダーと連携して適切に配信されるようにする",
   "zen.problem.item3": "私たちが推奨するすべてのモデルとプロバイダーの組み合わせのベンチマーク",
   "zen.how.title": "Zen の仕組み",
-  "zen.how.body": "Zen を Terminal Agent とともに使用することをお勧めしますが、Zen はどのエージェントでも使用できます。",
+  "zen.how.body":
+    "Zen を Terminal Agent とともに使用することをお勧めしますが、Zen はどのエージェントでも使用できます。",
   "zen.how.step1.title": "サインアップして 20 ドルの残高を追加してください",
   "zen.how.step1.beforeLink": "に従ってください",
   "zen.how.step1.link": "セットアップ手順",

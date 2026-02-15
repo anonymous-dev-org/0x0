@@ -19,11 +19,13 @@ import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
+import { ToolRegistry } from "@/tool/registry"
 
 export namespace Agent {
   export const Info = z
     .object({
       name: z.string(),
+      displayName: z.string().optional(),
       description: z.string().optional(),
       mode: z.enum(["primary", "all"]),
       native: z.boolean().optional(),
@@ -40,16 +42,20 @@ export namespace Agent {
         .optional(),
       variant: z.string().optional(),
       prompt: z.string().optional(),
-      options: z.record(z.string(), z.any()),
+      options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
+      toolsAllowed: z.array(z.string()).default([]),
+      thinkingEffort: z.string().optional(),
+      knowledgeBase: z.array(z.string()).default([]),
     })
     .meta({
       ref: "Agent",
     })
-  export type Info = z.infer<typeof Info>
+  export type Info = z.input<typeof Info>
 
   const state = Instance.state(async () => {
     const cfg = await Config.get()
+    const availableTools = new Set(await ToolRegistry.ids())
 
     const skillDirs = await Skill.dirs()
     const defaults = PermissionNext.fromConfig({
@@ -74,6 +80,7 @@ export namespace Agent {
     const result: Record<string, Info> = {
       compaction: {
         name: "compaction",
+        displayName: "Compaction",
         mode: "primary",
         native: true,
         hidden: true,
@@ -86,9 +93,12 @@ export namespace Agent {
           user,
         ),
         options: {},
+        toolsAllowed: [],
+        knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
       title: {
         name: "title",
+        displayName: "Title",
         mode: "primary",
         options: {},
         native: true,
@@ -102,9 +112,12 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_TITLE,
+        toolsAllowed: [],
+        knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
       summary: {
         name: "summary",
+        displayName: "Summary",
         mode: "primary",
         options: {},
         native: true,
@@ -117,10 +130,12 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_SUMMARY,
+        toolsAllowed: [],
+        knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
     }
 
-    const native = new Set(["build", "plan", "general", "explore", "compaction", "title", "summary"])
+    const native = new Set(["builder", "planner", "general", "explore", "compaction", "title", "summary"])
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
       if (value.disable) {
@@ -131,24 +146,20 @@ export namespace Agent {
       if (!item)
         item = result[key] = {
           name: key,
-          mode: "all",
-          permission: PermissionNext.merge(defaults, user),
+          displayName: value.name,
+          mode: "primary",
+          permission: PermissionNext.merge(defaults, PermissionNext.fromConfig({ "*": "deny" }), user),
           options: {},
           native: native.has(key),
+          toolsAllowed: [],
+          knowledgeBase: [...(cfg.knowledge_base ?? [])],
         }
 
-      if (key === "plan") {
-        item.permission = PermissionNext.merge(
-          item.permission,
-          PermissionNext.fromConfig({
-            external_directory: {
-              [path.join(Global.Path.data, "plans", "*")]: "allow",
-            },
-            edit: {
-              [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
-            },
-          }),
-        )
+      const toolsAllowed = value.tools_allowed
+      for (const tool of toolsAllowed) {
+        if (!availableTools.has(tool)) {
+          throw new Error(`Unknown tool \"${tool}\" in agent \"${key}\". Update tools_allowed to valid tool IDs.`)
+        }
       }
 
       if (key === "explore" && !value.prompt) item.prompt = PROMPT_EXPLORE
@@ -159,13 +170,31 @@ export namespace Agent {
       item.description = value.description ?? item.description
       item.temperature = value.temperature ?? item.temperature
       item.topP = value.top_p ?? item.topP
-      item.mode = value.mode ?? item.mode
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
-      item.name = value.name ?? item.name
+      item.displayName = value.name
       item.steps = value.steps ?? item.steps
+      item.toolsAllowed = [...toolsAllowed]
+      item.thinkingEffort = value.thinking_effort
+      item.knowledgeBase = Array.from(new Set([...(cfg.knowledge_base ?? []), ...(value.knowledge_base ?? [])]))
       item.options = mergeDeep(item.options, value.options ?? {})
-      item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+      item.permission = PermissionNext.merge(
+        defaults,
+        user,
+        PermissionNext.fromConfig({ "*": "deny" }),
+        PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
+      )
+
+      if (key === "planner") {
+        item.permission = PermissionNext.merge(
+          item.permission,
+          PermissionNext.fromConfig({
+            external_directory: {
+              [path.join(Global.Path.data, "plans", "*")]: "allow",
+            },
+          }),
+        )
+      }
     }
 
     // Ensure Truncate.GLOB is allowed unless explicitly configured
@@ -196,7 +225,7 @@ export namespace Agent {
     return pipe(
       await state(),
       values(),
-      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "plan"), "desc"]),
+      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "planner"), "desc"]),
     )
   }
 
@@ -211,7 +240,7 @@ export namespace Agent {
       return agent.name
     }
 
-    const preferred = agents.plan
+    const preferred = agents.planner
     if (preferred && preferred.hidden !== true) return preferred.name
 
     const visible = Object.values(agents).find((a) => a.hidden !== true)

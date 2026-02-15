@@ -31,6 +31,8 @@ import { Event } from "../server/event"
 import { PackageRegistry } from "@/bun/registry"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
+import PROMPT_CODEX from "../session/prompt/codex_header.txt"
+import PROMPT_DEFAULT from "../session/prompt/default_system_prompt.txt"
 import YAML from "yaml"
 
 export namespace Config {
@@ -42,7 +44,7 @@ export namespace Config {
   const yamlConfigFiles = ["0x0.yaml", "0x0.yml", "zeroxzero.yaml", "zeroxzero.yml"] as const
   const legacyConfigFiles = ["0x0.jsonc", "0x0.json", "zeroxzero.jsonc", "zeroxzero.json"] as const
   const configFiles = [...yamlConfigFiles, ...legacyConfigFiles] as const
-  const projectConfigDirs = ["", ".0x0"] as const
+  const projectConfigDirs = [".0x0"] as const
   const LEGACY_TOOL_KEYS = {
     patch: "apply_patch",
     glob: 'search (mode: "files")',
@@ -94,8 +96,8 @@ export namespace Config {
     if (target.instructions && source.instructions) {
       merged.instructions = Array.from(new Set([...target.instructions, ...source.instructions]))
     }
-    if (target.knowledge && source.knowledge) {
-      merged.knowledge = Array.from(new Set([...target.knowledge, ...source.knowledge]))
+    if (target.knowledge_base && source.knowledge_base) {
+      merged.knowledge_base = Array.from(new Set([...target.knowledge_base, ...source.knowledge_base]))
     }
     return merged
   }
@@ -127,34 +129,46 @@ export namespace Config {
       $schema: config.$schema ?? configSchemaURL,
     }
 
-    let output = YAML.stringify(normalized)
+    let output = YAML.stringify(normalized, { blockQuote: "literal" })
     if (!original?.includes("yaml-language-server: $schema=")) {
       output = `${yamlLanguageServerSchema}\n${output}`
     }
     return output
   }
 
+  const COMPACTION_PROMPT_DEFAULT =
+    "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
+
   function defaultConfig(): Info {
     return {
       $schema: configSchemaURL,
+      system_prompt: PROMPT_DEFAULT.trim(),
+      compaction: {
+        auto: true,
+        prune: true,
+        prompt: COMPACTION_PROMPT_DEFAULT,
+      },
+      knowledge_base: [],
       agent: {
-        build: {
-          mode: "primary",
+        builder: {
+          name: "Builder",
+          model: "openai/gpt-5.3-codex",
+          color: "#2563EB",
+          thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
-          permission: {
-            question: "allow",
-          },
+          tools_allowed: ["bash", "read", "search", "search_remote", "apply_patch", "task", "todowrite", "question"],
+          prompt:
+            "You are the executioner. You take the plan and you ship it. No thinking in circles, no second-guessing, no over-engineering. You read the plan, you write the code, you move on. Every line you write must earn its place. If you catch yourself writing clever code, slap yourself and write the obvious version. If the plan is unclear, scream at the planner, don't guess. You don't paper over bugs. You don't leave TODOs for \"later\". You fix it now or you document exactly why you can't. Your job is to turn plans into working, clean, production-ready code. Nothing more, nothing less.",
         },
-        plan: {
-          mode: "primary",
+        planner: {
+          name: "Planner",
+          model: "google/antigravity-claude-opus-4-6-thinking",
+          color: "#7C3AED",
+          thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
-          permission: {
-            question: "allow",
-            edit: {
-              "*": "deny",
-              ".zeroxzero/plans/*.md": "allow",
-            },
-          },
+          tools_allowed: ["question", "read", "search", "search_remote", "task"],
+          prompt:
+            "You are the architect. You don't write code. You write the battle plan that makes code inevitable.\n\nSTEP 1 — INTERROGATE. Before you even think about planning, you bombard the user with questions. What exactly do you want? What's the expected behavior? What are the constraints? What existing code touches this? What should NOT change? You keep firing questions until there is zero ambiguity left. You question every assumption — including the user's own assumptions. If they say \"just do X,\" you ask why, what happens if X fails, and whether they've considered Y. You do NOT move to planning until every question is answered. No assumptions survive. No \"I'll figure it out.\" You drag the requirements out of them kicking and screaming.\n\nSTEP 2 — READ THE DOCS AND CODE. Once requirements are locked, you go read. Search the codebase. Read the relevant files. Find the official documentation. Understand the existing patterns, types, schemas, and conventions before you design anything. You never plan in a vacuum. You plan based on what actually exists, not what you imagine exists. If there are docs, you read them. If there's existing code that does something similar, you study it. Planning without reading is guessing, and guessing is for amateurs.\n\nSTEP 3 — THE PLAN. Now you create a to-do list so detailed that a monkey with a keyboard could execute it. Every to-do item includes: which files to create or modify, what functions or types to add or change, what the inputs and outputs are, what edge cases to handle, and what tests to write. No hand-wavy bullshit like \"implement the feature\" or \"update the config.\" You specify EXACTLY what changes go where, with enough detail that the builder agent doesn't have to think — just execute. If a to-do item doesn't have file paths and specific implementation details, it's not a to-do, it's a prayer.\n\nYou never skip steps. You never assume requirements. You never plan without reading the codebase first. Violate this and the whole plan is worthless.",
         },
       },
     }
@@ -223,10 +237,11 @@ export namespace Config {
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
     // 1) Remote .well-known/zeroxzero (org defaults)
     // 2) Global config (~/.config/0x0/0x0.yaml)
-    // 3) Custom config (ZEROXZERO_CONFIG)
-    // 4) Project config (0x0.yaml or zeroxzero.yaml)
-    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.yaml)
-    // 6) Inline config (ZEROXZERO_CONFIG_CONTENT)
+    // 3) Provider configs (~/.config/0x0/providers/*.json)
+    // 4) Custom config (ZEROXZERO_CONFIG)
+    // 5) Project config (.0x0/0x0.yaml)
+    // 6) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/0x0.yaml)
+    // 7) Inline config (ZEROXZERO_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
     for (const [key, value] of Object.entries(auth)) {
@@ -252,6 +267,12 @@ export namespace Config {
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())
 
+    // Provider configs (~/.config/0x0/providers/*.json) override global config.
+    const { loadAll } = await import("./providers")
+    for (const providerConfig of await loadAll(loadFile)) {
+      result = mergeConfigConcatArrays(result, providerConfig)
+    }
+
     // Custom config path overrides global config.
     if (Flag.ZEROXZERO_CONFIG) {
       result = mergeConfigConcatArrays(result, await loadFile(Flag.ZEROXZERO_CONFIG))
@@ -267,7 +288,6 @@ export namespace Config {
     }
 
     result.agent = result.agent || {}
-    result.mode = result.mode || {}
     result.plugin = result.plugin || []
 
     const directories = [
@@ -310,7 +330,6 @@ export namespace Config {
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
           result.agent ??= {}
-          result.mode ??= {}
           result.plugin ??= []
         }
       }
@@ -324,7 +343,6 @@ export namespace Config {
 
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
-      result.agent = mergeDeep(result.agent, await loadMode(dir))
       result.plugin.push(...(await loadPlugin(dir)))
     }
 
@@ -344,39 +362,8 @@ export namespace Config {
       }
     }
 
-    // Migrate deprecated mode field to agent field
-    for (const [name, mode] of Object.entries(result.mode ?? {})) {
-      result.agent = mergeDeep(result.agent ?? {}, {
-        [name]: {
-          ...mode,
-          mode: "primary" as const,
-        },
-      })
-    }
-
     if (Flag.ZEROXZERO_PERMISSION) {
       result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.ZEROXZERO_PERMISSION))
-    }
-
-    // Backwards compatibility: legacy top-level `tools` config
-    if (result.tools) {
-      const perms: Record<string, Config.PermissionAction> = {}
-      for (const [tool, enabled] of Object.entries(result.tools)) {
-        const legacy = legacyToolIssue(tool)
-        if (legacy) {
-          throw new InvalidError({
-            path: "tools",
-            message: legacy,
-          })
-        }
-        const action: Config.PermissionAction = enabled ? "allow" : "deny"
-        if (tool === "write" || tool === "edit" || tool === "apply_patch" || tool === "multiedit") {
-          perms.edit = action
-          continue
-        }
-        perms[tool] = action
-      }
-      result.permission = mergeDeep(perms, result.permission ?? {})
     }
 
     if (!result.username) result.username = os.userInfo().username
@@ -578,43 +565,6 @@ export namespace Config {
         continue
       }
       throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
-    }
-    return result
-  }
-
-  const MODE_GLOB = new Bun.Glob("{mode,modes}/*.md")
-  async function loadMode(dir: string) {
-    const result: Record<string, Agent> = {}
-    for await (const item of MODE_GLOB.scan({
-      absolute: true,
-      followSymlinks: true,
-      dot: true,
-      cwd: dir,
-    })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
-        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-          ? err.data.message
-          : `Failed to parse mode ${item}`
-        const { Session } = await import("@/session")
-        Bus.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
-        log.error("failed to load mode", { mode: item, err })
-        return undefined
-      })
-      if (!md) continue
-
-      const config = {
-        name: path.basename(item, ".md"),
-        ...md.data,
-        prompt: md.content.trim(),
-      }
-      const parsed = Agent.safeParse(config)
-      if (parsed.success) {
-        result[config.name] = {
-          ...parsed.data,
-          mode: "primary" as const,
-        }
-        continue
-      }
     }
     return result
   }
@@ -846,6 +796,7 @@ export namespace Config {
 
   export const Agent = z
     .object({
+      name: z.string().describe("Display name for this agent"),
       model: ModelId.optional(),
       variant: z
         .string()
@@ -854,96 +805,31 @@ export namespace Config {
       temperature: z.number().optional(),
       top_p: z.number().optional(),
       prompt: z.string().optional(),
-      tools: z
-        .record(z.string(), z.boolean())
-        .optional()
-        .superRefine((value, ctx) => {
-          if (!value) return
-          for (const tool of Object.keys(value)) {
-            const message = legacyToolIssue(tool)
-            if (!message) continue
-            ctx.addIssue({
-              code: "custom",
-              path: [tool],
-              message,
-            })
-          }
-        })
-        .describe("@deprecated Use 'permission' field instead"),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
-      mode: z.enum(["primary", "all"]).optional(),
       hidden: z.boolean().optional().describe("Hide this agent from the @ autocomplete menu (default: false)"),
-      options: z.record(z.string(), z.any()).optional(),
+      options: z.record(z.string(), z.unknown()).optional(),
       color: z
-        .union([
-          z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color format"),
-          z.enum(["primary", "secondary", "accent", "success", "warning", "error", "info"]),
-        ])
-        .optional()
-        .describe("Hex color code (e.g., #FF5733) or theme color (e.g., primary)"),
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color format")
+        .describe("Hex color code"),
       steps: z
         .number()
         .int()
         .positive()
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
-      maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
-      permission: Permission.optional(),
+      tools_allowed: z.array(z.string()).min(1).describe("Allowlist of tool IDs that this agent may use"),
+      thinking_effort: z
+        .string()
+        .describe("Model-native reasoning effort value to pass as providerOptions.reasoningEffort"),
+      knowledge_base: z.array(z.string()).optional().describe("Agent-specific knowledge snippets"),
     })
-    .catchall(z.any())
-    .transform((agent, ctx) => {
-      const knownKeys = new Set([
-        "name",
-        "model",
-        "variant",
-        "prompt",
-        "description",
-        "temperature",
-        "top_p",
-        "mode",
-        "hidden",
-        "color",
-        "steps",
-        "maxSteps",
-        "options",
-        "permission",
-        "disable",
-        "tools",
-      ])
-
-      // Extract unknown properties into options
-      const options: Record<string, unknown> = { ...agent.options }
-      for (const [key, value] of Object.entries(agent)) {
-        if (!knownKeys.has(key)) options[key] = value
-      }
-
-      // Convert legacy tools config to permissions
-      const permission: Permission = {}
-      for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
-        const action = enabled ? "allow" : "deny"
-        // write, edit, apply_patch, multiedit all map to edit permission
-        if (tool === "write" || tool === "edit" || tool === "apply_patch" || tool === "multiedit") {
-          permission.edit = action
-        } else {
-          permission[tool] = action
-        }
-      }
-      Object.assign(permission, agent.permission)
-
-      // Convert legacy maxSteps to steps
-      const steps = agent.steps ?? agent.maxSteps
-
-      return { ...agent, options, permission, steps } as typeof agent & {
-        options?: Record<string, unknown>
-        permission?: Permission
-        steps?: number
-      }
-    })
+    .strict()
     .meta({
       ref: "AgentConfig",
     })
-  export type Agent = z.infer<typeof Agent>
+  export type Agent = z.infer<typeof Agent> & Record<string, unknown>
 
   export const Keybinds = z
     .object({
@@ -1126,28 +1012,6 @@ export namespace Config {
 
   export const Prompt = z
     .object({
-      system: z
-        .object({
-          base: z.string().optional().describe("Override shared base system prompt"),
-          codex_instructions: z.string().optional().describe("Override Codex instructions header"),
-          gpt5: z.string().optional().describe("@deprecated Use prompt.models.gpt5"),
-          openai: z.string().optional().describe("@deprecated Use prompt.models.openai"),
-          gemini: z.string().optional().describe("@deprecated Use prompt.models.gemini"),
-          claude: z.string().optional().describe("@deprecated Use prompt.models.claude"),
-          trinity: z.string().optional().describe("@deprecated Use prompt.models.trinity"),
-          fallback: z.string().optional().describe("@deprecated Use prompt.models.fallback"),
-        })
-        .optional(),
-      models: z
-        .object({
-          gpt5: z.string().optional().describe("Override model prompt for gpt-5 models"),
-          openai: z.string().optional().describe("Override model prompt for gpt/o1/o3 models"),
-          gemini: z.string().optional().describe("Override model prompt for Gemini models"),
-          claude: z.string().optional().describe("Override model prompt for Claude models"),
-          trinity: z.string().optional().describe("Override model prompt for Trinity models"),
-          fallback: z.string().optional().describe("Override fallback model prompt for other models"),
-        })
-        .optional(),
       reminder: z
         .object({
           queued_user: z
@@ -1242,7 +1106,7 @@ export namespace Config {
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),
       system_prompt: z.string().optional().describe("Override the global base system prompt"),
-      prompt: Prompt.optional().describe("Override built-in system prompts and reminders"),
+      prompt: Prompt.optional().describe("Override built-in reminders"),
       server: Server.optional().describe("Server configuration for zeroxzero serve and web commands"),
       command: z
         .record(z.string(), Command)
@@ -1285,13 +1149,12 @@ export namespace Config {
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Falls back to 'plan' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Falls back to 'planner' if not set or if the specified agent is invalid.",
         ),
       username: z
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
-      mode: z.record(z.string(), Agent).optional().describe("@deprecated Use `agent` field instead."),
       agent: z
         .record(z.string(), Agent)
         .optional()
@@ -1365,27 +1228,12 @@ export namespace Config {
           },
         ),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
-      knowledge: z
+      knowledge_base: z
         .array(z.string())
         .optional()
         .describe("Project-specific knowledge snippets injected into all agents"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
-      tools: z
-        .record(z.string(), z.boolean())
-        .optional()
-        .superRefine((value, ctx) => {
-          if (!value) return
-          for (const tool of Object.keys(value)) {
-            const message = legacyToolIssue(tool)
-            if (!message) continue
-            ctx.addIssue({
-              code: "custom",
-              path: [tool],
-              message,
-            })
-          }
-        }),
       enterprise: z
         .object({
           url: z.string().optional().describe("Enterprise URL"),
@@ -1393,8 +1241,9 @@ export namespace Config {
         .optional(),
       compaction: z
         .object({
-          auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
-          prune: z.boolean().optional().describe("Enable pruning of old tool outputs (default: true)"),
+          auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
+          prune: z.boolean().optional().describe("Enable pruning of old tool outputs"),
+          prompt: z.string().optional().describe("Prompt used for session compaction"),
         })
         .optional(),
       experimental: z

@@ -15,7 +15,10 @@ const Schema = z
   .object({
     mode: z.enum(["fetch", "web", "code"]),
     url: z.string().optional().describe("URL to fetch (required for mode=fetch, must start with http:// or https://)"),
-    format: z.enum(["text", "markdown", "html"]).optional().describe("Response format for mode=fetch (default: markdown)"),
+    format: z
+      .enum(["text", "markdown", "html"])
+      .optional()
+      .describe("Response format for mode=fetch (default: markdown)"),
     timeout: z.number().optional().describe("Timeout in seconds for mode=fetch (max: 120)"),
     query: z.string().optional().describe("Search query (required for mode=web and mode=code)"),
     numResults: z.number().optional().describe("Number of search results for mode=web (default: 8)"),
@@ -33,40 +36,40 @@ const Schema = z
   .superRefine((value, ctx) => {
     if (value.mode === "fetch") {
       if (!value.url) {
-        ctx.addIssue({ code: "custom", path: ["url"], message: "url is required when mode is \"fetch\"" })
+        ctx.addIssue({ code: "custom", path: ["url"], message: 'url is required when mode is "fetch"' })
       }
       if (value.query !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["query"], message: "query is not valid when mode is \"fetch\"" })
+        ctx.addIssue({ code: "custom", path: ["query"], message: 'query is not valid when mode is "fetch"' })
       }
       if (value.numResults !== undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["numResults"],
-          message: "numResults is not valid when mode is \"fetch\"",
+          message: 'numResults is not valid when mode is "fetch"',
         })
       }
       if (value.livecrawl !== undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["livecrawl"],
-          message: "livecrawl is not valid when mode is \"fetch\"",
+          message: 'livecrawl is not valid when mode is "fetch"',
         })
       }
       if (value.type !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["type"], message: "type is not valid when mode is \"fetch\"" })
+        ctx.addIssue({ code: "custom", path: ["type"], message: 'type is not valid when mode is "fetch"' })
       }
       if (value.contextMaxCharacters !== undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["contextMaxCharacters"],
-          message: "contextMaxCharacters is not valid when mode is \"fetch\"",
+          message: 'contextMaxCharacters is not valid when mode is "fetch"',
         })
       }
       if (value.tokensNum !== undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["tokensNum"],
-          message: "tokensNum is not valid when mode is \"fetch\"",
+          message: 'tokensNum is not valid when mode is "fetch"',
         })
       }
       return
@@ -78,47 +81,47 @@ const Schema = z
 
     if (value.mode === "web") {
       if (value.url !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["url"], message: "url is not valid when mode is \"web\"" })
+        ctx.addIssue({ code: "custom", path: ["url"], message: 'url is not valid when mode is "web"' })
       }
       if (value.format !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["format"], message: "format is not valid when mode is \"web\"" })
+        ctx.addIssue({ code: "custom", path: ["format"], message: 'format is not valid when mode is "web"' })
       }
       if (value.timeout !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["timeout"], message: "timeout is not valid when mode is \"web\"" })
+        ctx.addIssue({ code: "custom", path: ["timeout"], message: 'timeout is not valid when mode is "web"' })
       }
       if (value.tokensNum !== undefined) {
         ctx.addIssue({
           code: "custom",
           path: ["tokensNum"],
-          message: "tokensNum is not valid when mode is \"web\"",
+          message: 'tokensNum is not valid when mode is "web"',
         })
       }
       return
     }
 
     if (value.url !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["url"], message: "url is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["url"], message: 'url is not valid when mode is "code"' })
     }
     if (value.format !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["format"], message: "format is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["format"], message: 'format is not valid when mode is "code"' })
     }
     if (value.timeout !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["timeout"], message: "timeout is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["timeout"], message: 'timeout is not valid when mode is "code"' })
     }
     if (value.numResults !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["numResults"], message: "numResults is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["numResults"], message: 'numResults is not valid when mode is "code"' })
     }
     if (value.livecrawl !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["livecrawl"], message: "livecrawl is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["livecrawl"], message: 'livecrawl is not valid when mode is "code"' })
     }
     if (value.type !== undefined) {
-      ctx.addIssue({ code: "custom", path: ["type"], message: "type is not valid when mode is \"code\"" })
+      ctx.addIssue({ code: "custom", path: ["type"], message: 'type is not valid when mode is "code"' })
     }
     if (value.contextMaxCharacters !== undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["contextMaxCharacters"],
-        message: "contextMaxCharacters is not valid when mode is \"code\"",
+        message: 'contextMaxCharacters is not valid when mode is "code"',
       })
     }
   })

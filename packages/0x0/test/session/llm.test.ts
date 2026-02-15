@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
-import type { ModelMessage } from "ai"
+import { jsonSchema, type ModelMessage, tool } from "ai"
 import { LLM } from "../../src/session/llm"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
@@ -366,6 +366,114 @@ describe("session.llm.stream", () => {
 
         const reasoning = (body.reasoningEffort as string | undefined) ?? (body.reasoning_effort as string | undefined)
         expect(reasoning).toBe("high")
+      },
+    })
+  })
+
+  test("does not include session-denied tools in provider payload", async () => {
+    const server = state.server
+    if (!server) {
+      throw new Error("Server not initialized")
+    }
+
+    const providerID = "alibaba"
+    const modelID = "qwen-plus"
+    const fixture = await loadFixture(providerID, modelID)
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "zeroxzero.json"),
+          JSON.stringify({
+            $schema: "https://zeroxzero.ai/config.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${server.url.origin}/v1`,
+                },
+                models: {
+                  [fixture.model.id]: fixture.model,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(providerID, fixture.model.id)
+        const sessionID = "session-test-permissions"
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: "user-permissions",
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID, modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const createTool = () =>
+          tool({
+            description: "test tool",
+            inputSchema: jsonSchema({ type: "object", properties: {} }),
+            execute: async () => ({ output: "", title: "", metadata: {} }),
+          })
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          permission: [{ permission: "denied", pattern: "*", action: "deny" }],
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {
+            allowed: createTool(),
+            denied: createTool(),
+          },
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        const body = capture.body
+        const items = (body.tools as Array<Record<string, unknown>> | undefined) ?? []
+        const names = items
+          .map((item) => {
+            const fn = item["function"]
+            if (fn && typeof fn === "object" && "name" in fn && typeof fn.name === "string") {
+              return fn.name
+            }
+            if (typeof item.name === "string") {
+              return item.name
+            }
+          })
+          .filter((x): x is string => !!x)
+
+        expect(names).toContain("allowed")
+        expect(names).not.toContain("denied")
       },
     })
   })

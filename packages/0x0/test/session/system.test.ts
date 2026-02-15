@@ -23,17 +23,11 @@ describe("session.system", () => {
     })
   })
 
-  test("prefers top-level system_prompt over legacy prompt system overrides", async () => {
+  test("uses top-level system_prompt for instructions", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
         system_prompt: "TOP_LEVEL_BASE",
-        prompt: {
-          system: {
-            base: "LEGACY_BASE",
-            codex_instructions: "LEGACY_CODEX",
-          },
-        },
       },
     })
 

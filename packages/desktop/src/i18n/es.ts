@@ -21,7 +21,8 @@ export const dict = {
   "desktop.updater.installFailed.message": "No se pudo instalar la actualización",
 
   "desktop.cli.installed.title": "CLI instalada",
-  "desktop.cli.installed.message": "CLI instalada en {{path}}\n\nReinicia tu terminal para usar el comando 'zeroxzero'.",
+  "desktop.cli.installed.message":
+    "CLI instalada en {{path}}\n\nReinicia tu terminal para usar el comando 'zeroxzero'.",
   "desktop.cli.failed.title": "Instalación fallida",
   "desktop.cli.failed.message": "No se pudo instalar la CLI: {{error}}",
 }

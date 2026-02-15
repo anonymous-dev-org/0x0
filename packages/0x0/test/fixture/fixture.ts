@@ -11,7 +11,7 @@ function sanitizePath(p: string): string {
 
 type TmpDirOptions<T> = {
   git?: boolean
-  config?: Partial<Config.Info>
+  config?: Record<string, unknown>
   init?: (dir: string) => Promise<T>
   dispose?: (dir: string) => Promise<T>
 }

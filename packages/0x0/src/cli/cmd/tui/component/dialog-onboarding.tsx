@@ -72,7 +72,7 @@ export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; o
       <box flexDirection="column" gap={1} paddingBottom={1}>
         <Option
           title="Use default agents"
-          description="Start with build and plan"
+          description="Start with builder and planner"
           active={choice() === "default"}
           hover={hover() === "default"}
           busy={busy()}

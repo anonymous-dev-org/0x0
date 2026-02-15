@@ -35,8 +35,8 @@ test("loads config with defaults when no files exist", async () => {
     fn: async () => {
       const config = await Config.get()
       expect(config.username).toBeDefined()
-      expect(config.agent?.build?.mode).toBe("primary")
-      expect(config.agent?.plan?.mode).toBe("primary")
+      expect(config.agent?.builder?.name).toBe("Builder")
+      expect(config.agent?.planner?.name).toBe("Planner")
     },
   })
 })
@@ -75,6 +75,30 @@ test("loads top-level system_prompt", async () => {
     fn: async () => {
       const config = await Config.get()
       expect(config.system_prompt).toBe("BASE_SYSTEM_PROMPT")
+    },
+  })
+})
+
+test("loads compaction.auto and compaction.prompt from YAML config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeYaml(
+        dir,
+        `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
+$schema: https://zeroxzero.ai/config.json
+compaction:
+  auto: false
+  prompt: Keep this summary concise.
+`,
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.compaction?.auto).toBe(false)
+      expect(config.compaction?.prompt).toBe("Keep this summary concise.")
     },
   })
 })
@@ -215,7 +239,7 @@ test("loads project config from .0x0 directory", async () => {
         `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
 $schema: https://zeroxzero.ai/config.json
 model: test/model
-knowledge:
+knowledge_base:
   - project note
 `,
       )
@@ -227,7 +251,7 @@ knowledge:
     fn: async () => {
       const config = await Config.get()
       expect(config.model).toBe("test/model")
-      expect(config.knowledge).toEqual(["project note"])
+      expect(config.knowledge_base).toEqual(["project note"])
     },
   })
 })
@@ -238,12 +262,12 @@ test("updateProject writes .0x0/0x0.yaml and merges knowledge", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await Config.updateProject({ knowledge: ["first note"] })
-      await Config.updateProject({ knowledge: ["first note", "second note"] })
+      await Config.updateProject({ knowledge_base: ["first note"] })
+      await Config.updateProject({ knowledge_base: ["first note", "second note"] })
       const projectConfigPath = path.join(tmp.path, ".0x0", "0x0.yaml")
       expect(await Bun.file(projectConfigPath).exists()).toBe(true)
       const config = await Config.getProject()
-      expect(config.knowledge).toEqual(["first note", "second note"])
+      expect(config.knowledge_base).toEqual(["first note", "second note"])
     },
   })
 })
@@ -517,7 +541,7 @@ test("migrates mode field to agent field", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test_mode"]).toEqual({
+      expect(config.agent?.["test_mode"] as any).toEqual({
         model: "test/model",
         temperature: 0.5,
         mode: "primary",
@@ -711,6 +735,25 @@ test("updates config and writes to file", async () => {
 
       const writtenConfig = await Bun.file(path.join(tmp.path, "0x0.yaml")).text()
       expect(writtenConfig).toContain("model: updated/model")
+    },
+  })
+})
+
+test("writes multiline YAML prompts without extra blank lines", async () => {
+  await using tmp = await tmpdir()
+  const paragraph = "word ".repeat(40).trim()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({
+        system_prompt: `${paragraph}\n\n${paragraph}`,
+      })
+
+      const writtenConfig = await Bun.file(path.join(tmp.path, "0x0.yaml")).text()
+      expect(writtenConfig).toContain("system_prompt: |-")
+      expect(writtenConfig).not.toContain("\n\n\n")
+      expect(writtenConfig).toContain("\n\n  word")
     },
   })
 })
@@ -1076,7 +1119,7 @@ test("migrates legacy tools config to permissions - allow", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         bash: "allow",
         read: "allow",
       })
@@ -1107,7 +1150,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         bash: "deny",
         search_remote: "deny",
       })
@@ -1137,7 +1180,7 @@ test("migrates legacy write tool to edit permission", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         edit: "allow",
       })
     },
@@ -1246,7 +1289,7 @@ test("migrates legacy edit tool to edit permission", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         edit: "deny",
       })
     },
@@ -1275,7 +1318,7 @@ test("migrates apply_patch tool to edit permission", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         edit: "allow",
       })
     },
@@ -1304,7 +1347,7 @@ test("migrates legacy multiedit tool to edit permission", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         edit: "deny",
       })
     },
@@ -1336,7 +1379,7 @@ test("migrates mixed legacy tools config", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         bash: "allow",
         edit: "allow",
         read: "deny",
@@ -1421,7 +1464,7 @@ test("merges legacy tools with existing permission config", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.["test"]?.permission).toEqual({
+      expect((config.agent?.["test"] as any)?.permission).toEqual({
         search: "allow",
         bash: "allow",
       })

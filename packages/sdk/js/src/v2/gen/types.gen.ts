@@ -83,13 +83,6 @@ export type EventLspUpdated = {
   }
 }
 
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
 export type FileDiff = {
   file: string
   before: string
@@ -524,35 +517,6 @@ export type EventPermissionReplied = {
   }
 }
 
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type QuestionOption = {
   /**
    * Display text (1-5 words, concise)
@@ -624,21 +588,6 @@ export type EventQuestionRejected = {
   }
 }
 
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
 export type Todo = {
   /**
    * Brief description of the task
@@ -663,6 +612,57 @@ export type EventTodoUpdated = {
   properties: {
     sessionID: string
     todos: Array<Todo>
+  }
+}
+
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -894,21 +894,21 @@ export type Event =
   | EventGlobalDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
-  | EventFileEdited
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
   | EventMessagePartRemoved
   | EventPermissionAsked
   | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
-  | EventSessionCompacted
-  | EventFileWatcherUpdated
   | EventTodoUpdated
+  | EventFileWatcherUpdated
+  | EventFileEdited
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventSessionCompacted
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1310,39 +1310,9 @@ export type KeybindsConfig = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Override built-in system prompts and reminders
+ * Override built-in reminders
  */
 export type PromptConfig = {
-  system?: {
-    /**
-     * Override Codex instructions header
-     */
-    codex_instructions?: string
-    /**
-     * Override default system prompt for gpt-5 models
-     */
-    gpt5?: string
-    /**
-     * Override default system prompt for gpt/o1/o3 models
-     */
-    openai?: string
-    /**
-     * Override default system prompt for Gemini models
-     */
-    gemini?: string
-    /**
-     * Override default system prompt for Claude models
-     */
-    claude?: string
-    /**
-     * Override default system prompt for Trinity models
-     */
-    trinity?: string
-    /**
-     * Override fallback system prompt for other models
-     */
-    fallback?: string
-  }
   reminder?: {
     /**
      * Override queued-user reminder. Use {{message}} placeholder for the user text.
@@ -1381,39 +1351,11 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
-export type PermissionActionConfig = "ask" | "allow" | "deny"
-
-export type PermissionObjectConfig = {
-  [key: string]: PermissionActionConfig
-}
-
-export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
-
-export type PermissionConfig =
-  | {
-      __originalKeys?: Array<string>
-      read?: PermissionRuleConfig
-      edit?: PermissionRuleConfig
-      glob?: PermissionRuleConfig
-      grep?: PermissionRuleConfig
-      list?: PermissionRuleConfig
-      bash?: PermissionRuleConfig
-      task?: PermissionRuleConfig
-      external_directory?: PermissionRuleConfig
-      todowrite?: PermissionActionConfig
-      todoread?: PermissionActionConfig
-      question?: PermissionActionConfig
-      webfetch?: PermissionActionConfig
-      websearch?: PermissionActionConfig
-      codesearch?: PermissionActionConfig
-      lsp?: PermissionRuleConfig
-      doom_loop?: PermissionActionConfig
-      skill?: PermissionRuleConfig
-      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
-    }
-  | PermissionActionConfig
-
 export type AgentConfig = {
+  /**
+   * Display name for this agent
+   */
+  name: string
   model?: string
   /**
    * Default model variant for this agent (applies only when using the agent's configured model).
@@ -1422,18 +1364,11 @@ export type AgentConfig = {
   temperature?: number
   top_p?: number
   prompt?: string
-  /**
-   * @deprecated Use 'permission' field instead
-   */
-  tools?: {
-    [key: string]: boolean
-  }
   disable?: boolean
   /**
    * Description of when to use the agent
    */
   description?: string
-  mode?: "primary" | "all"
   /**
    * Hide this agent from the @ autocomplete menu (default: false)
    */
@@ -1442,42 +1377,25 @@ export type AgentConfig = {
     [key: string]: unknown
   }
   /**
-   * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
+   * Hex color code
    */
-  color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
+  color: string
   /**
    * Maximum number of agentic iterations before forcing text-only response
    */
   steps?: number
   /**
-   * @deprecated Use 'steps' field instead.
+   * Allowlist of tool IDs that this agent may use
    */
-  maxSteps?: number
-  permission?: PermissionConfig
-  [key: string]:
-    | unknown
-    | string
-    | number
-    | {
-        [key: string]: boolean
-      }
-    | boolean
-    | "primary"
-    | "all"
-    | {
-        [key: string]: unknown
-      }
-    | string
-    | "primary"
-    | "secondary"
-    | "accent"
-    | "success"
-    | "warning"
-    | "error"
-    | "info"
-    | number
-    | PermissionConfig
-    | undefined
+  tools_allowed: Array<string>
+  /**
+   * Model-native reasoning effort value to pass as providerOptions.reasoningEffort
+   */
+  thinking_effort: string
+  /**
+   * Agent-specific knowledge snippets
+   */
+  knowledge_base?: Array<string>
 }
 
 export type ProviderConfig = {
@@ -1642,6 +1560,34 @@ export type McpRemoteConfig = {
  */
 export type LayoutConfig = "auto" | "stretch"
 
+export type PermissionActionConfig = "ask" | "allow" | "deny"
+
+export type PermissionObjectConfig = {
+  [key: string]: PermissionActionConfig
+}
+
+export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
+
+export type PermissionConfig =
+  | {
+      __originalKeys?: Array<string>
+      read?: PermissionRuleConfig
+      edit?: PermissionRuleConfig
+      search?: PermissionRuleConfig
+      search_remote?: PermissionRuleConfig
+      bash?: PermissionRuleConfig
+      task?: PermissionRuleConfig
+      external_directory?: PermissionRuleConfig
+      todowrite?: PermissionActionConfig
+      todoread?: PermissionActionConfig
+      question?: PermissionActionConfig
+      lsp?: PermissionRuleConfig
+      doom_loop?: PermissionActionConfig
+      skill?: PermissionRuleConfig
+      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
+    }
+  | PermissionActionConfig
+
 export type Config = {
   /**
    * JSON schema reference for configuration validation
@@ -1671,10 +1617,22 @@ export type Config = {
       enabled: boolean
     }
     /**
+     * Enable terminal bell notifications for completed turns and required user actions
+     */
+    terminal_notifications?: boolean
+    /**
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Global tint opacity scale for TUI color blending, from 0 to 1 (default: 1.0)
+     */
+    tint_strength?: number
   }
+  /**
+   * Override the global base system prompt
+   */
+  system_prompt?: string
   prompt?: PromptConfig
   server?: ServerConfig
   /**
@@ -1736,7 +1694,7 @@ export type Config = {
    */
   small_model?: string
   /**
-   * Default agent to use when none is specified. Falls back to 'build' if not set or if the specified agent is invalid.
+   * Default agent to use when none is specified. Falls back to 'planner' if not set or if the specified agent is invalid.
    */
   default_agent?: string
   /**
@@ -1744,25 +1702,10 @@ export type Config = {
    */
   username?: string
   /**
-   * @deprecated Use `agent` field instead.
-   */
-  mode?: {
-    build?: AgentConfig
-    plan?: AgentConfig
-    [key: string]: AgentConfig | undefined
-  }
-  /**
    * Agent configuration, see https://zeroxzero.ai/docs/agents
    */
   agent?: {
-    plan?: AgentConfig
-    build?: AgentConfig
-    general?: AgentConfig
-    explore?: AgentConfig
-    title?: AgentConfig
-    summary?: AgentConfig
-    compaction?: AgentConfig
-    [key: string]: AgentConfig | undefined
+    [key: string]: AgentConfig
   }
   /**
    * Custom provider configurations and model overrides
@@ -1816,11 +1759,12 @@ export type Config = {
    * Additional instruction files or patterns to include
    */
   instructions?: Array<string>
+  /**
+   * Project-specific knowledge snippets injected into all agents
+   */
+  knowledge_base?: Array<string>
   layout?: LayoutConfig
   permission?: PermissionConfig
-  tools?: {
-    [key: string]: boolean
-  }
   enterprise?: {
     /**
      * Enterprise URL
@@ -1829,13 +1773,17 @@ export type Config = {
   }
   compaction?: {
     /**
-     * Enable automatic compaction when context is full (default: true)
+     * Enable automatic compaction when context is full
      */
     auto?: boolean
     /**
-     * Enable pruning of old tool outputs (default: true)
+     * Enable pruning of old tool outputs
      */
     prune?: boolean
+    /**
+     * Prompt used for session compaction
+     */
+    prompt?: string
   }
   experimental?: {
     disable_paste_summary?: boolean
@@ -2183,6 +2131,7 @@ export type Command = {
 
 export type Agent = {
   name: string
+  displayName?: string
   description?: string
   mode: "primary" | "all"
   native?: boolean
@@ -2201,6 +2150,9 @@ export type Agent = {
     [key: string]: unknown
   }
   steps?: number
+  toolsAllowed: Array<string>
+  thinkingEffort?: string
+  knowledgeBase: Array<string>
 }
 
 export type LspStatus = {
@@ -4955,6 +4907,30 @@ export type AppAgentsResponses = {
 }
 
 export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
+
+export type AppPromptData = {
+  body?: {
+    agent: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/prompt"
+}
+
+export type AppPromptResponses = {
+  /**
+   * Resolved prompt
+   */
+  200: {
+    agent: string
+    parts: Array<string>
+    prompt: string
+  }
+}
+
+export type AppPromptResponse = AppPromptResponses[keyof AppPromptResponses]
 
 export type AppSkillsData = {
   body?: never

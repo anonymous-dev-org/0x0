@@ -56,12 +56,12 @@ export function createDialogProviderOptions() {
               pluginMethods &&
               !pluginMethods.some((method) => method.type === "api")
                 ? [...pluginMethods, { type: "api" as const, label: "API key" }]
-                : pluginMethods ?? [
+                : (pluginMethods ?? [
                     {
                       type: "api" as const,
                       label: "API key",
                     },
-                  ]
+                  ])
             let index: number | null = 0
             if (methods.length > 1) {
               index = await new Promise<number | null>((resolve) => {

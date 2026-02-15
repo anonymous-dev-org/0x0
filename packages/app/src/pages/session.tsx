@@ -1580,12 +1580,7 @@ export default function Page() {
               <Match when={params.id}>
                 <Show
                   when={activeMessage()}
-                  fallback={
-                    <NewSessionView
-                      worktree={newSessionWorktree()}
-                      onWorktreeChange={handleWorktreeChange}
-                    />
-                  }
+                  fallback={<NewSessionView worktree={newSessionWorktree()} onWorktreeChange={handleWorktreeChange} />}
                 >
                   <MessageTimeline
                     mobileChanges={mobileChanges()}
@@ -1663,10 +1658,7 @@ export default function Page() {
                 </Show>
               </Match>
               <Match when={true}>
-                <NewSessionView
-                  worktree={newSessionWorktree()}
-                  onWorktreeChange={handleWorktreeChange}
-                />
+                <NewSessionView worktree={newSessionWorktree()} onWorktreeChange={handleWorktreeChange} />
               </Match>
             </Switch>
           </div>

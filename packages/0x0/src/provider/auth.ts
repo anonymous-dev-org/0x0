@@ -6,6 +6,7 @@ import { fn } from "@/util/fn"
 import type { AuthOuathResult, Hooks } from "@0x0-ai/plugin"
 import { NamedError } from "@0x0-ai/util/error"
 import { Auth } from "@/auth"
+import { write as writeProvider } from "@/config/providers"
 
 export namespace ProviderAuth {
   const state = Instance.state(async () => {
@@ -109,6 +110,13 @@ export namespace ProviderAuth {
             info.accountId = result.accountId
           }
           await Auth.set(input.providerID, info)
+        }
+        const auth = await state().then((s) => s.methods[input.providerID])
+        if (auth?.methods[input.method]?.label.toLowerCase().includes("antigravity")) {
+          await writeProvider("antigravity")
+        }
+        if (auth?.methods[input.method]?.label.toLowerCase().includes("chatgpt")) {
+          await writeProvider("codex")
         }
         return
       }

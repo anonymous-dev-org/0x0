@@ -7,6 +7,7 @@ import type {
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
+  AppPromptResponses,
   AppSkillsResponses,
   Auth as Auth3,
   AuthRemoveErrors,
@@ -3092,6 +3093,41 @@ export class App extends HeyApiClient {
       url: "/agent",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Resolve final prompt
+   *
+   * Get the final resolved system prompt layers for a specific agent in the current project.
+   */
+  public prompt<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      agent?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AppPromptResponses, unknown, ThrowOnError>({
+      url: "/prompt",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

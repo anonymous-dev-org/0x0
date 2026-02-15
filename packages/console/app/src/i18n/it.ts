@@ -74,7 +74,8 @@ export const dict = {
   "home.install.ariaLabel": "Opzioni di installazione",
 
   "home.what.title": "Che cos'e Terminal Agent?",
-  "home.what.body": "Terminal Agent e un agente open source che ti aiuta a scrivere codice nel terminale, IDE o desktop.",
+  "home.what.body":
+    "Terminal Agent e un agente open source che ti aiuta a scrivere codice nel terminale, IDE o desktop.",
   "home.what.lsp.title": "LSP abilitato",
   "home.what.lsp.body": "Carica automaticamente gli LSP giusti per il LLM",
   "home.what.multiSession.title": "Multi-session",
@@ -196,7 +197,8 @@ export const dict = {
   "zen.problem.item2": "Collaborare con i fornitori per garantire che vengano consegnati correttamente",
   "zen.problem.item3": "Eseguiamo il benchmarking di tutte le combinazioni di fornitori di modelli che consigliamo",
   "zen.how.title": "Come funziona Zen",
-  "zen.how.body": "Anche se ti consigliamo di utilizzare Zen con Terminal Agent, puoi utilizzare Zen con qualsiasi agente.",
+  "zen.how.body":
+    "Anche se ti consigliamo di utilizzare Zen con Terminal Agent, puoi utilizzare Zen con qualsiasi agente.",
   "zen.how.step1.title": "Iscriviti e aggiungi un saldo di $ 20",
   "zen.how.step1.beforeLink": "seguire il",
   "zen.how.step1.link": "istruzioni di configurazione",
@@ -230,7 +232,8 @@ export const dict = {
     "Non necessariamente, ma probabilmente. Ti serve un abbonamento IA se vuoi collegare Terminal Agent a un provider a pagamento, ma puoi lavorare con",
   "download.faq.a3.localLink": "modelli locali",
   "download.faq.a3.afterLocal.beforeZen": "gratis. Anche se incoraggiamo gli utenti a usare",
-  "download.faq.a3.afterZen": ", Terminal Agent funziona con tutti i provider popolari come OpenAI, Anthropic, xAI, ecc.",
+  "download.faq.a3.afterZen":
+    ", Terminal Agent funziona con tutti i provider popolari come OpenAI, Anthropic, xAI, ecc.",
 
   "download.faq.a5.p1": "Terminal Agent e gratuito al 100%.",
   "download.faq.a5.p2.beforeZen":

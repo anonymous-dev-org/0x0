@@ -75,7 +75,8 @@ export const dict = {
   "home.install.ariaLabel": "Installeringsalternativer",
 
   "home.what.title": "Hva er Terminal Agent?",
-  "home.what.body": "Terminal Agent er en apen kildekode-agent som hjelper deg a skrive kode i terminal, IDE eller desktop.",
+  "home.what.body":
+    "Terminal Agent er en apen kildekode-agent som hjelper deg a skrive kode i terminal, IDE eller desktop.",
   "home.what.lsp.title": "LSP aktivert",
   "home.what.lsp.body": "Laster automatisk de riktige LSP-ene for LLM-en",
   "home.what.multiSession.title": "Multi-sesjon",
@@ -112,7 +113,8 @@ export const dict = {
   "home.faq.a2.before": "Den enkleste maten a komme i gang pa er a lese",
   "home.faq.a2.link": "introen",
   "home.faq.q3": "Trenger jeg ekstra AI-abonnementer for a bruke Terminal Agent?",
-  "home.faq.a3.p1": "Ikke nodvendigvis. Terminal Agent kommer med gratis modeller du kan bruke uten a opprette en konto.",
+  "home.faq.a3.p1":
+    "Ikke nodvendigvis. Terminal Agent kommer med gratis modeller du kan bruke uten a opprette en konto.",
   "home.faq.a3.p2.beforeZen": "I tillegg kan du bruke populære kodemodeller ved a opprette en",
   "home.faq.a3.p2.afterZen": " konto.",
   "home.faq.a3.p3":
@@ -195,7 +197,8 @@ export const dict = {
   "zen.problem.item2": "Samarbeide med leverandører for å sikre at de blir levert riktig",
   "zen.problem.item3": "Benchmarking av alle modellleverandørkombinasjoner anbefaler vi",
   "zen.how.title": "Hvordan Zen fungerer",
-  "zen.how.body": "Selv om vi foreslår at du bruker Zen med Terminal Agent, kan du bruke Zen med hvilken som helst agent.",
+  "zen.how.body":
+    "Selv om vi foreslår at du bruker Zen med Terminal Agent, kan du bruke Zen med hvilken som helst agent.",
   "zen.how.step1.title": "Registrer deg og legg til $20-saldo",
   "zen.how.step1.beforeLink": "følg",
   "zen.how.step1.link": "oppsettsinstruksjoner",
@@ -229,7 +232,8 @@ export const dict = {
     "Ikke nodvendigvis, men sannsynligvis. Du trenger et AI-abonnement hvis du vil koble Terminal Agent til en betalt leverandor, men du kan jobbe med",
   "download.faq.a3.localLink": "lokale modeller",
   "download.faq.a3.afterLocal.beforeZen": "gratis. Selv om vi oppfordrer brukere til a bruke",
-  "download.faq.a3.afterZen": ", fungerer Terminal Agent med alle populære leverandorer som OpenAI, Anthropic, xAI osv.",
+  "download.faq.a3.afterZen":
+    ", fungerer Terminal Agent med alle populære leverandorer som OpenAI, Anthropic, xAI osv.",
 
   "download.faq.a5.p1": "Terminal Agent er 100% gratis a bruke.",
   "download.faq.a5.p2.beforeZen":

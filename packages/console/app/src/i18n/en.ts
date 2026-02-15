@@ -101,7 +101,8 @@ export const dict = {
   "home.install.ariaLabel": "Install options",
 
   "home.what.title": "What is Terminal Agent?",
-  "home.what.body": "Terminal Agent is an open source agent that helps you write code in your terminal, IDE, or desktop.",
+  "home.what.body":
+    "Terminal Agent is an open source agent that helps you write code in your terminal, IDE, or desktop.",
   "home.what.lsp.title": "LSP enabled",
   "home.what.lsp.body": "Automatically loads the right LSPs for the LLM",
   "home.what.multiSession.title": "Multi-session",
@@ -195,7 +196,8 @@ export const dict = {
   "zen.faq.a4.p1.afterPricing": "with zero markups, so you pay exactly what the model provider charges.",
   "zen.faq.a4.p2.beforeAccount": "Your total cost depends on usage, and you can set monthly spend limits in your",
   "zen.faq.a4.p2.accountLink": "account",
-  "zen.faq.a4.p3": "To cover costs, Terminal Agent adds only a small payment processing fee of $1.23 per $20 balance top-up.",
+  "zen.faq.a4.p3":
+    "To cover costs, Terminal Agent adds only a small payment processing fee of $1.23 per $20 balance top-up.",
   "zen.faq.q5": "What about data and privacy?",
   "zen.faq.a5.beforeExceptions":
     "All Zen models are hosted in the US. Providers follow a zero-retention policy and do not use your data for model training, with the",

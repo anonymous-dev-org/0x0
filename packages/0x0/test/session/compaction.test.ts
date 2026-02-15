@@ -7,6 +7,7 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
+import { Config } from "../../src/config/config"
 
 Log.init({ print: false })
 
@@ -41,7 +42,11 @@ function createModel(opts: {
 
 describe("session.compaction.isOverflow", () => {
   test("returns true when token count exceeds usable context", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -53,7 +58,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("returns false when token count within usable context", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -65,7 +74,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("includes cache.read in token count", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -77,7 +90,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("respects input limit for input caps", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -89,7 +106,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("returns false when input/output are within input caps", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -101,7 +122,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("returns false when output within limit with input caps", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -113,7 +138,11 @@ describe("session.compaction.isOverflow", () => {
   })
 
   test("returns false when model context limit is 0", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "zeroxzero.json"), JSON.stringify({ compaction: { auto: true } }))
+      },
+    })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -143,6 +172,18 @@ describe("session.compaction.isOverflow", () => {
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
       },
     })
+  })
+
+  test("returns false when compaction.auto is not explicitly enabled", async () => {
+    const get = Config.get
+    Config.get = async () => ({})
+    try {
+      const model = createModel({ context: 100_000, output: 32_000 })
+      const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
+      expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+    } finally {
+      Config.get = get
+    }
   })
 })
 

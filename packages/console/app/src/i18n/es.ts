@@ -152,7 +152,8 @@ export const dict = {
 
   "download.title": "Terminal Agent | Descargar",
 
-  "zen.title": "Terminal Agent Zen | Un conjunto seleccionado de modelos confiables y optimizados para agentes de codigo",
+  "zen.title":
+    "Terminal Agent Zen | Un conjunto seleccionado de modelos confiables y optimizados para agentes de codigo",
   "zen.hero.title": "Accede a modelos confiables y optimizados para agentes de codigo",
   "zen.hero.body":
     "Zen te da acceso a un conjunto seleccionado de modelos de IA que Terminal Agent ha probado y benchmarkeado especificamente para agentes de codigo. No necesitas preocuparte por el rendimiento y la calidad inconsistentes entre proveedores: usa modelos validados que funcionan.",
@@ -239,7 +240,8 @@ export const dict = {
     "Cualquier costo adicional vendra de tu suscripcion a un proveedor de modelos. Aunque Terminal Agent funciona con cualquier proveedor de modelos, recomendamos usar",
   "download.faq.a5.p2.afterZen": ".",
 
-  "download.faq.a6.p1": "Tus datos e informacion solo se almacenan cuando creas enlaces compartibles en Terminal Agent.",
+  "download.faq.a6.p1":
+    "Tus datos e informacion solo se almacenan cuando creas enlaces compartibles en Terminal Agent.",
   "download.faq.a6.p2.beforeShare": "Mas informacion sobre",
   "download.faq.a6.shareLink": "paginas para compartir",
 
@@ -458,8 +460,10 @@ export const dict = {
   "workspace.black.subscription.resetsIn": "Se reinicia en",
   "workspace.black.subscription.useBalance": "Utilice su saldo disponible después de alcanzar los límites de uso",
   "workspace.black.waitlist.title": "Lista de espera",
-  "workspace.black.waitlist.joined": "Estás en la lista de espera para el plan Black de ${{plan}} por mes Terminal Agent.",
-  "workspace.black.waitlist.ready": "Estamos listos para inscribirlo en el plan Black de ${{plan}} por mes Terminal Agent.",
+  "workspace.black.waitlist.joined":
+    "Estás en la lista de espera para el plan Black de ${{plan}} por mes Terminal Agent.",
+  "workspace.black.waitlist.ready":
+    "Estamos listos para inscribirlo en el plan Black de ${{plan}} por mes Terminal Agent.",
   "workspace.black.waitlist.leave": "Salir de la lista de espera",
   "workspace.black.waitlist.leaving": "Partida...",
   "workspace.black.waitlist.left": "Izquierda",

@@ -115,7 +115,8 @@ export const dict = {
   "home.faq.a3.p1": "Sart degil. Terminal Agent, hesap acmadan kullanabileceginiz ucretsiz modellerle gelir.",
   "home.faq.a3.p2.beforeZen": "Bunun disinda, populer kodlama modellerini kullanmak icin bir",
   "home.faq.a3.p2.afterZen": " hesabi olusturabilirsiniz.",
-  "home.faq.a3.p3": "Zen'i oneriyoruz, ancak Terminal Agent OpenAI, Anthropic, xAI gibi populer saglayicilarla da calisir.",
+  "home.faq.a3.p3":
+    "Zen'i oneriyoruz, ancak Terminal Agent OpenAI, Anthropic, xAI gibi populer saglayicilarla da calisir.",
   "home.faq.a3.p4.beforeLocal": "Hatta",
   "home.faq.a3.p4.localLink": "yerel modellerinizi baglayabilirsiniz",
   "home.faq.q4": "Mevcut AI aboneliklerimi Terminal Agent ile kullanabilir miyim?",

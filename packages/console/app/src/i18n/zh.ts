@@ -285,7 +285,8 @@ export const dict = {
   "brand.title": "Terminal Agent | \u54c1\u724c",
   "brand.meta.description": "Terminal Agent \u54c1\u724c\u6307\u5357",
   "brand.heading": "\u54c1\u724c\u6307\u5357",
-  "brand.subtitle": "\u5e2e\u52a9\u4f60\u4f7f\u7528 Terminal Agent \u54c1\u724c\u7684\u8d44\u6e90\u4e0e\u7d20\u6750\u3002",
+  "brand.subtitle":
+    "\u5e2e\u52a9\u4f60\u4f7f\u7528 Terminal Agent \u54c1\u724c\u7684\u8d44\u6e90\u4e0e\u7d20\u6750\u3002",
   "brand.downloadAll": "\u4e0b\u8f7d\u5168\u90e8\u7d20\u6750",
   "changelog.title": "Terminal Agent | \u66f4\u65b0\u65e5\u5fd7",
   "changelog.meta.description": "Terminal Agent \u53d1\u5e03\u8bf4\u660e\u4e0e\u66f4\u65b0\u65e5\u5fd7",

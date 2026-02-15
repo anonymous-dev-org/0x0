@@ -33,6 +33,7 @@ export namespace LLM {
     sessionID: string
     model: Provider.Model
     agent: Agent.Info
+    permission?: PermissionNext.Ruleset
     system: string[]
     abort: AbortSignal
     messages: ModelMessage[]
@@ -50,7 +51,23 @@ export namespace LLM {
     user: MessageV2.User
   }) {
     const skill = input.system.find((item) => !!item?.trim())
-    return SystemPrompt.compose({ agent: input.agent.prompt, skill })
+    const agentPrompt = [input.agent.prompt, transparencySection(input.agent)].filter(Boolean).join("\n\n")
+    return SystemPrompt.compose({ agent: agentPrompt, skill })
+  }
+
+  export function transparencySection(agent: Agent.Info) {
+    const toolsAllowed = agent.toolsAllowed ?? []
+    const knowledgeBase = agent.knowledgeBase ?? []
+    const tools = toolsAllowed.length > 0 ? toolsAllowed.join(", ") : "(none)"
+    const knowledge = knowledgeBase.length > 0 ? knowledgeBase.join("\n- ") : "(none)"
+    return [
+      "## Effective Agent Configuration",
+      `- Agent ID: ${agent.name}`,
+      `- Agent Name: ${agent.displayName ?? agent.name}`,
+      `- Tools Allowed: ${tools}`,
+      `- Thinking Effort: ${agent.thinkingEffort ?? "(unset)"}`,
+      `- Knowledge Base:\n- ${knowledge}`,
+    ].join("\n")
   }
 
   export async function stream(input: StreamInput) {
@@ -61,7 +78,6 @@ export namespace LLM {
       .tag("sessionID", input.sessionID)
       .tag("small", (input.small ?? false).toString())
       .tag("agent", input.agent.name)
-      .tag("mode", input.agent.mode)
     l.info("stream", {
       modelID: input.model.id,
       providerID: input.model.providerID,
@@ -131,6 +147,12 @@ export namespace LLM {
         options,
       },
     )
+    if (input.agent.thinkingEffort) {
+      params.options = {
+        ...params.options,
+        reasoningEffort: input.agent.thinkingEffort,
+      }
+    }
 
     const { headers } = await Plugin.trigger(
       "chat.headers",
@@ -263,8 +285,9 @@ export namespace LLM {
     })
   }
 
-  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {
-    const disabled = PermissionNext.disabled(Object.keys(input.tools), input.agent.permission)
+  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
+    const ruleset = PermissionNext.merge(input.agent.permission, input.permission ?? [])
+    const disabled = PermissionNext.disabled(Object.keys(input.tools), ruleset)
     for (const tool of Object.keys(input.tools)) {
       if (input.user.tools?.[tool] === false || disabled.has(tool)) {
         delete input.tools[tool]

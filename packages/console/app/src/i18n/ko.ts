@@ -122,7 +122,8 @@ export const dict = {
   "home.faq.q2": "Terminal Agent\ub97c \uc5b4\ub5bb\uac8c \uc0ac\uc6a9\ud558\ub098\uc694?",
   "home.faq.a2.before": "\uac00\uc7a5 \uc27d\uac8c \uc2dc\uc791\ud558\ub824\uba74",
   "home.faq.a2.link": "\uc778\ud2b8\ub85c\ub97c \uc77d\uc5b4\ubcf4\uc138\uc694",
-  "home.faq.q3": "Terminal Agent\ub97c \uc0ac\uc6a9\ud558\ub824\uba74 AI \uad6c\ub3c5\uc774 \ud544\uc694\ud55c\uac00\uc694?",
+  "home.faq.q3":
+    "Terminal Agent\ub97c \uc0ac\uc6a9\ud558\ub824\uba74 AI \uad6c\ub3c5\uc774 \ud544\uc694\ud55c\uac00\uc694?",
   "home.faq.a3.p1":
     "\ud544\uc218\ub294 \uc544\ub2c8\uc5d0\uc694. Terminal Agent\uc5d0\ub294 \uacc4\uc815 \uc5c6\uc774\ub3c4 \uc0ac\uc6a9\ud560 \uc218 \uc788\ub294 \ubb34\ub8cc \ubaa8\ub378\uc774 \ud3ec\ud568\ub429\ub2c8\ub2e4.",
   "home.faq.a3.p2.beforeZen": "\uadf8 \uc678\uc5d0\ub294",
@@ -136,7 +137,8 @@ export const dict = {
     "\uae30\uc874 AI \uad6c\ub3c5\uc744 Terminal Agent\uc5d0\uc11c \uc0ac\uc6a9\ud560 \uc218 \uc788\ub098\uc694?",
   "home.faq.a4.p1":
     "\ub124. Terminal Agent\ub294 \uc8fc\uc694 \ud504\ub85c\ubc14\uc774\ub354\uc758 \uad6c\ub3c5\uc744 \uc9c0\uc6d0\ud569\ub2c8\ub2e4. Claude Pro/Max, ChatGPT Plus/Pro, GitHub Copilot\uc744 \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.",
-  "home.faq.q5": "Terminal Agent\ub97c \ud130\ubbf8\ub110\uc5d0\uc11c\ub9cc \uc0ac\uc6a9\ud574\uc57c \ud558\ub098\uc694?",
+  "home.faq.q5":
+    "Terminal Agent\ub97c \ud130\ubbf8\ub110\uc5d0\uc11c\ub9cc \uc0ac\uc6a9\ud574\uc57c \ud558\ub098\uc694?",
   "home.faq.a5.beforeDesktop": "\uc774\uc81c\ub294 \uc544\ub2c8\uc5d0\uc694! Terminal Agent\ub294 \uc774\uc81c",
   "home.faq.a5.desktop": "\ub370\uc2a4\ud06c\ud1b1",
   "home.faq.a5.and": "\uacfc",
@@ -232,7 +234,8 @@ export const dict = {
   "zen.privacy.beforeExceptions":
     "모든 Zen 모델은 미국에서 호스팅됩니다. 제공업체는 무보존 정책을 따르고 모델 교육에 데이터를 사용하지 않습니다.",
   "zen.privacy.exceptionsLink": "다음 예외",
-  "download.meta.description": "macOS, Windows, Linux\uc6a9 Terminal Agent\ub97c \ub2e4\uc6b4\ub85c\ub4dc\ud558\uc138\uc694",
+  "download.meta.description":
+    "macOS, Windows, Linux\uc6a9 Terminal Agent\ub97c \ub2e4\uc6b4\ub85c\ub4dc\ud558\uc138\uc694",
   "download.hero.title": "Terminal Agent \ub2e4\uc6b4\ub85c\ub4dc",
   "download.hero.subtitle": "macOS, Windows, Linux\uc5d0\uc11c \ubca0\ud0c0\ub85c \uc81c\uacf5\ub429\ub2c8\ub2e4",
   "download.hero.button": "{{os}}\uc6a9 \ub2e4\uc6b4\ub85c\ub4dc",
@@ -255,7 +258,8 @@ export const dict = {
     "\uc740 \ubb34\ub8cc\ub85c \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4. \ub610\ud55c",
   "download.faq.a3.afterZen":
     " \uc0ac\uc6a9\uc744 \uad8c\uc7a5\ud558\uc9c0\ub9cc Terminal Agent\ub294 OpenAI, Anthropic, xAI \ub4f1 \ubaa8\ub4e0 \uc8fc\uc694 \uc81c\uacf5\uc5c5\uccb4\uc640\ub3c4 \uc791\ub3d9\ud569\ub2c8\ub2e4.",
-  "download.faq.a5.p1": "Terminal Agent\ub294 100% \ubb34\ub8cc\ub85c \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.",
+  "download.faq.a5.p1":
+    "Terminal Agent\ub294 100% \ubb34\ub8cc\ub85c \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.",
   "download.faq.a5.p2.beforeZen":
     "\ucd94\uac00 \ube44\uc6a9\uc740 \ubaa8\ub378 \uc81c\uacf5\uc5c5\uccb4 \uad6c\ub3c5\uc5d0\uc11c \ubc1c\uc0dd\ud569\ub2c8\ub2e4. Terminal Agent\ub294 \uc5b4\ub5a4 \ubaa8\ub378 \uc81c\uacf5\uc5c5\uccb4\uc640\ub3c4 \ub3d9\uc791\ud558\uc9c0\ub9cc",
   "download.faq.a5.p2.afterZen": " \uc0ac\uc6a9\uc744 \uad8c\uc7a5\ud569\ub2c8\ub2e4.",

@@ -41,7 +41,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
         const configured = sync.data.config.default_agent
         if (configured && list.some((x) => x.name === configured)) return configured
-        if (list.some((x) => x.name === "plan")) return "plan"
+        if (list.some((x) => x.name === "planner")) return "planner"
         return list[0]?.name ?? ""
       })
       const [agentStore, setAgentStore] = createStore<{
@@ -92,21 +92,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           })
         },
         label(name: string) {
-          if (name === "build") return "Builder"
-          if (name === "plan") return "Planner"
-          return Locale.titlecase(name)
+          const agent = agents().find((item) => item.name === name)
+          if (!agent) return Locale.titlecase(name)
+          const configuredName = sync.data.config.agent?.[agent.name]?.name
+          return configuredName ?? Locale.titlecase(agent.name)
         },
         color(name: string) {
           const index = agents().findIndex((x) => x.name === name)
           if (index === -1) return colors()[0]
           const agent = agents()[index]
 
-          if (agent?.color) {
-            const color = agent.color
-            if (color.startsWith("#")) return RGBA.fromHex(color)
-            // already validated by config, just satisfying TS here
-            return theme[color as keyof typeof theme] as RGBA
-          }
+          if (agent?.color) return RGBA.fromHex(agent.color)
           return colors()[index % colors().length]
         },
       }

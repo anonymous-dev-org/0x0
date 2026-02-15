@@ -10,6 +10,8 @@ import { Config } from "../../config/config"
 import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
+import { Antigravity } from "../../antigravity"
+import { write as writeProvider } from "../../config/providers"
 import type { Hooks } from "@0x0-ai/plugin"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
@@ -108,6 +110,12 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
             key: result.key,
           })
         }
+        if (method.label.toLowerCase().includes("antigravity")) {
+          await writeProvider("antigravity")
+        }
+        if (method.label.toLowerCase().includes("chatgpt")) {
+          await writeProvider("codex")
+        }
         spinner.stop("Login successful")
       }
     }
@@ -139,6 +147,12 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
             type: "api",
             key: result.key,
           })
+        }
+        if (method.label.toLowerCase().includes("antigravity")) {
+          await writeProvider("antigravity")
+        }
+        if (method.label.toLowerCase().includes("chatgpt")) {
+          await writeProvider("codex")
         }
         prompts.log.success("Login successful")
       }
@@ -174,7 +188,12 @@ export const AuthCommand = cmd({
   command: "auth",
   describe: "manage credentials",
   builder: (yargs) =>
-    yargs.command(AuthLoginCommand).command(AuthLogoutCommand).command(AuthListCommand).demandCommand(),
+    yargs
+      .command(AuthLoginCommand)
+      .command(AuthLogoutCommand)
+      .command(AuthListCommand)
+      .command(AuthAccountsCommand)
+      .demandCommand(),
   async handler() {},
 })
 
@@ -414,5 +433,72 @@ export const AuthLogoutCommand = cmd({
     if (prompts.isCancel(providerID)) throw new UI.CancelledError()
     await Auth.remove(providerID)
     prompts.outro("Logout successful")
+  },
+})
+
+export const AuthAccountsCommand = cmd({
+  command: "accounts",
+  describe: "manage Antigravity accounts",
+  async handler() {
+    UI.empty()
+    prompts.intro("Antigravity accounts")
+
+    const data = await Antigravity.accounts()
+    if (!data || data.accounts.length === 0) {
+      prompts.log.error("No Antigravity accounts found. Run `0x0 auth login` and select Google first.")
+      prompts.outro("Done")
+      return
+    }
+
+    for (const [i, account] of data.accounts.entries()) {
+      const active = i === data.activeIndex ? " (active)" : ""
+      const status = account.enabled === false ? " [disabled]" : ""
+      const email = account.email ?? "unknown"
+      const used = account.lastUsed ? new Date(account.lastUsed).toLocaleString() : "never"
+      prompts.log.info(`${i + 1}. ${email}${active}${status}` + UI.Style.TEXT_DIM + ` last used: ${used}`)
+    }
+
+    const action = await prompts.select({
+      message: "Action",
+      options: [
+        { label: "Switch active account", value: "switch" },
+        { label: "Enable/disable account", value: "toggle" },
+        { label: "Cancel", value: "cancel" },
+      ],
+    })
+    if (prompts.isCancel(action) || action === "cancel") {
+      prompts.outro("Done")
+      return
+    }
+
+    if (action === "switch") {
+      const target = await prompts.select({
+        message: "Select account",
+        options: data.accounts.map((account, i) => ({
+          label: `${account.email ?? "unknown"}${i === data.activeIndex ? " (current)" : ""}`,
+          value: i.toString(),
+        })),
+      })
+      if (prompts.isCancel(target)) throw new UI.CancelledError()
+      await Antigravity.setActiveAccount(parseInt(target))
+      prompts.log.success(`Switched to ${data.accounts[parseInt(target)].email ?? "unknown"}`)
+    }
+
+    if (action === "toggle") {
+      const target = await prompts.select({
+        message: "Select account",
+        options: data.accounts.map((account, i) => ({
+          label: `${account.email ?? "unknown"} ${account.enabled === false ? "[disabled]" : "[enabled]"}`,
+          value: i.toString(),
+        })),
+      })
+      if (prompts.isCancel(target)) throw new UI.CancelledError()
+      const idx = parseInt(target)
+      const enabled = data.accounts[idx].enabled !== false
+      await Antigravity.setAccountEnabled(idx, !enabled)
+      prompts.log.success(`${data.accounts[idx].email ?? "unknown"} ${enabled ? "disabled" : "enabled"}`)
+    }
+
+    prompts.outro("Done")
   },
 })

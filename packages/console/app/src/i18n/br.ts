@@ -458,7 +458,8 @@ export const dict = {
   "workspace.black.subscription.useBalance": "Use seu saldo disponível após atingir os limites de uso",
   "workspace.black.waitlist.title": "Lista de espera",
   "workspace.black.waitlist.joined": "Você está na lista de espera do plano Black de ${{plan}} por mês Terminal Agent.",
-  "workspace.black.waitlist.ready": "Estamos prontos para inscrevê-lo no plano Black de ${{plan}} por mês Terminal Agent.",
+  "workspace.black.waitlist.ready":
+    "Estamos prontos para inscrevê-lo no plano Black de ${{plan}} por mês Terminal Agent.",
   "workspace.black.waitlist.leave": "Sair da lista de espera",
   "workspace.black.waitlist.leaving": "Saindo...",
   "workspace.black.waitlist.left": "Esquerda",

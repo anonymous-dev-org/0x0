@@ -274,7 +274,8 @@ export const dict = {
   "download.section.terminal": "Terminal Agent Terminal",
   "download.section.desktop": "Terminal Agent Desktop (Beta)",
   "download.section.extensions": "\u0e2a\u0e48\u0e27\u0e19\u0e02\u0e22\u0e32\u0e22 Terminal Agent",
-  "download.section.integrations": "\u0e01\u0e32\u0e23\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21\u0e15\u0e48\u0e2d Terminal Agent",
+  "download.section.integrations":
+    "\u0e01\u0e32\u0e23\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21\u0e15\u0e48\u0e2d Terminal Agent",
   "download.action.download": "\u0e14\u0e32\u0e27\u0e19\u0e4c\u0e42\u0e2b\u0e25\u0e14",
   "download.action.install": "\u0e15\u0e34\u0e14\u0e15\u0e31\u0e49\u0e07",
   "download.platform.macosAppleSilicon": "macOS (Apple Silicon)",
@@ -533,7 +534,8 @@ export const dict = {
   "workspace.black.subscription.useBalance": "ใช้ยอดเงินคงเหลือของคุณหลังจากถึงขีดจำกัดการใช้งานแล้ว",
   "workspace.black.waitlist.title": "รายชื่อผู้รอ",
   "workspace.black.waitlist.joined": "คุณอยู่ในรายชื่อรอสำหรับแผน ${{plan}} ต่อเดือน Terminal Agent Black",
-  "workspace.black.waitlist.ready": "เราพร้อมที่จะลงทะเบียนให้คุณเข้าร่วมแผน ${{plan}} ต่อเดือน Terminal Agent Black แล้ว",
+  "workspace.black.waitlist.ready":
+    "เราพร้อมที่จะลงทะเบียนให้คุณเข้าร่วมแผน ${{plan}} ต่อเดือน Terminal Agent Black แล้ว",
   "workspace.black.waitlist.leave": "ออกจากรายชื่อผู้รอ",
   "workspace.black.waitlist.leaving": "กำลังออก...",
   "workspace.black.waitlist.left": "ซ้าย",

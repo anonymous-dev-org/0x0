@@ -29,7 +29,7 @@ export namespace SessionCompaction {
 
   export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
-    if (config.compaction?.auto === false) return false
+    if (config.compaction?.auto !== true) return false
     const context = input.model.limit.context
     if (context === 0) return false
     const count = input.tokens.input + input.tokens.cache.read + input.tokens.output
@@ -48,7 +48,7 @@ export namespace SessionCompaction {
   // tool calls that are no longer relevant.
   export async function prune(input: { sessionID: string }) {
     const config = await Config.get()
-    if (config.compaction?.prune === false) return
+    if (config.compaction?.prune !== true) return
     log.info("pruning")
     const msgs = await Session.messages({ sessionID: input.sessionID })
     let total = 0
@@ -101,6 +101,19 @@ export namespace SessionCompaction {
     const model = agent.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
       : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+    const config = await Config.get()
+    // Allow plugins to inject additional compaction context
+    const compacting = await Plugin.trigger(
+      "experimental.session.compacting",
+      { sessionID: input.sessionID },
+      { context: [], prompt: undefined },
+    )
+    const prompt = config.compaction?.prompt?.trim()
+    if (!prompt) {
+      log.info("skipping compaction, missing compaction.prompt")
+      return "stop"
+    }
+
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "assistant",
@@ -133,15 +146,9 @@ export namespace SessionCompaction {
       model,
       abort: input.abort,
     })
-    // Allow plugins to inject context or replace compaction prompt
-    const compacting = await Plugin.trigger(
-      "experimental.session.compacting",
-      { sessionID: input.sessionID },
-      { context: [], prompt: undefined },
-    )
-    const defaultPrompt =
-      "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
-    const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
+    const promptText = [prompt, ...(compacting?.context ?? [])]
+      .filter((item): item is string => Boolean(item))
+      .join("\n\n")
     const result = await processor.process({
       user: userMessage,
       agent,

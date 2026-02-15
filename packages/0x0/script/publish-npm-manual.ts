@@ -43,7 +43,9 @@ if (!version) throw new Error("Could not determine version. Pass --version.")
 
 const publishName = (name: string) => `${scope}/${name}`
 const config = token
-  ? await Bun.write(`./dist/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${token}\n`).then(() => `./dist/.npmrc.publish`)
+  ? await Bun.write(`./dist/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${token}\n`).then(
+      () => `./dist/.npmrc.publish`,
+    )
   : undefined
 
 if (meta.optionalDependencies?.[publishName("0x0")]) {
@@ -92,8 +94,12 @@ const push = async (folder: string) => {
 
   while (true) {
     const result = otp
-      ? await $`${{ raw: `npm publish *.tgz --access public --tag ${tag} --otp=${otp}${config ? ` --userconfig ${config}` : ""}` }}`.cwd(cwd).nothrow()
-      : await $`${{ raw: `npm publish *.tgz --access public --tag ${tag}${config ? ` --userconfig ${config}` : ""}` }}`.cwd(cwd).nothrow()
+      ? await $`${{ raw: `npm publish *.tgz --access public --tag ${tag} --otp=${otp}${config ? ` --userconfig ${config}` : ""}` }}`
+          .cwd(cwd)
+          .nothrow()
+      : await $`${{ raw: `npm publish *.tgz --access public --tag ${tag}${config ? ` --userconfig ${config}` : ""}` }}`
+          .cwd(cwd)
+          .nothrow()
     if (result.exitCode === 0) return
 
     const stderr = result.stderr.toString()

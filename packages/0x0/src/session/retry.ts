@@ -59,9 +59,23 @@ export namespace SessionRetry {
   }
 
   export function retryable(error: ReturnType<NamedError["toObject"]>) {
+    const summarize = (value: string, max = 160) => {
+      const normalized = value.replace(/\s+/g, " ").trim()
+      if (normalized.length <= max) return normalized
+      return `${normalized.slice(0, max - 1)}…`
+    }
+
+    const formatRetryMessage = (reason: string, code: string, detail?: string) => {
+      const meta = detail ? `[retry_code=${code}; detail=${JSON.stringify(summarize(detail))}]` : `[retry_code=${code}]`
+      return `${reason} Retrying automatically. ${meta}`
+    }
+
     if (MessageV2.APIError.isInstance(error)) {
       if (!error.data.isRetryable) return undefined
-      return error.data.message.includes("Overloaded") ? "Provider is overloaded" : error.data.message
+      if (error.data.message.includes("Overloaded")) {
+        return formatRetryMessage("Provider is temporarily overloaded.", "provider_overloaded", error.data.message)
+      }
+      return formatRetryMessage("Temporary API error.", "api_retryable_error", error.data.message)
     }
 
     const json = iife(() => {
@@ -79,17 +93,18 @@ export namespace SessionRetry {
     try {
       if (!json || typeof json !== "object") return undefined
       const code = typeof json.code === "string" ? json.code : ""
+      const detail = typeof json.error?.message === "string" ? json.error.message : undefined
 
       if (json.type === "error" && json.error?.type === "too_many_requests") {
-        return "Too Many Requests"
+        return formatRetryMessage("Rate limit reached.", "too_many_requests", detail)
       }
       if (code.includes("exhausted") || code.includes("unavailable")) {
-        return "Provider is overloaded"
+        return formatRetryMessage("Provider is temporarily overloaded.", "provider_overloaded", detail)
       }
       if (json.type === "error" && json.error?.code?.includes("rate_limit")) {
-        return "Rate Limited"
+        return formatRetryMessage("Rate limit reached.", "rate_limit", detail)
       }
-      return JSON.stringify(json)
+      return formatRetryMessage("Temporary provider error.", "provider_retryable_error", JSON.stringify(json))
     } catch {
       return undefined
     }

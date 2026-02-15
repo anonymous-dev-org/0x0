@@ -40,6 +40,8 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { SystemPrompt } from "@/session/system"
+import { LLM } from "@/session/llm"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -408,6 +410,46 @@ export namespace Server {
           async (c) => {
             const modes = await Agent.list()
             return c.json(modes)
+          },
+        )
+        .post(
+          "/prompt",
+          describeRoute({
+            summary: "Resolve final prompt",
+            description: "Get the final resolved system prompt layers for a specific agent in the current project.",
+            operationId: "app.prompt",
+            responses: {
+              200: {
+                description: "Resolved prompt",
+                content: {
+                  "application/json": {
+                    schema: resolver(
+                      z.object({
+                        agent: z.string(),
+                        parts: z.array(z.string()),
+                        prompt: z.string(),
+                      }),
+                    ),
+                  },
+                },
+              },
+            },
+          }),
+          validator("json", z.object({ agent: z.string() })),
+          async (c) => {
+            const { agent: agentID } = c.req.valid("json")
+            const agent = await Agent.get(agentID)
+            if (!agent) {
+              return c.json({ message: `Agent not found: ${agentID}` }, 404)
+            }
+            const parts = await SystemPrompt.compose({
+              agent: [agent.prompt, LLM.transparencySection(agent)].filter(Boolean).join("\n\n"),
+            })
+            return c.json({
+              agent: agent.name,
+              parts,
+              prompt: parts.join("\n\n"),
+            })
           },
         )
         .get(

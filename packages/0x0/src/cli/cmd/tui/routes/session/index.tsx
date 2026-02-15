@@ -830,6 +830,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
   const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
+  const sessionStatus = createMemo(() => sync.data.session_status?.[props.message.sessionID])
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
   const agentColor = createMemo(() => {
     const color = local.agent.color(props.message.agent)
@@ -847,6 +848,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
     return tint(theme.text, color, 0.52)
   })
 
+  const agentLabel = createMemo(() => local.agent.label(props.message.agent)?.trim() ?? "")
+  const modelLabel = createMemo(() => props.message.modelID?.trim() ?? "")
+  const showMetadataRow = createMemo(() => ctx.showAssistantMetadata() && Boolean(agentLabel() || modelLabel()))
+
   const duration = () => {
     if (!final()) return 0
     if (!props.message.time.completed) return 0
@@ -855,14 +860,31 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
     return props.message.time.completed - user.time.created
   }
 
+  const retryMessage = createMemo(() => {
+    const status = sessionStatus()
+    if (status?.type !== "retry") return
+    if (props.message.time.completed) return
+    const nextInSeconds = Math.max(0, Math.ceil((status.next - Date.now()) / 1000))
+    const eta = nextInSeconds > 0 ? ` Next retry in ~${nextInSeconds}s.` : ""
+    const meta = `retry_meta{attempt=${status.attempt},next_unix_ms=${status.next}}`
+    return `${status.message} Attempt ${status.attempt}.${eta} ${meta}`
+  })
+
   return (
     <box border={["left"]} customBorderChars={SplitBorder.customBorderChars} borderColor={rail()}>
-      <Show when={ctx.showAssistantMetadata() && final()}>
+      <Show when={showMetadataRow()}>
         <box paddingLeft={3} marginTop={1}>
           <text>
             <span style={{ fg: rail() }}>▣ </span>
-            <span style={{ fg: rail() }}>{local.agent.label(props.message.agent)}</span>
-            <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
+            <Show when={agentLabel()}>
+              <span style={{ fg: rail() }}>{agentLabel()}</span>
+            </Show>
+            <Show when={agentLabel() && modelLabel()}>
+              <span style={{ fg: theme.textMuted }}> · </span>
+            </Show>
+            <Show when={modelLabel()}>
+              <span style={{ fg: theme.textMuted }}>{modelLabel()}</span>
+            </Show>
             <Show when={duration()}>
               <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
             </Show>
@@ -896,6 +918,20 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
           borderColor={theme.error}
         >
           <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
+        </box>
+      </Show>
+      <Show when={retryMessage()}>
+        <box
+          border={["left"]}
+          paddingTop={1}
+          paddingBottom={1}
+          paddingLeft={2}
+          marginTop={1}
+          backgroundColor={theme.backgroundPanel}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={theme.warning}
+        >
+          <text fg={theme.textMuted}>{retryMessage()}</text>
         </box>
       </Show>
     </box>

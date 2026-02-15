@@ -28,7 +28,7 @@ const Schema = z
       ctx.addIssue({
         code: "custom",
         path: ["include"],
-        message: "include is only valid when mode is \"content\"",
+        message: 'include is only valid when mode is "content"',
       })
     }
   })

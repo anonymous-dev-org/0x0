@@ -10,6 +10,7 @@ import { usePromptRef } from "../context/prompt"
 import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { useExit } from "../context/exit"
+import { DialogAlert } from "../ui/dialog-alert"
 import type { Accessor, Component, Setter } from "solid-js"
 
 type Loader<T> = () => Promise<T>
@@ -161,6 +162,27 @@ export function registerAppCommands(props: {
       keybind: "agent_list",
       category: "Agent",
       onSelect: show("agents", load.agent),
+    },
+    {
+      title: "Show resolved prompt",
+      value: "agent.prompt",
+      category: "Agent",
+      slash: {
+        name: "prompt",
+      },
+      onSelect: async (dialog) => {
+        const currentAgent = props.local.agent.current().name
+        const response = await props.sdk.client.app.prompt({ agent: currentAgent }).catch(() => undefined)
+        if (!response?.data?.prompt) {
+          props.toast.show({
+            variant: "error",
+            message: "Failed to resolve prompt",
+          })
+          dialog.clear()
+          return
+        }
+        await DialogAlert.show(dialog, `Prompt · ${currentAgent}`, response.data.prompt)
+      },
     },
     {
       title: "Toggle MCPs",

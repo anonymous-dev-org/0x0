@@ -12,7 +12,9 @@ const npmToken = process.env.ZEROXZERO_NPM_TOKEN ?? process.env.NPM_TOKEN ?? pro
 
 const publishTgz = async (cwd: string) => {
   const config = npmToken
-    ? await Bun.write(`${cwd}/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${npmToken}\n`).then(() => `${cwd}/.npmrc.publish`)
+    ? await Bun.write(`${cwd}/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${npmToken}\n`).then(
+        () => `${cwd}/.npmrc.publish`,
+      )
     : undefined
   const base = `npm publish *.tgz --access public --tag ${Script.channel}${config ? ` --userconfig ${config}` : ""}`
   if (otp) {

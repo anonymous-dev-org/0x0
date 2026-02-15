@@ -148,6 +148,7 @@ function App() {
     dialog.replace(() => (
       <DialogOnboarding
         onKeepDefaults={async () => {
+          await sync.bootstrap()
           kv.set("onboarding_v1_done", true)
           dialog.clear()
         }}
@@ -156,7 +157,7 @@ function App() {
           const config = JSON.parse(JSON.stringify(current.data ?? {}))
           config.agent = config.agent ?? {}
 
-          for (const name of ["build", "plan"]) {
+          for (const name of ["builder", "planner"]) {
             const current = config.agent[name] ?? {}
             config.agent[name] = {
               ...current,
@@ -167,12 +168,15 @@ function App() {
           const custom = sync.data.agent.find((item) => !item.native && item.hidden !== true)?.name ?? "my_agent"
           config.agent[custom] = {
             ...(config.agent[custom] ?? {}),
-            mode: "primary",
+            name: config.agent[custom]?.name ?? "My Agent",
+            color: config.agent[custom]?.color ?? "#22C55E",
+            tools_allowed: config.agent[custom]?.tools_allowed ?? ["bash", "read", "search", "apply_patch", "task"],
+            thinking_effort: config.agent[custom]?.thinking_effort ?? "medium",
             hidden: false,
             description: config.agent[custom]?.description ?? "My custom agent",
           }
 
-          if (["build", "plan"].includes(config.default_agent)) {
+          if (["builder", "planner"].includes(config.default_agent)) {
             config.default_agent = custom
           }
 
