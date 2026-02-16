@@ -178,7 +178,12 @@ export namespace LLM {
             OUTPUT_TOKEN_MAX,
           )
 
-    const tools = await resolveTools(input)
+    const tools = input.tools
+    if (input.permission) {
+      for (const name of PermissionNext.disabled(Object.keys(tools), input.permission)) {
+        delete tools[name]
+      }
+    }
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -283,17 +288,6 @@ export namespace LLM {
         },
       },
     })
-  }
-
-  async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
-    const ruleset = PermissionNext.merge(input.agent.permission, input.permission ?? [])
-    const disabled = PermissionNext.disabled(Object.keys(input.tools), ruleset)
-    for (const tool of Object.keys(input.tools)) {
-      if (input.user.tools?.[tool] === false || disabled.has(tool)) {
-        delete input.tools[tool]
-      }
-    }
-    return input.tools
   }
 
   // Check if messages contain any tool-call content

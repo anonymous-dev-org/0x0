@@ -24,7 +24,6 @@ import { Binary } from "@0x0-ai/util/binary"
 import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
-import { useArgs } from "./args"
 import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@0x0-ai/sdk"
@@ -326,87 +325,155 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     })
 
     const exit = useExit()
-    const args = useArgs()
+    const bootstrapState = {
+      inFlight: undefined as Promise<void> | undefined,
+      runID: 0,
+      queued: false,
+    }
 
     async function bootstrap() {
-      console.log("bootstrapping")
-      const start = Date.now() - 30 * 24 * 60 * 60 * 1000
-      const sessionListPromise = sdk.client.session
-        .list({ start: start })
-        .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
+      if (bootstrapState.inFlight) {
+        bootstrapState.queued = true
+        return bootstrapState.inFlight
+      }
 
-      // blocking - include session.list when continuing a session
-      const providersPromise = sdk.client.config.providers({}, { throwOnError: true })
-      const providerListPromise = sdk.client.provider.list({}, { throwOnError: true })
-      const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
-      const configPromise = sdk.client.config.get({}, { throwOnError: true })
-      const blockingRequests: Promise<unknown>[] = [
-        providersPromise,
-        providerListPromise,
-        agentsPromise,
-        configPromise,
-        ...(args.continue ? [sessionListPromise] : []),
-      ]
-
-      await Promise.all(blockingRequests)
-        .then(() => {
-          const providersResponse = providersPromise.then((x) => x.data!)
-          const providerListResponse = providerListPromise.then((x) => x.data!)
-          const agentsResponse = agentsPromise.then((x) => x.data ?? [])
-          const configResponse = configPromise.then((x) => x.data!)
-          const sessionListResponse = args.continue ? sessionListPromise : undefined
-
-          return Promise.all([
-            providersResponse,
-            providerListResponse,
-            agentsResponse,
-            configResponse,
-            ...(sessionListResponse ? [sessionListResponse] : []),
-          ]).then((responses) => {
-            const providers = responses[0]
-            const providerList = responses[1]
-            const agents = responses[2]
-            const config = responses[3]
-            const sessions = responses[4]
-
-            batch(() => {
-              setStore("provider", reconcile(providers.providers))
-              setStore("provider_default", reconcile(providers.default))
-              setStore("provider_next", reconcile(providerList))
-              setStore("agent", reconcile(agents))
-              setStore("config", reconcile(config))
-              if (sessions !== undefined) setStore("session", reconcile(sessions))
-            })
-          })
+      const runID = ++bootstrapState.runID
+      const started = performance.now()
+      const requestTiming = (stage: string, extra?: Record<string, unknown>) => {
+        Log.Default.debug("startup", {
+          stage,
+          elapsed_ms: Math.round(performance.now() - started),
+          ...extra,
         })
-        .then(() => {
-          if (store.status !== "complete") setStore("status", "partial")
-          // non-blocking
-          Promise.all([
-            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions)))]),
-            sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
-            sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
-            sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
-            sdk.client.experimental.resource.list().then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
-            sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!))),
-            sdk.client.session.status().then((x) => {
+      }
+
+      async function request<T>(label: string, fn: () => Promise<T>) {
+        const requestStarted = performance.now()
+        const value = await fn()
+        requestTiming("sync.request.completed", {
+          request: label,
+          duration_ms: Math.round(performance.now() - requestStarted),
+        })
+        return value
+      }
+
+      setStore("status", "loading")
+      requestTiming("sync.bootstrap.start")
+
+      bootstrapState.inFlight = (async () => {
+        try {
+          const since = Date.now() - 30 * 24 * 60 * 60 * 1000
+
+          const providersPromise = request("config.providers", () =>
+            sdk.client.config.providers({}, { throwOnError: true }),
+          )
+            .then((x) => x.data!)
+            .then((providers) => {
+              if (runID !== bootstrapState.runID) return
+              batch(() => {
+                setStore("provider", reconcile(providers.providers))
+                setStore("provider_default", reconcile(providers.default))
+              })
+            })
+
+          const providerListPromise = request("provider.list", () =>
+            sdk.client.provider.list({}, { throwOnError: true }),
+          )
+            .then((x) => x.data!)
+            .then((providerList) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("provider_next", reconcile(providerList))
+            })
+
+          const agentsPromise = request("app.agents", () => sdk.client.app.agents({}, { throwOnError: true }))
+            .then((x) => x.data ?? [])
+            .then((agents) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("agent", reconcile(agents))
+            })
+
+          const configPromise = request("config.get", () => sdk.client.config.get({}, { throwOnError: true }))
+            .then((x) => x.data!)
+            .then((config) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("config", reconcile(config))
+            })
+
+          const sessionListPromise = request("session.list", () => sdk.client.session.list({ start: since }))
+            .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
+            .then((sessions) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("session", reconcile(sessions))
+            })
+
+          await Promise.all([providersPromise, providerListPromise, agentsPromise, configPromise])
+
+          if (runID !== bootstrapState.runID) return
+          setStore("status", "partial")
+          requestTiming("sync.partial")
+
+          await Promise.all([
+            sessionListPromise,
+            request("command.list", () => sdk.client.command.list()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("command", reconcile(x.data ?? []))
+            }),
+            request("lsp.status", () => sdk.client.lsp.status()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("lsp", reconcile(x.data!))
+            }),
+            request("mcp.status", () => sdk.client.mcp.status()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("mcp", reconcile(x.data!))
+            }),
+            request("experimental.resource.list", () => sdk.client.experimental.resource.list()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("mcp_resource", reconcile(x.data ?? {}))
+            }),
+            request("formatter.status", () => sdk.client.formatter.status()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("formatter", reconcile(x.data!))
+            }),
+            request("session.status", () => sdk.client.session.status()).then((x) => {
+              if (runID !== bootstrapState.runID) return
               setStore("session_status", reconcile(x.data!))
             }),
-            sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
-            sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
-            sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
-          ]).then(() => {
-            setStore("status", "complete")
-          })
-        })
-        .catch(async (e) => {
+            request("provider.auth", () => sdk.client.provider.auth()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("provider_auth", reconcile(x.data ?? {}))
+            }),
+            request("vcs.get", () => sdk.client.vcs.get()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("vcs", reconcile(x.data))
+            }),
+            request("path.get", () => sdk.client.path.get()).then((x) => {
+              if (runID !== bootstrapState.runID) return
+              setStore("path", reconcile(x.data!))
+            }),
+          ])
+
+          if (runID !== bootstrapState.runID) return
+          setStore("status", "complete")
+          requestTiming("sync.complete")
+        } catch (e) {
           Log.Default.error("tui bootstrap failed", {
             error: e instanceof Error ? e.message : String(e),
             name: e instanceof Error ? e.name : undefined,
             stack: e instanceof Error ? e.stack : undefined,
           })
           await exit(e)
-        })
+        } finally {
+          if (bootstrapState.inFlight) {
+            bootstrapState.inFlight = undefined
+          }
+          if (bootstrapState.queued) {
+            bootstrapState.queued = false
+            void bootstrap()
+          }
+        }
+      })()
+
+      return bootstrapState.inFlight
     }
 
     onMount(() => {

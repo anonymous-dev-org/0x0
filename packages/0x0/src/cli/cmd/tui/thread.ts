@@ -33,9 +33,37 @@ function createWorkerFetch(client: RpcClient): typeof fetch {
   return fn as typeof fetch
 }
 
-function createEventSource(client: RpcClient): EventSource {
+function createEventSource(client: RpcClient, directory: string): EventSource {
+  let subscriptions = 0
+  let active = false
+
   return {
-    on: (handler) => client.on<Event>("event", handler),
+    on: (handler) => {
+      const unsubscribe = client.on<Event>("event", handler)
+      subscriptions += 1
+
+      if (!active) {
+        active = true
+        void client.call("eventStart", { directory }).catch((error) => {
+          Log.Default.error("failed to start event bridge", {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+
+      return () => {
+        unsubscribe()
+        subscriptions = Math.max(0, subscriptions - 1)
+        if (subscriptions > 0 || !active) return
+
+        active = false
+        void client.call("eventStop", undefined).catch((error) => {
+          Log.Default.error("failed to stop event bridge", {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+    },
   }
 }
 
@@ -76,6 +104,17 @@ export const TuiThreadCommand = cmd({
         describe: "agent to use",
       }),
   handler: async (args) => {
+    const started = performance.now()
+    const timing = (stage: string, extra?: Record<string, unknown>) => {
+      Log.Default.debug("startup", {
+        stage,
+        elapsed_ms: Math.round(performance.now() - started),
+        ...extra,
+      })
+    }
+
+    timing("tui.thread.start")
+
     if (args.fork && !args.continue && !args.session) {
       UI.error("--fork requires --continue or --session")
       process.exit(1)
@@ -105,6 +144,7 @@ export const TuiThreadCommand = cmd({
         Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
       ),
     })
+    timing("tui.worker.spawned")
     worker.onerror = (e) => {
       Log.Default.error(e)
     }
@@ -124,6 +164,7 @@ export const TuiThreadCommand = cmd({
       if (!args.prompt) return piped
       return piped ? piped + "\n" + args.prompt : args.prompt
     })
+    timing("tui.prompt.resolved", { has_prompt: !!prompt })
 
     // Check if server should be started (port or hostname explicitly set in CLI or config)
     const networkOpts = await resolveNetworkOptions(args)
@@ -137,17 +178,18 @@ export const TuiThreadCommand = cmd({
 
     let url: string
     let customFetch: typeof fetch | undefined
-    let events: EventSource | undefined
+    const events = createEventSource(client, cwd)
 
     if (shouldStartServer) {
       // Start HTTP server for external access
       const server = await client.call("server", networkOpts)
       url = server.url
+      timing("tui.server.started")
     } else {
       // Use direct RPC communication (no HTTP)
       url = "http://zeroxzero.internal"
       customFetch = createWorkerFetch(client)
-      events = createEventSource(client)
+      timing("tui.rpc.mode")
     }
 
     const { tui } = await app
@@ -174,5 +216,6 @@ export const TuiThreadCommand = cmd({
     }, 1000)
 
     await tuiPromise
+    timing("tui.thread.done")
   },
 })

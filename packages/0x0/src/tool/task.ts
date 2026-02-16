@@ -12,13 +12,15 @@ import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
 
-const subtaskParameters = z.object({
+const parameters = z.object({
   mode: z
-    .literal("subtask")
-    .describe("Use subtask mode when you need to delegate work and then return to the current agent"),
+    .enum(["subtask", "handoff"])
+    .describe(
+      "subtask: delegate work and return to the current agent. handoff: permanently transfer control to another agent",
+    ),
   description: z.string().describe("A short (3-5 words) description of the task"),
-  prompt: z.string().describe("The task for the agent to perform"),
   agent: z.string().describe("The agent to use for this task"),
+  prompt: z.string().describe("The task for the agent to perform (required for subtask mode)").optional(),
   task_id: z
     .string()
     .describe(
@@ -27,16 +29,6 @@ const subtaskParameters = z.object({
     .optional(),
   command: z.string().describe("The command that triggered this task").optional(),
 })
-
-const handoffParameters = z.object({
-  mode: z
-    .literal("handoff")
-    .describe("Use handoff mode when you need to permanently transfer control to another agent"),
-  description: z.string().describe("A short description of what the target agent should do next"),
-  agent: z.string().describe("The target agent to hand off to"),
-})
-
-const parameters = z.discriminatedUnion("mode", [subtaskParameters, handoffParameters])
 
 export const TaskTool = Tool.define("task", async (ctx) => {
   const agents = await Agent.list().then((x) => x.filter((a) => !a.hidden))
@@ -135,6 +127,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           output: ["<handoff_result>", `Handed off to @${agent.name}`, "</handoff_result>"].join("\n"),
         }
       }
+
+      if (!params.prompt) throw new Error("prompt is required for subtask mode")
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {

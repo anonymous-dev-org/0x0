@@ -10,7 +10,7 @@ describe("session.prompt agent variant", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          builder: {
             model: "openai/gpt-5.2",
             variant: "xhigh",
           },
@@ -25,7 +25,7 @@ describe("session.prompt agent variant", () => {
 
         const other = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "builder",
           model: { providerID: "zeroxzero", modelID: "kimi-k2.5-free" },
           noReply: true,
           parts: [{ type: "text", text: "hello" }],
@@ -35,7 +35,7 @@ describe("session.prompt agent variant", () => {
 
         const match = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "builder",
           noReply: true,
           parts: [{ type: "text", text: "hello again" }],
         })
@@ -45,7 +45,7 @@ describe("session.prompt agent variant", () => {
 
         const override = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "builder",
           noReply: true,
           variant: "high",
           parts: [{ type: "text", text: "hello third" }],

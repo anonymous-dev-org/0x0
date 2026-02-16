@@ -79,6 +79,8 @@ type SubmitInput = {
     clear: () => void
   }
   clear: () => void
+  setText: (value: string) => void
+  gotoBufferEnd: () => void
 }
 
 export async function submitPrompt(props: {
@@ -98,6 +100,7 @@ export async function submitPrompt(props: {
   setMode: (mode: "normal" | "shell") => void
   setPrompt: (prompt: PromptInfo) => void
   setExtmarkToPartIndex: (map: Map<number, number>) => void
+  restorePromptParts?: (parts: PromptInfo["parts"]) => void
   onPromptModelWarning: () => void
   onSubmit?: () => void
   onSubmitError?: (message: string) => void
@@ -118,40 +121,64 @@ export async function submitPrompt(props: {
     return
   }
 
-  const sessionID = props.sessionID
-    ? props.sessionID
-    : await (async () => {
-        try {
-          const created = await props.sdk.client.session.create({})
-          if (!created.data?.id) {
-            props.onSubmitError?.("Failed to create session")
-            return
-          }
-          return created.data.id
-        } catch (error) {
-          props.onSubmitError?.(errorMessage(error))
-          return
-        }
-      })()
-  if (!sessionID) return
+  const snapshotPrompt = clonePromptInfo(props.prompt)
+  const snapshotMode = props.mode
+  const snapshotExtmarkToPartIndex = new Map(props.extmarkToPartIndex)
+
+  const allExtmarks = props.input.extmarks.getAllForTypeId(props.promptPartTypeId)
+  const sortedExtmarks = [...allExtmarks].sort((a: { start: number }, b: { start: number }) => b.start - a.start)
 
   const messageID = Identifier.ascending("message")
-  let inputText = props.prompt.input
-  const allExtmarks = props.input.extmarks.getAllForTypeId(props.promptPartTypeId)
-  const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
+  let inputText = snapshotPrompt.input
 
   for (const extmark of sortedExtmarks) {
-    const partIndex = props.extmarkToPartIndex.get(extmark.id)
+    const partIndex = snapshotExtmarkToPartIndex.get(extmark.id)
     if (partIndex === undefined) continue
-    const part = props.prompt.parts[partIndex]
+    const part = snapshotPrompt.parts[partIndex]
     if (part?.type !== "text" || !part.text) continue
     const before = inputText.slice(0, extmark.start)
     const after = inputText.slice(extmark.end)
     inputText = before + part.text + after
   }
 
-  const nonTextParts = props.prompt.parts.filter((part) => part.type !== "text")
+  const nonTextParts = snapshotPrompt.parts.filter((part) => part.type !== "text")
   const variant = props.local.model.variant.current()
+
+  props.input.extmarks.clear()
+  props.setPrompt({
+    input: "",
+    parts: [],
+  })
+  props.setExtmarkToPartIndex(new Map())
+  props.onSubmit?.()
+  props.input.clear()
+
+  function rollbackSubmit(error: unknown) {
+    props.setPrompt(snapshotPrompt)
+    props.setMode(snapshotMode)
+    props.setExtmarkToPartIndex(new Map(snapshotExtmarkToPartIndex))
+    props.input.setText(snapshotPrompt.input)
+    props.restorePromptParts?.(snapshotPrompt.parts)
+    props.input.gotoBufferEnd()
+    props.onSubmitError?.(errorMessage(error))
+  }
+
+  const sessionID = props.sessionID
+    ? props.sessionID
+    : await (async () => {
+        try {
+          const created = await props.sdk.client.session.create({})
+          if (!created.data?.id) {
+            rollbackSubmit("Failed to create session")
+            return
+          }
+          return created.data.id
+        } catch (error) {
+          rollbackSubmit(error)
+          return
+        }
+      })()
+  if (!sessionID) return
 
   const result = await (async () => {
     try {
@@ -223,26 +250,20 @@ export async function submitPrompt(props: {
   })()
 
   if (isErrorResult(result) && result.error) {
-    props.onSubmitError?.(errorMessage(result.error))
+    rollbackSubmit(result.error)
     return
   }
   if (result instanceof Error) {
-    props.onSubmitError?.(errorMessage(result))
+    rollbackSubmit(result)
     return
   }
-  if (props.mode === "shell") props.setMode("normal")
 
   props.history.append({
-    ...props.prompt,
-    mode: props.mode,
+    ...snapshotPrompt,
+    mode: snapshotMode,
   })
-  props.input.extmarks.clear()
-  props.setPrompt({
-    input: "",
-    parts: [],
-  })
-  props.setExtmarkToPartIndex(new Map())
-  props.onSubmit?.()
+
+  if (props.mode === "shell") props.setMode("normal")
 
   if (!props.sessionID)
     setTimeout(() => {
@@ -251,7 +272,55 @@ export async function submitPrompt(props: {
         sessionID,
       })
     }, 50)
-  props.input.clear()
+}
+
+function clonePromptInfo(prompt: PromptInfo): PromptInfo {
+  return {
+    input: prompt.input,
+    mode: prompt.mode,
+    parts: prompt.parts.map((part) => {
+      if (part.type === "text") {
+        return {
+          ...part,
+          ...(part.source
+            ? {
+                source: {
+                  text: {
+                    start: part.source.text.start,
+                    end: part.source.text.end,
+                    value: part.source.text.value,
+                  },
+                },
+              }
+            : {}),
+        }
+      }
+
+      if (part.type === "agent") {
+        return {
+          ...part,
+          ...(part.source
+            ? {
+                source: {
+                  value: part.source.value,
+                  start: part.source.start,
+                  end: part.source.end,
+                },
+              }
+            : {}),
+        }
+      }
+
+      if (part.type === "file") {
+        return {
+          ...part,
+          ...(part.source ? { source: { ...part.source } } : {}),
+        }
+      }
+
+      return part
+    }),
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

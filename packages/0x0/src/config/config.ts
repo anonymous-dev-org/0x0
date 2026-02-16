@@ -780,7 +780,7 @@ export namespace Config {
 
   export const Agent = z
     .object({
-      name: z.string().describe("Display name for this agent"),
+      name: z.string().optional().describe("Display name for this agent"),
       model: ModelId.optional(),
       variant: z
         .string()
@@ -796,6 +796,7 @@ export namespace Config {
       color: z
         .string()
         .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color format")
+        .optional()
         .describe("Hex color code"),
       steps: z
         .number()
@@ -803,13 +804,18 @@ export namespace Config {
         .positive()
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
-      tools_allowed: z.array(z.string()).min(1).describe("Allowlist of tool IDs that this agent may use"),
+      tools_allowed: z.array(z.string()).min(1).optional().describe("Allowlist of tool IDs that this agent may use"),
       thinking_effort: z
         .string()
+        .optional()
         .describe("Model-native reasoning effort value to pass as providerOptions.reasoningEffort"),
       knowledge_base: z.array(z.string()).optional().describe("Agent-specific knowledge snippets"),
+      mode: z.enum(["primary", "all"]).optional().describe("Agent mode"),
+      permission: z.record(z.string(), z.unknown()).optional().describe("Per-agent permission overrides"),
+      tools: z.record(z.string(), z.boolean()).optional().describe("Legacy tools config (use permission instead)"),
+      maxSteps: z.number().int().positive().optional().describe("Alias for steps"),
     })
-    .strict()
+    .passthrough()
     .meta({
       ref: "AgentConfig",
     })

@@ -110,10 +110,12 @@ export namespace ToolRegistry {
       modelID: string
     },
     agent?: Agent.Info,
+    excluded?: Set<string>,
   ) {
     const tools = await all()
+    const filtered = excluded?.size ? tools.filter((t) => !excluded.has(t.id)) : tools
     const result = await Promise.all(
-      tools.map(async (t) => {
+      filtered.map(async (t) => {
         using _ = log.time(t.id)
         return {
           id: t.id,

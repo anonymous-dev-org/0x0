@@ -10,7 +10,7 @@ import { Config } from "../../config/config"
 import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
-import { Antigravity } from "../../antigravity"
+import { Antigravity } from "../../auth/antigravity"
 import { writeTemplate } from "../../config/providers"
 import type { Hooks } from "@0x0-ai/plugin"
 

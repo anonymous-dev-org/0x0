@@ -738,9 +738,15 @@ export namespace SessionPrompt {
       },
     })
 
+    const excluded = PermissionNext.disabled(
+      await ToolRegistry.ids(),
+      PermissionNext.merge(input.agent.permission, input.session.permission ?? []),
+    )
+
     for (const item of await ToolRegistry.tools(
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
+      excluded,
     )) {
       const json = z.toJSONSchema(item.parameters)
       if (json.type !== "object") {
@@ -794,6 +800,7 @@ export namespace SessionPrompt {
     })
 
     for (const [key, item] of Object.entries(await MCP.tools())) {
+      if (excluded.has(key)) continue
       const execute = item.execute
       if (!execute) continue
 

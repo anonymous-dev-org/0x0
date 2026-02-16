@@ -59,6 +59,7 @@ import { Logo } from "../../component/logo"
 import { useSessionCommands } from "./use-session-commands"
 import { SessionTool } from "./session-tools"
 import { SessionMessages } from "./session-messages"
+import { shouldShowAssistantHeader } from "./assistant-header"
 
 addDefaultParsers(parsers.parsers)
 
@@ -591,8 +592,12 @@ export function Session() {
                     pending={pending()}
                   />
                 )}
-                renderAssistant={(message) => (
-                  <AssistantMessage message={message} parts={sync.data.part[message.id] ?? []} />
+                renderAssistant={(message, index) => (
+                  <AssistantMessage
+                    message={message}
+                    parts={sync.data.part[message.id] ?? []}
+                    showHeader={shouldShowAssistantHeader(messages()[index - 1], message)}
+                  />
                 )}
               />
             </scrollbox>
@@ -835,7 +840,7 @@ function UserMessage(props: {
   )
 }
 
-function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
+function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; showHeader: boolean }) {
   const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
@@ -860,7 +865,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[] }) {
 
   const agentLabel = createMemo(() => local.agent.label(props.message.agent)?.trim() ?? "")
   const modelLabel = createMemo(() => props.message.modelID?.trim() ?? "")
-  const showMetadataRow = createMemo(() => ctx.showAssistantMetadata() && Boolean(agentLabel() || modelLabel()))
+  const showMetadataRow = createMemo(
+    () => props.showHeader && ctx.showAssistantMetadata() && Boolean(agentLabel() || modelLabel()),
+  )
 
   const duration = () => {
     if (!final()) return 0

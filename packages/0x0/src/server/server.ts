@@ -5,7 +5,7 @@ import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler 
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { streamSSE } from "hono/streaming"
-import { proxy } from "hono/proxy"
+
 import { basicAuth } from "hono/basic-auth"
 import z from "zod"
 import { Provider } from "../provider/provider"
@@ -109,12 +109,6 @@ export namespace Server {
 
               if (input.startsWith("http://localhost:")) return input
               if (input.startsWith("http://127.0.0.1:")) return input
-              if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
-
-              // *.zeroxzero.ai (https only, adjust if needed)
-              if (/^https:\/\/([a-z0-9-]+\.)*zeroxzero\.ai$/.test(input)) {
-                return input
-              }
               if (_corsWhitelist.includes(input)) {
                 return input
               }
@@ -571,23 +565,7 @@ export namespace Server {
               })
             })
           },
-        )
-        .all("/*", async (c) => {
-          const path = c.req.path
-
-          const response = await proxy(`https://app.zeroxzero.ai${path}`, {
-            ...c.req,
-            headers: {
-              ...c.req.raw.headers,
-              host: "app.zeroxzero.ai",
-            },
-          })
-          response.headers.set(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
-          )
-          return response
-        }) as unknown as Hono,
+        ) as unknown as Hono,
   )
 
   export async function openapi() {

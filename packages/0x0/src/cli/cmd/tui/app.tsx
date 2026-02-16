@@ -31,8 +31,13 @@ import { useStartupNavigation } from "./app/use-startup-navigation"
 import { useAppEventHandlers } from "./app/use-app-event-handlers"
 import { Logo } from "./component/logo"
 import { DialogOnboarding } from "./component/dialog-onboarding"
+import { Log } from "@/util/log"
 
 import type { EventSource } from "./context/sdk"
+
+const startupClock = {
+  started: 0,
+}
 
 export function tui(input: {
   url: string
@@ -44,18 +49,31 @@ export function tui(input: {
   onExit?: () => Promise<void>
 }) {
   // promise to prevent immediate exit
-  return new Promise<void>(async (resolve) => {
-    const mode = await Terminal.getTerminalBackgroundColor().catch(() => "dark" as const)
+  return new Promise<void>((resolve) => {
+    const started = performance.now()
+    startupClock.started = started
+    const timing = (stage: string, extra?: Record<string, unknown>) => {
+      Log.Default.debug("startup", {
+        stage,
+        elapsed_ms: Math.round(performance.now() - started),
+        ...extra,
+      })
+    }
+
+    timing("tui.start")
+
     const onExit = async () => {
       await input.onExit?.()
       resolve()
     }
 
+    timing("tui.render.invoked")
+
     render(
       () => {
         return (
           <ErrorBoundary
-            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
+            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode="dark" />}
           >
             <ArgsProvider {...input.args}>
               <ExitProvider onExit={onExit}>
@@ -70,7 +88,7 @@ export function tui(input: {
                         events={input.events}
                       >
                         <SyncProvider>
-                          <ThemeProvider mode={mode}>
+                          <ThemeProvider mode="dark">
                             <LocalProvider>
                               <KeybindProvider>
                                 <PromptStashProvider>
@@ -115,6 +133,8 @@ export function tui(input: {
         },
       },
     )
+
+    timing("tui.render.ready")
   })
 }
 
@@ -134,6 +154,13 @@ function App() {
   const exit = useExit()
   const promptRef = usePromptRef()
 
+  onMount(() => {
+    Log.Default.debug("startup", {
+      stage: "tui.first.frame",
+      elapsed_ms: Math.round(performance.now() - startupClock.started),
+    })
+  })
+
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
@@ -143,6 +170,7 @@ function App() {
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
   const onboardingDone = () => kv.get("onboarding_v1_done", false)
+  let terminalModeResolved = false
 
   const showOnboarding = () => {
     dialog.replace(() => (
@@ -237,6 +265,32 @@ function App() {
       },
     ),
   )
+
+  createEffect(() => {
+    if (terminalModeResolved) return
+    if (!kv.ready) return
+    terminalModeResolved = true
+    if (kv.store["theme_mode"] !== undefined) return
+
+    const started = performance.now()
+    Terminal.getTerminalBackgroundColor({ timeoutMs: 100 })
+      .then((detected) => {
+        Log.Default.debug("startup", {
+          stage: "terminal.bg.detected",
+          mode: detected,
+          duration_ms: Math.round(performance.now() - started),
+        })
+        setMode(detected)
+      })
+      .catch(() => {
+        Log.Default.debug("startup", {
+          stage: "terminal.bg.detected",
+          mode: "dark",
+          duration_ms: Math.round(performance.now() - started),
+          fallback: true,
+        })
+      })
+  })
 
   const connected = useConnected()
   onMount(() => {

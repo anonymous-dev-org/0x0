@@ -7,7 +7,8 @@ import { Rpc } from "@/util/rpc"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
-import { createZeroxzeroClient, type Event } from "@0x0-ai/sdk/v2"
+import { Bus } from "@/bus"
+import type { Event } from "@0x0-ai/sdk/v2"
 import type { BunWebSocketData } from "hono/bun"
 import { Flag } from "@/flag/flag"
 
@@ -39,62 +40,83 @@ GlobalBus.on("event", (event) => {
 
 let server: Bun.Server<BunWebSocketData> | undefined
 
-const eventStream = {
+const eventBridge = {
   abort: undefined as AbortController | undefined,
+  unsubscribe: undefined as (() => void) | undefined,
 }
 
-const startEventStream = (directory: string) => {
-  if (eventStream.abort) eventStream.abort.abort()
+const startup = {
+  started: performance.now(),
+}
+
+function timing(stage: string, extra?: Record<string, unknown>) {
+  Log.Default.debug("startup", {
+    stage,
+    elapsed_ms: Math.round(performance.now() - startup.started),
+    ...extra,
+  })
+}
+
+function stopEventBridge() {
+  if (eventBridge.abort) {
+    eventBridge.abort.abort()
+    eventBridge.abort = undefined
+  }
+  if (eventBridge.unsubscribe) {
+    eventBridge.unsubscribe()
+    eventBridge.unsubscribe = undefined
+  }
+}
+
+const startDirectEventBridge = async (directory: string) => {
+  timing("worker.event_bridge.start", { directory })
+  stopEventBridge()
+
   const abort = new AbortController()
-  eventStream.abort = abort
+  eventBridge.abort = abort
   const signal = abort.signal
 
-  const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init)
-    const auth = getAuthorizationHeader()
-    if (auth) request.headers.set("Authorization", auth)
-    return Server.App().fetch(request)
-  }) as typeof globalThis.fetch
-
-  const sdk = createZeroxzeroClient({
-    baseUrl: "http://zeroxzero.internal",
+  await Instance.provide({
     directory,
-    fetch: fetchFn,
-    signal,
-  })
+    init: InstanceBootstrap,
+    fn: async () => {
+      if (signal.aborted) return
+      Rpc.emit("event", {
+        type: "server.connected",
+        properties: {},
+      })
 
-  ;(async () => {
-    while (!signal.aborted) {
-      const events = await Promise.resolve(
-        sdk.event.subscribe(
-          {},
-          {
-            signal,
-          },
-        ),
-      ).catch(() => undefined)
-
-      if (!events) {
-        await Bun.sleep(250)
-        continue
-      }
-
-      for await (const event of events.stream) {
+      const unsubscribe = Bus.subscribeAll((event) => {
         Rpc.emit("event", event as Event)
+        if (event.type !== Bus.InstanceDisposed.type) return
+        if (signal.aborted) return
+        timing("worker.event_bridge.rebind", { directory })
+        queueMicrotask(() => {
+          void startDirectEventBridge(directory)
+        })
+      })
+
+      if (signal.aborted) {
+        unsubscribe()
+        return
       }
 
-      if (!signal.aborted) {
-        await Bun.sleep(250)
+      const cleanup = () => {
+        unsubscribe()
+        if (eventBridge.unsubscribe === cleanup) eventBridge.unsubscribe = undefined
       }
-    }
-  })().catch((error) => {
+      eventBridge.unsubscribe = cleanup
+
+      timing("worker.event_bridge.connected", { directory })
+    },
+  }).catch((error) => {
     Log.Default.error("event stream error", {
       error: error instanceof Error ? error.message : error,
     })
   })
 }
 
-startEventStream(process.cwd())
+timing("worker.ready")
 
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
@@ -130,13 +152,19 @@ export const rpc = {
       },
     })
   },
+  async eventStart(input: { directory: string }) {
+    await startDirectEventBridge(input.directory)
+  },
+  async eventStop() {
+    stopEventBridge()
+  },
   async reload() {
     Config.global.reset()
     await Instance.disposeAll()
   },
   async shutdown() {
     Log.Default.info("worker shutting down")
-    if (eventStream.abort) eventStream.abort.abort()
+    stopEventBridge()
     await Instance.disposeAll()
     if (server) server.stop(true)
   },

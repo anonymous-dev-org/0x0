@@ -11,7 +11,7 @@ describe("session.prompt missing file", () => {
       git: true,
       config: {
         agent: {
-          build: {
+          builder: {
             model: "openai/gpt-5.2",
           },
         },
@@ -26,7 +26,7 @@ describe("session.prompt missing file", () => {
         const missing = path.join(tmp.path, "does-not-exist.ts")
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "builder",
           noReply: true,
           parts: [
             { type: "text", text: "please review @does-not-exist.ts" },

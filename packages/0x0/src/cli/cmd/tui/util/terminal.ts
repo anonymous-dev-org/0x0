@@ -1,12 +1,15 @@
 export namespace Terminal {
-  export async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
+  export async function getTerminalBackgroundColor(options?: { timeoutMs?: number }): Promise<"dark" | "light"> {
     if (!process.stdin.isTTY) return "dark"
+
+    const timeoutMs = options?.timeoutMs ?? 1000
 
     return new Promise((resolve) => {
       let timeout: NodeJS.Timeout
+      let rawModeEnabled = false
 
       const cleanup = () => {
-        process.stdin.setRawMode(false)
+        if (rawModeEnabled) process.stdin.setRawMode(false)
         process.stdin.removeListener("data", handler)
         clearTimeout(timeout)
       }
@@ -41,14 +44,20 @@ export namespace Terminal {
         resolve(luminance > 0.5 ? "light" : "dark")
       }
 
-      process.stdin.setRawMode(true)
+      try {
+        process.stdin.setRawMode(true)
+        rawModeEnabled = true
+      } catch {
+        resolve("dark")
+        return
+      }
       process.stdin.on("data", handler)
       process.stdout.write("\x1b]11;?\x07")
 
       timeout = setTimeout(() => {
         cleanup()
         resolve("dark")
-      }, 1000)
+      }, timeoutMs)
     })
   }
 }

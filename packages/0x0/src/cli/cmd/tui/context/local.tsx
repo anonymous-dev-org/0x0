@@ -12,6 +12,7 @@ import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Locale } from "@/util/locale"
+import type { Agent as AgentInfo } from "@0x0-ai/sdk/v2"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -34,6 +35,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     function createAgent() {
+      const fallbackAgent: AgentInfo = {
+        name: "planner",
+        mode: "primary",
+        permission: [],
+        options: {},
+        toolsAllowed: [],
+        knowledgeBase: [],
+      }
       const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
       const preferred = createMemo(() => {
         const list = agents()
@@ -71,9 +80,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return agents()
         },
         current() {
-          return agents().find((x) => x.name === agentStore.current) ?? agents()[0]!
+          return agents().find((x) => x.name === agentStore.current) ?? agents()[0] ?? fallbackAgent
         },
         set(name: string) {
+          if (agents().length === 0) return
           if (!agents().some((x) => x.name === name))
             return toast.show({
               variant: "warning",
@@ -83,6 +93,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           setAgentStore("current", name)
         },
         move(direction: 1 | -1) {
+          if (agents().length === 0) return
           batch(() => {
             let next = agents().findIndex((x) => x.name === agentStore.current) + direction
             if (next < 0) next = agents().length - 1

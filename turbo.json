@@ -11,10 +11,6 @@
     "0x0#test": {
       "dependsOn": ["^build"],
       "outputs": []
-    },
-    "@0x0-ai/app#test": {
-      "dependsOn": ["^build"],
-      "outputs": []
     }
   }
 }

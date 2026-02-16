@@ -10,15 +10,31 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
     const [ready, setReady] = createSignal(false)
     const [store, setStore] = createStore<Record<string, any>>()
     const file = Bun.file(path.join(Global.Path.state, "kv.json"))
+    const pendingWrites: Record<string, any> = {}
+
+    function persist() {
+      return Bun.write(file, JSON.stringify(store, null, 2))
+    }
 
     file
       .json()
       .then((x) => {
+        if (!x || typeof x !== "object" || Array.isArray(x)) return
         setStore(x)
+
+        for (const [key, value] of Object.entries(pendingWrites)) {
+          setStore(key, value)
+        }
       })
       .catch(() => {})
       .finally(() => {
         setReady(true)
+
+        if (Object.keys(pendingWrites).length === 0) return
+        for (const key of Object.keys(pendingWrites)) {
+          delete pendingWrites[key]
+        }
+        void persist().catch(() => {})
       })
 
     const result = {
@@ -44,7 +60,11 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
       },
       set(key: string, value: any) {
         setStore(key, value)
-        Bun.write(file, JSON.stringify(store, null, 2))
+        if (!ready()) {
+          pendingWrites[key] = store[key]
+          return
+        }
+        void persist().catch(() => {})
       },
     }
     return result

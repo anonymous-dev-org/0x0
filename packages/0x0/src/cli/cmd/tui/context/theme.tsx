@@ -306,9 +306,25 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const kv = useKV()
     const [store, setStore] = createStore({
       themes: DEFAULT_THEMES,
-      mode: kv.get("theme_mode", props.mode),
-      active: (sync.data.config.theme ?? kv.get("theme", "zeroxzero")) as string,
+      mode: props.mode,
+      active: (sync.data.config.theme ?? "zeroxzero") as string,
       ready: false,
+    })
+
+    createEffect(() => {
+      if (!kv.ready) return
+
+      const mode = kv.get("theme_mode")
+      if (mode === "dark" || mode === "light") {
+        setStore("mode", mode)
+      }
+
+      if (!sync.data.config.theme) {
+        const theme = kv.get("theme")
+        if (typeof theme === "string" && theme.length > 0) {
+          setStore("active", theme)
+        }
+      }
     })
 
     createEffect(() => {

@@ -80,6 +80,14 @@ export namespace SessionCompaction {
     tokens: MessageV2.Assistant["tokens"]
     model: Provider.Model
   }) {
+    const config = await Config.get()
+    if (!config.compaction?.max_words_before_compact) return false
+    const limit = input.model.limit
+    if (limit.context > 0) {
+      const usable = Math.min(limit.context - limit.output, limit.input ?? Infinity)
+      const used = input.tokens.input + input.tokens.output + input.tokens.cache.read
+      if (used >= usable) return true
+    }
     if (!input.sessionID) return false
     return shouldCompact({
       sessionID: input.sessionID,

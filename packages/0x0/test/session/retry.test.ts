@@ -89,17 +89,23 @@ describe("session.retry.delay", () => {
 describe("session.retry.retryable", () => {
   test("maps too_many_requests json messages", () => {
     const error = wrap(JSON.stringify({ type: "error", error: { type: "too_many_requests" } }))
-    expect(SessionRetry.retryable(error)).toBe("Too Many Requests")
+    expect(SessionRetry.retryable(error)).toBe(
+      "Rate limit reached. Retrying automatically. [retry_code=too_many_requests]",
+    )
   })
 
   test("maps overloaded provider codes", () => {
     const error = wrap(JSON.stringify({ code: "resource_exhausted" }))
-    expect(SessionRetry.retryable(error)).toBe("Provider is overloaded")
+    expect(SessionRetry.retryable(error)).toBe(
+      "Provider is temporarily overloaded. Retrying automatically. [retry_code=provider_overloaded]",
+    )
   })
 
   test("handles json messages without code", () => {
     const error = wrap(JSON.stringify({ error: { message: "no_kv_space" } }))
-    expect(SessionRetry.retryable(error)).toBe(`{"error":{"message":"no_kv_space"}}`)
+    const result = SessionRetry.retryable(error)
+    expect(result).toContain("retry_code=provider_retryable_error")
+    expect(result).toContain("no_kv_space")
   })
 
   test("does not throw on numeric error codes", () => {
@@ -160,7 +166,9 @@ describe("session.message-v2.fromError", () => {
 
     const retryable = SessionRetry.retryable(error)
     expect(retryable).toBeDefined()
-    expect(retryable).toBe("Connection reset by server")
+    expect(retryable).toBe(
+      `Temporary API error. Retrying automatically. [retry_code=api_retryable_error; detail="Connection reset by server"]`,
+    )
   })
 
   test("marks OpenAI 404 status codes as retryable", () => {

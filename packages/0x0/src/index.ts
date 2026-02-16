@@ -149,17 +149,11 @@ const commands = [
   ),
   lazy(
     {
-      command: "serve",
+      command: "server",
+      aliases: ["serve"],
       describe: "starts a headless 0x0 server",
     },
     command(() => import("./cli/cmd/serve"), "ServeCommand"),
-  ),
-  lazy(
-    {
-      command: "web",
-      describe: "start 0x0 server and open web interface",
-    },
-    command(() => import("./cli/cmd/web"), "WebCommand"),
   ),
   lazy(
     {

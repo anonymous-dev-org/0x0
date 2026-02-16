@@ -42,6 +42,7 @@ export function useStartupNavigation(props: {
   let continued = false
   createEffect(() => {
     if (continued || props.sync.status === "loading" || !props.args.continue) return
+    if (props.sync.data.session.length === 0) return
     const match = props.sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id

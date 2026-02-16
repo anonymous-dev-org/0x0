@@ -17,7 +17,7 @@ describe("session.prompt agent mention handling", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "builder",
           model: {
             providerID: "openai",
             modelID: "gpt-5",

@@ -4,7 +4,8 @@ import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
 
 export const ServeCommand = cmd({
-  command: "serve",
+  command: "server",
+  aliases: ["serve"],
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless 0x0 server",
   handler: async (args) => {

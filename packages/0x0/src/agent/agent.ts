@@ -147,7 +147,7 @@ export namespace Agent {
         item = result[key] = {
           name: key,
           displayName: value.name,
-          mode: "primary",
+          mode: native.has(key) ? "primary" : "all",
           permission: PermissionNext.merge(defaults, PermissionNext.fromConfig({ "*": "deny" }), user),
           options: {},
           native: native.has(key),
@@ -155,7 +155,7 @@ export namespace Agent {
           knowledgeBase: [...(cfg.knowledge_base ?? [])],
         }
 
-      const toolsAllowed = value.tools_allowed
+      const toolsAllowed = value.tools_allowed ?? []
       for (const tool of toolsAllowed) {
         if (!availableTools.has(tool)) {
           throw new Error(`Unknown tool \"${tool}\" in agent \"${key}\". Update tools_allowed to valid tool IDs.`)
@@ -172,23 +172,75 @@ export namespace Agent {
       item.topP = value.top_p ?? item.topP
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
-      item.displayName = value.name
-      item.steps = value.steps ?? item.steps
+      item.displayName = value.name ?? item.displayName
+      item.steps = value.steps ?? value.maxSteps ?? item.steps
       item.toolsAllowed = [...toolsAllowed]
-      item.thinkingEffort = value.thinking_effort
+      item.thinkingEffort = value.thinking_effort ?? item.thinkingEffort
       item.knowledgeBase = Array.from(new Set([...(cfg.knowledge_base ?? []), ...(value.knowledge_base ?? [])]))
       item.options = mergeDeep(item.options, value.options ?? {})
-      item.permission = PermissionNext.merge(
-        defaults,
-        user,
-        PermissionNext.fromConfig({ "*": "deny" }),
-        PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
-      )
+      if (value.mode) item.mode = value.mode
+      if (native.has(key)) {
+        item.permission = PermissionNext.merge(defaults, user)
+      } else {
+        item.permission = PermissionNext.merge(
+          defaults,
+          user,
+          PermissionNext.fromConfig({ "*": "deny" }),
+          PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
+        )
+      }
+
+      if (value.permission) {
+        item.permission = PermissionNext.merge(
+          item.permission,
+          PermissionNext.fromConfig(value.permission as Parameters<typeof PermissionNext.fromConfig>[0]),
+        )
+      }
+
+      if (value.tools) {
+        const deny: Record<string, "deny"> = {}
+        for (const [tool, allowed] of Object.entries(value.tools)) {
+          if (!allowed) {
+            const perm = tool === "write" || tool === "apply_patch" || tool === "multiedit" ? "edit" : tool
+            deny[perm] = "deny"
+          }
+        }
+        item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(deny))
+      }
+
+      const known = new Set([
+        "name",
+        "model",
+        "variant",
+        "temperature",
+        "top_p",
+        "prompt",
+        "disable",
+        "description",
+        "hidden",
+        "options",
+        "color",
+        "steps",
+        "maxSteps",
+        "tools_allowed",
+        "thinking_effort",
+        "knowledge_base",
+        "mode",
+        "permission",
+        "tools",
+      ])
+      for (const [k, v] of Object.entries(value)) {
+        if (!known.has(k)) item.options[k] = v
+      }
 
       if (key === "planner") {
         item.permission = PermissionNext.merge(
           item.permission,
+          PermissionNext.fromConfig({ "*": "deny" }),
+          PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
           PermissionNext.fromConfig({
+            read: { "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow" },
+            edit: { ".zeroxzero/plans/*": "allow" },
             external_directory: {
               [path.join(Global.Path.data, "plans", "*")]: "allow",
             },

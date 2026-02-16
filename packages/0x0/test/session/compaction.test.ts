@@ -44,7 +44,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns true when token count exceeds usable context", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -60,7 +63,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when token count within usable context", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -76,7 +82,10 @@ describe("session.compaction.isOverflow", () => {
   test("includes cache.read in token count", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -92,7 +101,10 @@ describe("session.compaction.isOverflow", () => {
   test("respects input limit for input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -108,7 +120,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when input/output are within input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -124,7 +139,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when output within limit with input caps", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -140,7 +158,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when model context limit is 0", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, ".0x0", "config.yaml"), JSON.stringify({ compaction: { auto: true } }))
+        await Bun.write(
+          path.join(dir, ".0x0", "config.yaml"),
+          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
+        )
       },
     })
     await Instance.provide({
@@ -153,28 +174,19 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
-  test("returns false when compaction.auto is disabled", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({
-            compaction: { auto: false },
-          }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 100_000, output: 32_000 })
-        const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-      },
-    })
+  test("returns false when max_words_before_compact is not set", async () => {
+    const get = Config.get
+    Config.get = async () => ({ compaction: {} })
+    try {
+      const model = createModel({ context: 100_000, output: 32_000 })
+      const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
+      expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+    } finally {
+      Config.get = get
+    }
   })
 
-  test("returns false when compaction.auto is not explicitly enabled", async () => {
+  test("returns false when compaction is not configured", async () => {
     const get = Config.get
     Config.get = async () => ({})
     try {

@@ -13,11 +13,31 @@ import { NamedError } from "@0x0-ai/util/error"
 import { CopilotAuthPlugin } from "./copilot"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { AntigravityCLIOAuthPlugin } from "opencode-antigravity-auth"
+import { Global } from "@/global"
+import path from "path"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
   const BUILTIN = ["zeroxzero-anthropic-auth@0.0.13"]
+  const INSTALL_RETRY_BACKOFF_MS = 15 * 60 * 1000
+  const installFailurePath = path.join(Global.Path.state, "plugin-install-failures.json")
+
+  async function installFailures() {
+    return Bun.file(installFailurePath)
+      .json()
+      .catch(() => ({}) as Record<string, number>)
+      .then((data) => {
+        if (!data || typeof data !== "object") return {} as Record<string, number>
+        return Object.fromEntries(
+          Object.entries(data).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+        )
+      })
+  }
+
+  async function persistInstallFailures(entries: Record<string, number>) {
+    await Bun.write(installFailurePath, JSON.stringify(entries, null, 2))
+  }
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [
@@ -52,6 +72,7 @@ export namespace Plugin {
     }
 
     let plugins = config.plugin ?? []
+    const failures = await installFailures()
     if (plugins.length) await Config.waitForDependencies()
     if (!Flag.ZEROXZERO_DISABLE_DEFAULT_PLUGINS) {
       plugins = [...BUILTIN, ...plugins]
@@ -65,8 +86,22 @@ export namespace Plugin {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
+        const key = `${pkg}@${version}`
+        const retryAt = failures[key]
+        if (retryAt && retryAt > Date.now()) {
+          log.warn("skipping plugin install retry", {
+            pkg,
+            version,
+            retryAt,
+          })
+          continue
+        }
+
         const builtin = BUILTIN.some((x) => x.startsWith(pkg + "@"))
         plugin = await BunProc.install(pkg, version).catch((err) => {
+          failures[key] = Date.now() + INSTALL_RETRY_BACKOFF_MS
+          void persistInstallFailures(failures)
+
           if (!builtin) throw err
 
           const message = err instanceof Error ? err.message : String(err)
@@ -83,6 +118,14 @@ export namespace Plugin {
 
           return ""
         })
+
+        if (plugin) {
+          if (failures[key]) {
+            delete failures[key]
+            void persistInstallFailures(failures)
+          }
+        }
+
         if (!plugin) continue
       }
       const mod = await import(plugin)

@@ -419,6 +419,7 @@ export function Prompt(props: PromptProps) {
       setMode: (mode) => setStore("mode", mode),
       setPrompt: (prompt) => setStore("prompt", prompt),
       setExtmarkToPartIndex: (map) => setStore("extmarkToPartIndex", map),
+      restorePromptParts: (promptParts) => parts.restore(promptParts),
       onPromptModelWarning: promptModelWarning,
       onSubmit: props.onSubmit,
       onSubmitError: (message) => {
