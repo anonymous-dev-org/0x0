@@ -121,13 +121,6 @@ const commands = [
   ),
   lazy(
     {
-      command: "auth",
-      describe: "manage credentials",
-    },
-    command(() => import("./cli/cmd/auth"), "AuthCommand"),
-  ),
-  lazy(
-    {
       command: "agent",
       describe: "manage agents",
     },

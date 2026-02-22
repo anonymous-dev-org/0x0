@@ -101,7 +101,7 @@ export const ReadTool = Tool.define("read", {
     let bytes = 0
     let truncatedByBytes = false
     for (let i = offset; i < Math.min(lines.length, offset + limit); i++) {
-      const line = lines[i].length > MAX_LINE_LENGTH ? lines[i].substring(0, MAX_LINE_LENGTH) + "..." : lines[i]
+      const line = lines[i]!.length > MAX_LINE_LENGTH ? lines[i]!.substring(0, MAX_LINE_LENGTH) + "..." : lines[i]!
       const size = Buffer.byteLength(line, "utf-8") + (raw.length > 0 ? 1 : 0)
       if (bytes + size > MAX_BYTES) {
         truncatedByBytes = true
@@ -201,8 +201,8 @@ async function isBinaryFile(filepath: string, file: Bun.BunFile): Promise<boolea
 
   let nonPrintableCount = 0
   for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] === 0) return true
-    if (bytes[i] < 9 || (bytes[i] > 13 && bytes[i] < 32)) {
+    if (bytes[i]! === 0) return true
+    if (bytes[i]! < 9 || (bytes[i]! > 13 && bytes[i]! < 32)) {
       nonPrintableCount++
     }
   }

@@ -10,7 +10,6 @@ import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
 import { NamedError } from "@0x0-ai/util/error"
-import { Auth } from "../auth"
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
@@ -213,44 +212,22 @@ export namespace Config {
           files: found,
         })
       }
-      if (found.length === 1) files.push(found[0])
+      if (found.length === 1) files.push(found[0]!)
     }
     return files
   }
 
   export const state = Instance.state(async () => {
-    const auth = await Auth.all()
-
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
-    // 1) Remote .well-known/zeroxzero (org defaults)
-    // 2) Global config (~/.config/0x0/config.yaml)
-    // 3) Global provider configs (~/.config/0x0/providers/*.yaml)
-    // 4) Project config (.0x0/config.yaml)
-    // 5) Project provider configs (.0x0/providers/*.yaml)
-    // 6) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
+    // 1) Global config (~/.config/0x0/config.yaml)
+    // 2) Global provider configs (~/.config/0x0/providers/*.yaml)
+    // 3) Project config (.0x0/config.yaml)
+    // 4) Project provider configs (.0x0/providers/*.yaml)
+    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
-    for (const [key, value] of Object.entries(auth)) {
-      if (value.type === "wellknown") {
-        process.env[value.key] = value.token
-        log.debug("fetching remote config", { url: `${key}/.well-known/zeroxzero` })
-        const response = await fetch(`${key}/.well-known/zeroxzero`)
-        if (!response.ok) {
-          throw new Error(`failed to fetch remote config from ${key}: ${response.status}`)
-        }
-        const wellknown = (await response.json()) as any
-        const remoteConfig = wellknown.config ?? {}
-        // Add $schema to prevent load() from trying to write back to a non-existent file
-        if (!remoteConfig.$schema) remoteConfig.$schema = configSchemaURL
-        result = mergeConfigConcatArrays(
-          result,
-          await load(YAML.stringify(remoteConfig), `${key}/.well-known/zeroxzero.yaml`),
-        )
-        log.debug("loaded remote config from well-known", { url: key })
-      }
-    }
 
-    // Global user config overrides remote config.
+    // Global user config.
     result = mergeConfigConcatArrays(result, await global())
 
     // Global provider configs (~/.config/0x0/providers/*.yaml) override global config.
@@ -1315,7 +1292,7 @@ export namespace Config {
 
       for (const match of fileMatches) {
         const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (lineIndex !== -1 && (lines[lineIndex].trim().startsWith("//") || lines[lineIndex].trim().startsWith("#"))) {
+        if (lineIndex !== -1 && (lines[lineIndex]!.trim().startsWith("//") || lines[lineIndex]!.trim().startsWith("#"))) {
           continue // Skip if line is commented
         }
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
@@ -1368,7 +1345,7 @@ export namespace Config {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
           try {
-            data.plugin[i] = import.meta.resolve!(plugin, configFilepath)
+            data.plugin[i] = import.meta.resolve!(plugin!, configFilepath)
           } catch (err) {}
         }
       }
@@ -1459,7 +1436,7 @@ export namespace Config {
     for (const file of candidates) {
       if (existsSync(file)) return file
     }
-    return candidates[0]
+    return candidates[0]!
   }
 
   function parseConfig(text: string, filepath: string): Info {

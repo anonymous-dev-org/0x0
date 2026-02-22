@@ -524,7 +524,7 @@ export const SessionRoutes = lazy(() =>
         const msgs = await Session.messages({ sessionID })
         let currentAgent = await Agent.defaultAgent()
         for (let i = msgs.length - 1; i >= 0; i--) {
-          const info = msgs[i].info
+          const info = msgs[i]!.info
           if (info.role === "user") {
             currentAgent = info.agent || (await Agent.defaultAgent())
             break

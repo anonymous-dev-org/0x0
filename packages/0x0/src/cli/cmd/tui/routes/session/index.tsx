@@ -526,7 +526,7 @@ export function Session() {
             <box flexShrink={0}>
               <Thinking
                 visible={busy}
-                color={thinkingColor}
+                color={() => thinkingColor()!}
                 interrupt={interrupt}
                 title={thinkingStatus}
                 text={theme.text}
@@ -534,10 +534,10 @@ export function Session() {
                 primary={theme.primary}
               />
               <Show when={permissions().length > 0}>
-                <PermissionPrompt request={permissions()[0]} />
+                <PermissionPrompt request={permissions()[0]!} />
               </Show>
               <Show when={permissions().length === 0 && questions().length > 0}>
-                <QuestionPrompt request={questions()[0]} />
+                <QuestionPrompt request={questions()[0]!} />
               </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}

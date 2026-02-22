@@ -665,7 +665,7 @@ export namespace MessageV2 {
     for (let i = list.length - 1; i >= 0; i--) {
       yield await get({
         sessionID,
-        messageID: list[i][2],
+        messageID: list[i]![2]!,
       })
     }
   })

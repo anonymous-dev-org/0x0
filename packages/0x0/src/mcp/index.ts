@@ -410,7 +410,7 @@ export namespace MCP {
       const cwd = Instance.directory
       const transport = new StdioClientTransport({
         stderr: "pipe",
-        command: cmd,
+        command: cmd!,
         args,
         cwd,
         env: {
@@ -591,7 +591,7 @@ export namespace MCP {
         continue
       }
       const mcpConfig = config[clientName]
-      const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+      const entry = mcpConfig && isMcpConfigured(mcpConfig) ? mcpConfig : undefined
       const timeout = entry?.timeout ?? defaultTimeout
       for (const mcpTool of toolsResult.tools) {
         const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")

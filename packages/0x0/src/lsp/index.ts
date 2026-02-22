@@ -103,7 +103,7 @@ export namespace LSP {
           extensions: item.extensions ?? existing?.extensions ?? [],
           spawn: async (root) => {
             return {
-              process: spawn(item.command[0], item.command.slice(1), {
+              process: spawn(item.command[0]!, item.command.slice(1), {
                 cwd: root,
                 env: {
                   ...process.env,
@@ -156,7 +156,7 @@ export namespace LSP {
       for (const client of x.clients) {
         result.push({
           id: client.serverID,
-          name: x.servers[client.serverID].id,
+          name: x.servers[client.serverID]!.id,
           root: path.relative(Instance.directory, client.root),
           status: "connected",
         })

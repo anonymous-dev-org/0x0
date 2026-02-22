@@ -204,7 +204,7 @@ export function useSessionCommands(props: {
           .then(() => {
             props.toBottom()
           })
-        const parts = props.sync.data.part[message.id]
+        const parts = props.sync.data.part[message.id] ?? []
         props.setPrompt(
           parts.reduce(
             (agg, part) => {

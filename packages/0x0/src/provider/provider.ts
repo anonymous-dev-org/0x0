@@ -189,48 +189,45 @@ export namespace Provider {
   // Static provider registry
   // ─────────────────────────────────────────────────────────────────────────────
 
-  function buildProviders(connected: Set<string>): Record<string, Info> {
-    const result: Record<string, Info> = {}
-
-    if (connected.has("claude-code")) {
-      result["claude-code"] = {
-        id: "claude-code",
-        name: "Claude Code",
-        source: "custom",
-        env: [],
-        options: {},
-        models: CLAUDE_CODE_MODELS,
-      }
-    }
-
-    if (connected.has("codex")) {
-      result["codex"] = {
-        id: "codex",
-        name: "Codex",
-        source: "custom",
-        env: [],
-        options: {},
-        models: CODEX_MODELS,
-      }
-    }
-
-    return result
+  const ALL_PROVIDERS: Record<string, Info> = {
+    "claude-code": {
+      id: "claude-code",
+      name: "Claude Code",
+      source: "custom",
+      env: [],
+      options: {},
+      models: CLAUDE_CODE_MODELS,
+    },
+    codex: {
+      id: "codex",
+      name: "Codex",
+      source: "custom",
+      env: [],
+      options: {},
+      models: CODEX_MODELS,
+    },
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Public API
   // ─────────────────────────────────────────────────────────────────────────────
 
+  /** Returns all known providers regardless of whether they are installed. */
+  export function all(): Record<string, Info> {
+    return ALL_PROVIDERS
+  }
+
+  /** Returns only providers whose CLI binary is on PATH. */
   export async function list(): Promise<Record<string, Info>> {
     const [claudeAvailable, codexAvailable] = await Promise.all([
       ProviderAuth.isAvailable("claude-code"),
       ProviderAuth.isAvailable("codex"),
     ])
-    const connected = new Set<string>()
-    if (claudeAvailable) connected.add("claude-code")
-    if (codexAvailable) connected.add("codex")
-    log.info("providers", { connected: [...connected] })
-    return buildProviders(connected)
+    const result: Record<string, Info> = {}
+    if (claudeAvailable) result["claude-code"] = ALL_PROVIDERS["claude-code"]!
+    if (codexAvailable) result["codex"] = ALL_PROVIDERS["codex"]!
+    log.info("providers", { connected: Object.keys(result) })
+    return result
   }
 
   export async function getProvider(providerID: string): Promise<Info | undefined> {

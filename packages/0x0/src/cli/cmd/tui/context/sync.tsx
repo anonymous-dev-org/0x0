@@ -15,7 +15,6 @@ import type {
   FormatterStatus,
   SessionStatus,
   ProviderListResponse,
-  ProviderAuthMethod,
   VcsInfo,
 } from "@0x0-ai/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -36,7 +35,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       provider: Provider[]
       provider_default: Record<string, string>
       provider_next: ProviderListResponse
-      provider_auth: Record<string, ProviderAuthMethod[]>
       agent: Agent[]
       command: Command[]
       permission: {
@@ -78,7 +76,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         default: {},
         connected: [],
       },
-      provider_auth: {},
       config: {},
       status: "loading",
       agent: [],
@@ -441,10 +438,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             request("session.status", () => sdk.client.session.status()).then((x) => {
               if (runID !== bootstrapState.runID) return
               setStore("session_status", reconcile(x.data!))
-            }),
-            request("provider.auth", () => sdk.client.provider.auth()).then((x) => {
-              if (runID !== bootstrapState.runID) return
-              setStore("provider_auth", reconcile(x.data ?? {}))
             }),
             request("vcs.get", () => sdk.client.vcs.get()).then((x) => {
               if (runID !== bootstrapState.runID) return

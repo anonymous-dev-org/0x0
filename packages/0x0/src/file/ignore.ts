@@ -70,7 +70,7 @@ export namespace FileIgnore {
 
     const parts = filepath.split(sep)
     for (let i = 0; i < parts.length; i++) {
-      if (FOLDERS.has(parts[i])) return true
+      if (FOLDERS.has(parts[i]!)) return true
     }
 
     const extra = opts?.extra || []

@@ -234,15 +234,15 @@ export namespace Snapshot {
             .quiet()
             .nothrow()
             .text()
-      const added = isBinaryFile ? 0 : parseInt(additions)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions)
+      const added = isBinaryFile ? 0 : parseInt(additions!)
+      const deleted = isBinaryFile ? 0 : parseInt(deletions!)
       result.push({
-        file,
+        file: file!,
         before,
         after,
         additions: Number.isFinite(added) ? added : 0,
         deletions: Number.isFinite(deleted) ? deleted : 0,
-        status: status.get(file) ?? "modified",
+        status: status.get(file!) ?? "modified",
       })
     }
     return result

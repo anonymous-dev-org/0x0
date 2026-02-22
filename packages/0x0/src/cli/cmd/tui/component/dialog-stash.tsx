@@ -22,7 +22,7 @@ function getRelativeTime(timestamp: number): string {
 }
 
 function getStashPreview(input: string, maxLength: number = 50): string {
-  const firstLine = input.split("\n")[0].trim()
+  const firstLine = (input.split("\n")[0] ?? "").trim()
   return Locale.truncate(firstLine, maxLength)
 }
 

@@ -21,8 +21,7 @@ export function DialogOnboarding() {
   const [busy, setBusy] = createSignal(false)
   const [hover, setHover] = createSignal<"default" | "custom" | undefined>()
 
-  const keepDefaults = async () => {
-    await sync.bootstrap()
+  const keepDefaults = () => {
     kv.set("onboarding_v1_done", true)
     dialog.clear()
   }
@@ -70,7 +69,7 @@ export function DialogOnboarding() {
     if (busy()) return
     setBusy(true)
     try {
-      if (choice() === "default") await keepDefaults()
+      if (choice() === "default") keepDefaults()
       if (choice() === "custom") await useCustom()
     } finally {
       setBusy(false)
@@ -106,19 +105,13 @@ export function DialogOnboarding() {
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="column" paddingBottom={1}>
-        <text fg={theme.textMuted}>Switch agents with {keybind.print("agent_cycle")}</text>
-        <text fg={theme.textMuted}>Type / to open command suggestions</text>
-        <text fg={theme.textMuted}>Press {keybind.print("command_list")} to browse all commands</text>
-      </box>
-
       <text fg={theme.text}>How do you want to start?</text>
       <text fg={theme.textMuted}>You can always change this later in 0x0.yaml.</text>
 
       <box flexDirection="column" gap={1} paddingBottom={1}>
         <OnboardingOption
-          title="Use default agents"
-          description="Start with builder and planner"
+          title="Get started"
+          description="Use the built-in builder and planner agents"
           active={choice() === "default"}
           hover={hover() === "default"}
           busy={busy()}
@@ -131,8 +124,8 @@ export function DialogOnboarding() {
         />
 
         <OnboardingOption
-          title="Use my own agents"
-          description="Disable defaults and keep only your custom setup"
+          title="Custom setup"
+          description="Disable built-in agents and use your own from 0x0.yaml"
           active={choice() === "custom"}
           hover={hover() === "custom"}
           busy={busy()}
@@ -145,8 +138,14 @@ export function DialogOnboarding() {
         />
       </box>
 
+      <box flexDirection="column" paddingBottom={1}>
+        <text fg={theme.textMuted}>
+          {keybind.print("agent_cycle")} switch agents {"  "}/ commands {"  "}{keybind.print("command_list")} all commands
+        </text>
+      </box>
+
       <box flexDirection="row" justifyContent="space-between" paddingBottom={1}>
-        <text fg={theme.textMuted}>tab/arrows to choose, enter to confirm</text>
+        <text fg={theme.textMuted}>arrows to choose, enter to confirm</text>
         <Show when={busy()}>
           <text fg={theme.textMuted}>Applying...</text>
         </Show>

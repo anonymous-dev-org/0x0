@@ -423,21 +423,21 @@ function Prompt<const T extends Record<string, string>>(props: {
 
     if (evt.name === "left" || evt.name == "h") {
       evt.preventDefault()
-      const idx = keys.indexOf(store.selected)
-      const next = keys[(idx - 1 + keys.length) % keys.length]
+      const idx = keys.indexOf(store.selected!)
+      const next = keys[(idx - 1 + keys.length) % keys.length]!
       setStore("selected", next)
     }
 
     if (evt.name === "right" || evt.name == "l") {
       evt.preventDefault()
-      const idx = keys.indexOf(store.selected)
-      const next = keys[(idx + 1) % keys.length]
+      const idx = keys.indexOf(store.selected!)
+      const next = keys[(idx + 1) % keys.length]!
       setStore("selected", next)
     }
 
     if (evt.name === "return") {
       evt.preventDefault()
-      props.onSelect(store.selected)
+      props.onSelect(store.selected!)
     }
 
     if (props.escapeKey && (evt.name === "escape" || keybind.match("app_exit", evt))) {

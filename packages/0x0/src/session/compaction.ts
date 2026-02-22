@@ -159,7 +159,7 @@ export namespace SessionCompaction {
       .join("\n\n")
     const result = await processor.process({
       user: userMessage,
-      agent,
+      agent: agent!,
       abort: input.abort,
       sessionID: input.sessionID,
       tools: {},

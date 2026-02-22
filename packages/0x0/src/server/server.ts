@@ -17,7 +17,6 @@ import { Instance } from "../project/instance"
 import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
 import { Skill } from "../skill/skill"
-import { Auth } from "../auth"
 import { Config } from "../config/config"
 import { Command } from "../command"
 import { Global } from "../global"
@@ -119,68 +118,6 @@ export namespace Server {
           }),
         )
         .route("/global", GlobalRoutes())
-        .put(
-          "/auth/:providerID",
-          describeRoute({
-            summary: "Set auth credentials",
-            description: "Set authentication credentials",
-            operationId: "auth.set",
-            responses: {
-              200: {
-                description: "Successfully set authentication credentials",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
-                },
-              },
-              ...errors(400),
-            },
-          }),
-          validator(
-            "param",
-            z.object({
-              providerID: z.string(),
-            }),
-          ),
-          validator("json", Auth.Info),
-          async (c) => {
-            const providerID = c.req.valid("param").providerID
-            const info = c.req.valid("json")
-            await Auth.set(providerID, info)
-            return c.json(true)
-          },
-        )
-        .delete(
-          "/auth/:providerID",
-          describeRoute({
-            summary: "Remove auth credentials",
-            description: "Remove authentication credentials",
-            operationId: "auth.remove",
-            responses: {
-              200: {
-                description: "Successfully removed authentication credentials",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
-                },
-              },
-              ...errors(400),
-            },
-          }),
-          validator(
-            "param",
-            z.object({
-              providerID: z.string(),
-            }),
-          ),
-          async (c) => {
-            const providerID = c.req.valid("param").providerID
-            await Auth.remove(providerID)
-            return c.json(true)
-          },
-        )
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
           const raw = c.req.query("directory") || c.req.header("x-zeroxzero-directory") || process.cwd()
