@@ -44,4 +44,4 @@ const result = z.toJSONSchema(Config.Info, {
 result.allowComments = true
 result.allowTrailingCommas = true
 
-await Bun.write(file, JSON.stringify(result, null, 2))
+await Bun.write(file!, JSON.stringify(result, null, 2))

@@ -231,8 +231,8 @@ export async function submitPrompt(props: {
   const isCommand =
     inputText.startsWith("/") &&
     iife(() => {
-      const firstLine = inputText.split("\n")[0]!
-      const command = firstLine.split(" ")[0]!.slice(1)
+      const firstLine = inputText.split("\n")[0] ?? ""
+      const command = (firstLine.split(" ")[0] ?? "").slice(1)
       return props.sync.data.command.some((x) => x.name === command)
     })
 
@@ -279,7 +279,7 @@ export async function submitPrompt(props: {
     props.sdk.client.session
       .command({
         sessionID,
-        command: command!.slice(1),
+        command: (command ?? "").slice(1),
         arguments: args,
         agent: props.local.agent.current().name,
         model: `${selectedModel.providerID}/${selectedModel.modelID}`,

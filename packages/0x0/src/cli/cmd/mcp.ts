@@ -346,9 +346,9 @@ export const McpLogoutCommand = cmd({
           const selected = await prompts.select({
             message: "Select MCP server to logout",
             options: serverNames.map((name) => {
-              const entry = credentials[name]!
-              const hasTokens = !!entry.tokens
-              const hasClient = !!entry.clientInfo
+              const entry = credentials[name]
+              const hasTokens = !!entry?.tokens
+              const hasClient = !!entry?.clientInfo
               let hint = ""
               if (hasTokens && hasClient) hint = "tokens + client"
               else if (hasTokens) hint = "tokens"

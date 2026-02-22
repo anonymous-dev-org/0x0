@@ -180,7 +180,7 @@ export const ruff: Info = {
       const found = await Filesystem.findUp(config, Instance.directory, Instance.worktree)
       if (found.length > 0) {
         if (config === "pyproject.toml") {
-          const content = await Bun.file(found[0]!).text()
+          const content = found[0] ? await Bun.file(found[0]).text() : ""
           if (content.includes("[tool.ruff]")) return true
         } else {
           return true
@@ -191,7 +191,7 @@ export const ruff: Info = {
     for (const dep of deps) {
       const found = await Filesystem.findUp(dep, Instance.directory, Instance.worktree)
       if (found.length > 0) {
-        const content = await Bun.file(found[0]!).text()
+        const content = found[0] ? await Bun.file(found[0]).text() : ""
         if (content.includes("ruff")) return true
       }
     }

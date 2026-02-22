@@ -19,7 +19,6 @@ export namespace LLM {
     | { type: "reasoning-delta"; id: string; text: string }
     | { type: "tool-start"; id: string; tool: string; command?: string }
     | { type: "tool-input-delta"; id: string; partial: string }
-    | { type: "tool-call"; id: string; tool: string; input: Record<string, any> }
     | { type: "tool-end"; id: string; output: string; exitCode?: number }
     | { type: "file-change"; id: string; files: Array<{ path: string; kind: string }> }
     | { type: "step-start" }
@@ -233,6 +232,7 @@ export namespace LLM {
     let text = ""
     for await (const event of stream(input)) {
       if (event.type === "text-delta") text += event.text
+      if (event.type === "error") throw event.error
     }
     return text
   }

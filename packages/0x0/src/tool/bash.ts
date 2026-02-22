@@ -114,9 +114,10 @@ export const BashTool = Tool.define("bash", async () => {
         }
 
         // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0]!)) {
+        const command0 = command[0]
+        if (command0 !== undefined && ["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command0)) {
           for (const arg of command.slice(1)) {
-            if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
+            if (arg.startsWith("-") || (command0 === "chmod" && arg.startsWith("+"))) continue
             const resolved = await $`realpath ${arg}`
               .cwd(cwd)
               .quiet()

@@ -97,7 +97,7 @@ describe("tool.apply_patch freeform", () => {
         expect(calls.length).toBe(1)
 
         // Verify permission metadata includes files array for UI rendering
-        const permissionCall = calls[0]
+        const permissionCall = calls[0]!
         expect(permissionCall.metadata.files).toHaveLength(3)
         expect(permissionCall.metadata.files.map((f) => f.type).sort()).toEqual(["add", "delete", "update"])
 
@@ -106,7 +106,7 @@ describe("tool.apply_patch freeform", () => {
         expect(addFile!.relativePath).toBe("nested/new.txt")
         expect(addFile!.after).toBe("created\n")
 
-        const updateFile = permissionCall.metadata.files.find((f) => f.type === "update")
+        const updateFile = permissionCall!.metadata.files.find((f) => f.type === "update")
         expect(updateFile).toBeDefined()
         expect(updateFile!.before).toContain("line2")
         expect(updateFile!.after).toContain("changed")
@@ -136,10 +136,10 @@ describe("tool.apply_patch freeform", () => {
         await execute({ patchText }, ctx)
 
         expect(calls.length).toBe(1)
-        const permissionCall = calls[0]
+        const permissionCall = calls[0]!
         expect(permissionCall.metadata.files).toHaveLength(1)
 
-        const moveFile = permissionCall.metadata.files[0]
+        const moveFile = permissionCall.metadata.files[0]!
         expect(moveFile.type).toBe("move")
         expect(moveFile.relativePath).toBe("renamed/dir/name.txt")
         expect(moveFile.movePath).toBe(path.join(fixture.path, "renamed/dir/name.txt"))

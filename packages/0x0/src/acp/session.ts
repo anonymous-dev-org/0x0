@@ -97,7 +97,8 @@ export class ACPSessionManager {
     if (session.modeId) {
       if (!session.modes) session.modes = {}
       if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
-      session.modes[session.modeId]!.model = model
+      const modeEntry = session.modes[session.modeId]
+      if (modeEntry) modeEntry.model = model
     }
     this.sessions.set(sessionId, session)
     return session
@@ -114,7 +115,8 @@ export class ACPSessionManager {
     if (session.modeId) {
       if (!session.modes) session.modes = {}
       if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
-      session.modes[session.modeId]!.variant = variant
+      const modeEntryV = session.modes[session.modeId]
+      if (modeEntryV) modeEntryV.variant = variant
     }
     this.sessions.set(sessionId, session)
     return session
@@ -125,8 +127,11 @@ export class ACPSessionManager {
     if (session.modeId) {
       if (!session.modes) session.modes = {}
       if (!session.modes[session.modeId]) session.modes[session.modeId] = {}
-      session.modes[session.modeId]!.model = session.model
-      session.modes[session.modeId]!.variant = session.variant
+      const modeEntryM = session.modes[session.modeId]
+      if (modeEntryM) {
+        modeEntryM.model = session.model
+        modeEntryM.variant = session.variant
+      }
     }
     session.modeId = modeId
     const restored = session.modes?.[modeId]

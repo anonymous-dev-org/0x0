@@ -132,23 +132,6 @@ export namespace SessionProcessor {
                 break
               }
 
-              case "tool-call": {
-                const toolPart = toolParts[event.id]
-                if (toolPart) {
-                  const updated = (await Session.updatePart({
-                    ...toolPart,
-                    tool: event.tool,
-                    state: {
-                      status: "running",
-                      input: event.input,
-                      time: { start: Date.now() },
-                    },
-                  })) as MessageV2.ToolPart
-                  toolParts[event.id] = updated
-                }
-                break
-              }
-
               case "tool-end": {
                 const toolPart = toolParts[event.id]
                 if (toolPart) {
@@ -265,8 +248,8 @@ export namespace SessionProcessor {
               case "done": {
                 if (event.cliSessionId || event.codexThreadId) {
                   await Session.update(input.sessionID, (draft) => {
-                    if (event.cliSessionId) (draft as any).cliSessionId = event.cliSessionId
-                    if (event.codexThreadId) (draft as any).codexThreadId = event.codexThreadId
+                    if (event.cliSessionId) draft.cliSessionId = event.cliSessionId
+                    if (event.codexThreadId) draft.codexThreadId = event.codexThreadId
                   })
                 }
                 break
@@ -356,7 +339,7 @@ export namespace SessionProcessor {
               error: "Tool execution aborted",
               time: {
                 start:
-                  "time" in toolPart.state && toolPart.state.time ? (toolPart.state.time as any).start : Date.now(),
+                  "time" in toolPart.state && toolPart.state.time ? toolPart.state.time.start : Date.now(),
                 end: Date.now(),
               },
             },

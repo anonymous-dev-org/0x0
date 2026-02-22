@@ -95,7 +95,7 @@ export function DialogMessage(props: {
               )
             })()
             route.navigate({
-              sessionID: result.data!.id,
+              sessionID: result.data?.id ?? "",
               type: "session",
               initialPrompt,
             })

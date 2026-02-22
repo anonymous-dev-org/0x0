@@ -154,7 +154,7 @@ export namespace SessionSummary {
             `,
           },
         ],
-        abort: new AbortController().signal,
+        abort: AbortSignal.timeout(30_000),
         sessionID: userMsg.sessionID,
         system: [],
         retries: 3,

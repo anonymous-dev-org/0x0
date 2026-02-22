@@ -28,7 +28,7 @@ test("transforms share data to storage format", () => {
 
   expect(result.info.id).toBe("sess-1")
   expect(result.messages).toHaveLength(1)
-  expect(result.messages[0].parts).toHaveLength(2)
+  expect(result.messages[0]!.parts).toHaveLength(2)
 })
 
 test("returns null for invalid share data", () => {

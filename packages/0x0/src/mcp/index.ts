@@ -407,10 +407,14 @@ export namespace MCP {
 
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
+      if (!cmd) {
+        log.error("MCP local server has empty command", { key })
+        return
+      }
       const cwd = Instance.directory
       const transport = new StdioClientTransport({
         stderr: "pipe",
-        command: cmd!,
+        command: cmd,
         args,
         cwd,
         env: {

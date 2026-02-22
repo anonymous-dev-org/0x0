@@ -116,9 +116,15 @@ export const ImportCommand = cmd({
         exportData = transformed
       } else {
         const file = Bun.file(args.file)
-        exportData = await file.json().catch(() => {})
-        if (!exportData) {
+        if (!(await file.exists())) {
           process.stdout.write(`File not found: ${args.file}`)
+          process.stdout.write(EOL)
+          return
+        }
+        try {
+          exportData = await file.json()
+        } catch {
+          process.stdout.write(`Failed to parse JSON: ${args.file}`)
           process.stdout.write(EOL)
           return
         }

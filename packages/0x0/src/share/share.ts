@@ -16,7 +16,8 @@ export namespace Share {
     if (root !== "session") return
     const [sub, sessionID] = splits
     if (sub === "share") return
-    const share = await Session.getShare(sessionID!).catch(() => {})
+    if (!sessionID) return
+    const share = await Session.getShare(sessionID).catch(() => {})
     if (!share) return
     const { secret } = share
     pending.set(key, content)

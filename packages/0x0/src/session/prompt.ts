@@ -1097,7 +1097,7 @@ export namespace SessionPrompt {
                     const model = await Provider.getModel(info.model.providerID, info.model.modelID)
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
-                      abort: new AbortController().signal,
+                      abort: AbortSignal.timeout(30_000),
                       agent: input.agent!,
                       messageID: info.id,
                       extra: { bypassCwdCheck: true, model },
@@ -1159,7 +1159,7 @@ export namespace SessionPrompt {
                 const args = { path: filepath }
                 const listCtx: Tool.Context = {
                   sessionID: input.sessionID,
-                  abort: new AbortController().signal,
+                  abort: AbortSignal.timeout(30_000),
                   agent: input.agent!,
                   messageID: info.id,
                   extra: { bypassCwdCheck: true },
@@ -1735,7 +1735,7 @@ export namespace SessionPrompt {
       small: true,
       tools: {},
       model,
-      abort: new AbortController().signal,
+      abort: AbortSignal.timeout(30_000),
       sessionID: input.session.id,
       retries: 2,
       messages: [

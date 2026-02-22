@@ -52,7 +52,8 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       ]
       const currentIndex = order.indexOf(store.active)
       const nextIndex = (currentIndex + 1) % order.length
-      setStore("active", order[nextIndex]!)
+      const nextActive = order[nextIndex]
+      if (nextActive !== undefined) setStore("active", nextActive)
       evt.preventDefault()
     }
     if (evt.name === "space") {

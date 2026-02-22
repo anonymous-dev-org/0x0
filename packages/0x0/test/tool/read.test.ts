@@ -150,12 +150,12 @@ describe("tool.read env file permissions", () => {
             ...ctx,
             ask: async (req: Omit<PermissionNext.Request, "id" | "sessionID" | "tool">) => {
               for (const pattern of req.patterns) {
-                const rule = PermissionNext.evaluate(req.permission, pattern, agent.permission)
+                const rule = PermissionNext.evaluate(req.permission, pattern, agent!.permission)
                 if (rule.action === "ask" && req.permission === "read") {
                   askedForEnv = true
                 }
                 if (rule.action === "deny") {
-                  throw new PermissionNext.DeniedError(agent.permission)
+                  throw new PermissionNext.DeniedError(agent!.permission)
                 }
               }
             },
@@ -299,7 +299,7 @@ describe("tool.read truncation", () => {
         expect(result.metadata.truncated).toBe(false)
         expect(result.attachments).toBeDefined()
         expect(result.attachments?.length).toBe(1)
-        expect(result.attachments?.[0].type).toBe("file")
+        expect(result.attachments?.[0]!.type).toBe("file")
       },
     })
   })

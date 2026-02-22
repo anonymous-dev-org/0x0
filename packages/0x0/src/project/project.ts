@@ -261,7 +261,7 @@ export namespace Project {
     log.info("migrating sessions from global", { newProjectID, worktree, count: globalSessions.length })
 
     await work(10, globalSessions, async (key) => {
-      const sessionID = key[key.length - 1]!
+      const sessionID = key[key.length - 1] ?? ""
       const session = await Storage.read<Session.Info>(key).catch(() => undefined)
       if (!session) return
       if (session.directory && session.directory !== worktree) return

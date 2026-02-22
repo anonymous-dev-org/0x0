@@ -780,12 +780,18 @@ export const GithubRunCommand = cmd({
           const filename = path.basename(url)
 
           // Download image
-          const res = await fetch(url, {
-            headers: {
-              Authorization: `Bearer ${appToken}`,
-              Accept: "application/vnd.github.v3+json",
-            },
-          })
+          let res: Response
+          try {
+            res = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${appToken}`,
+                Accept: "application/vnd.github.v3+json",
+              },
+            })
+          } catch (err) {
+            console.error(`Failed to download image: ${url} (${err})`)
+            continue
+          }
           if (!res.ok) {
             console.error(`Failed to download image: ${url}`)
             continue

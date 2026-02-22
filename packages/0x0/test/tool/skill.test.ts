@@ -95,9 +95,9 @@ Use this skill.
           const file = path.resolve(dir, "scripts", "demo.txt")
 
           expect(requests.length).toBe(1)
-          expect(requests[0].permission).toBe("skill")
-          expect(requests[0].patterns).toContain("tool-skill")
-          expect(requests[0].always).toContain("tool-skill")
+          expect(requests[0]!.permission).toBe("skill")
+          expect(requests[0]!.patterns).toContain("tool-skill")
+          expect(requests[0]!.always).toContain("tool-skill")
 
           expect(result.metadata.dir).toBe(dir)
           expect(result.output).toContain(`<skill_content name="tool-skill">`)

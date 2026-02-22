@@ -7,7 +7,9 @@ export namespace Rpc {
     onmessage = async (evt) => {
       const parsed = JSON.parse(evt.data)
       if (parsed.type === "rpc.request") {
-        const result = await rpc[parsed.method]!(parsed.input)
+        const handler = rpc[parsed.method]
+        if (!handler) return
+        const result = await handler(parsed.input)
         postMessage(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
       }
     }

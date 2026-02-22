@@ -227,8 +227,7 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
             sessionTokens.cache.write += message.info.tokens.cache?.write || 0
 
             sessionModelUsage[modelKey].tokens.input += message.info.tokens.input || 0
-            sessionModelUsage[modelKey].tokens.output +=
-              (message.info.tokens.output || 0) + (message.info.tokens.reasoning || 0)
+            sessionModelUsage[modelKey].tokens.output += message.info.tokens.output || 0
             sessionModelUsage[modelKey].tokens.cache.read += message.info.tokens.cache?.read || 0
             sessionModelUsage[modelKey].tokens.cache.write += message.info.tokens.cache?.write || 0
           }
@@ -316,8 +315,8 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     sessionTotalTokens.length === 0
       ? 0
       : sessionTotalTokens.length % 2 === 0
-        ? (sessionTotalTokens[mid - 1]! + sessionTotalTokens[mid]!) / 2
-        : sessionTotalTokens[mid]!
+        ? ((sessionTotalTokens[mid - 1] ?? 0) + (sessionTotalTokens[mid] ?? 0)) / 2
+        : (sessionTotalTokens[mid] ?? 0)
 
   return stats
 }

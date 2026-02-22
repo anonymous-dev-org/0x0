@@ -20,7 +20,7 @@ export namespace ConfigMarkdown {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
     if (!match) return content
 
-    const frontmatter = match[1]!
+    const frontmatter = match[1] ?? ""
     const lines = frontmatter.split("\n")
     const result: string[] = []
 
@@ -44,8 +44,8 @@ export namespace ConfigMarkdown {
         continue
       }
 
-      const key = kvMatch[1]!
-      const value = kvMatch[2]!.trim()
+      const key = kvMatch[1] ?? ""
+      const value = (kvMatch[2] ?? "").trim()
 
       // skip if value is empty, already quoted, or uses block scalar
       if (value === "" || value === ">" || value === "|" || value.startsWith('"') || value.startsWith("'")) {

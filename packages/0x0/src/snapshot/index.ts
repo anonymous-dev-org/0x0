@@ -221,6 +221,7 @@ export namespace Snapshot {
       .lines()) {
       if (!line) continue
       const [additions, deletions, file] = line.split("\t")
+      if (!file || !additions || !deletions) continue
       const isBinaryFile = additions === "-" && deletions === "-"
       const before = isBinaryFile
         ? ""
@@ -234,15 +235,15 @@ export namespace Snapshot {
             .quiet()
             .nothrow()
             .text()
-      const added = isBinaryFile ? 0 : parseInt(additions!)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions!)
+      const added = isBinaryFile ? 0 : parseInt(additions)
+      const deleted = isBinaryFile ? 0 : parseInt(deletions)
       result.push({
-        file: file!,
+        file,
         before,
         after,
         additions: Number.isFinite(added) ? added : 0,
         deletions: Number.isFinite(deleted) ? deleted : 0,
-        status: status.get(file!) ?? "modified",
+        status: status.get(file) ?? "modified",
       })
     }
     return result

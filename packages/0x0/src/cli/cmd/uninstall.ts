@@ -312,7 +312,7 @@ async function cleanShellConfig(file: string) {
     filtered.push(line)
   }
 
-  while (filtered.length > 0 && filtered[filtered.length - 1]!.trim() === "") {
+  while (filtered.length > 0 && (filtered[filtered.length - 1] ?? "").trim() === "") {
     filtered.pop()
   }
 

@@ -670,7 +670,9 @@ export function Prompt(props: PromptProps) {
     if (store.mode === "shell") return theme.primary
     const dark = theme.text.r * 0.299 + theme.text.g * 0.587 + theme.text.b * 0.114 > 0.5
     if (dark) return agent()
-    return tint(theme.text, agent()!, 0.52)
+    const agentColor = agent()
+    if (!agentColor) return theme.text
+    return tint(theme.text, agentColor, 0.52)
   })
 
   const parsed = local.model.parsed

@@ -22,7 +22,6 @@ import { Event } from "../server/event"
 import { PackageRegistry } from "@/bun/registry"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
-import PROMPT_CODEX from "../session/prompt/codex_header.txt"
 import PROMPT_DEFAULT from "../session/prompt/default_system_prompt.txt"
 import YAML from "yaml"
 
@@ -212,7 +211,10 @@ export namespace Config {
           files: found,
         })
       }
-      if (found.length === 1) files.push(found[0]!)
+      if (found.length === 1) {
+        const f = found[0]
+        if (f !== undefined) files.push(f)
+      }
     }
     return files
   }
@@ -1292,7 +1294,7 @@ export namespace Config {
 
       for (const match of fileMatches) {
         const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (lineIndex !== -1 && (lines[lineIndex]!.trim().startsWith("//") || lines[lineIndex]!.trim().startsWith("#"))) {
+        if (lineIndex !== -1 && ((lines[lineIndex] ?? "").trim().startsWith("//") || (lines[lineIndex] ?? "").trim().startsWith("#"))) {
           continue // Skip if line is commented
         }
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
@@ -1344,9 +1346,11 @@ export namespace Config {
       if (data.plugin) {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
-          try {
-            data.plugin[i] = import.meta.resolve!(plugin!, configFilepath)
-          } catch (err) {}
+          if (plugin !== undefined) {
+            try {
+              data.plugin[i] = import.meta.resolve(plugin, configFilepath)
+            } catch (err) {}
+          }
         }
       }
       return data
@@ -1436,7 +1440,7 @@ export namespace Config {
     for (const file of candidates) {
       if (existsSync(file)) return file
     }
-    return candidates[0]!
+    return candidates[0] ?? ""
   }
 
   function parseConfig(text: string, filepath: string): Info {

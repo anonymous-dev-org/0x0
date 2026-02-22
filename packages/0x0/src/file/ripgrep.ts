@@ -316,7 +316,9 @@ export namespace Ripgrep {
 
     let used = 0
     for (let i = 0; i < queue.length && used < limit; i++) {
-      const { node, path } = queue[i]!
+      const item = queue[i]
+      if (!item) continue
+      const { node, path } = item
       lines.push(path)
       used++
       for (const child of Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name))) {

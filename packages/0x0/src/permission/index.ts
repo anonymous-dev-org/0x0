@@ -141,9 +141,11 @@ export namespace Permission {
         return
     }
 
-    pending[input.sessionID] = pending[input.sessionID] || {}
+    if (!pending[input.sessionID]) pending[input.sessionID] = {}
     return new Promise<void>((resolve, reject) => {
-      pending[input.sessionID]![info.id] = {
+      const sessionPending = pending[input.sessionID]
+      if (!sessionPending) return
+      sessionPending[info.id] = {
         info,
         resolve,
         reject,
@@ -160,7 +162,8 @@ export namespace Permission {
     const { pending, approved } = state()
     const match = pending[input.sessionID]?.[input.permissionID]
     if (!match) return
-    delete pending[input.sessionID]![input.permissionID]
+    const sessionPendingEntry = pending[input.sessionID]
+    if (sessionPendingEntry) delete sessionPendingEntry[input.permissionID]
     Bus.publish(Event.Replied, {
       sessionID: input.sessionID,
       permissionID: input.permissionID,
@@ -172,16 +175,20 @@ export namespace Permission {
     }
     match.resolve()
     if (input.response === "always") {
-      approved[input.sessionID] = approved[input.sessionID] || {}
+      if (!approved[input.sessionID]) approved[input.sessionID] = {}
       const approveKeys = toKeys(match.info.pattern, match.info.type)
-      for (const k of approveKeys) {
-        approved[input.sessionID]![k] = true
+      const sessionApproved = approved[input.sessionID]
+      if (sessionApproved) {
+        for (const k of approveKeys) {
+          sessionApproved[k] = true
+        }
       }
       const items = pending[input.sessionID]
       if (!items) return
+      const sessionApprovedKeys = approved[input.sessionID]
       for (const item of Object.values(items)) {
         const itemKeys = toKeys(item.info.pattern, item.info.type)
-        if (covered(itemKeys, approved[input.sessionID]!)) {
+        if (covered(itemKeys, sessionApprovedKeys ?? {})) {
           respond({
             sessionID: item.info.sessionID,
             permissionID: item.info.id,

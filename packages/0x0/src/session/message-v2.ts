@@ -447,17 +447,9 @@ export namespace MessageV2 {
     //
     // Only apply this workaround if the model actually supports image input -
     // otherwise there's no point extracting images.
-    const supportsMediaInToolResults = (() => {
-      if (model.api.npm === "@ai-sdk/anthropic") return true
-      if (model.api.npm === "@ai-sdk/openai") return true
-      if (model.api.npm === "@ai-sdk/amazon-bedrock") return true
-      if (model.api.npm === "@ai-sdk/google-vertex/anthropic") return true
-      if (model.api.npm === "@ai-sdk/google") {
-        const id = model.api.id.toLowerCase()
-        return id.includes("gemini-3") && !id.includes("gemini-2")
-      }
-      return false
-    })()
+    // In CLI-delegating mode, model.api.npm is always empty, so media in tool
+    // results is never natively supported. Always extract media to user messages.
+    const supportsMediaInToolResults = false
 
     const toModelOutput = (output: unknown) => {
       if (typeof output === "string") {
@@ -665,7 +657,7 @@ export namespace MessageV2 {
     for (let i = list.length - 1; i >= 0; i--) {
       yield await get({
         sessionID,
-        messageID: list[i]![2]!,
+        messageID: list[i]?.[2] ?? "",
       })
     }
   })

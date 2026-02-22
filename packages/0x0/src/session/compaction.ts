@@ -102,7 +102,9 @@ export namespace SessionCompaction {
     abort: AbortSignal
     auto: boolean
   }) {
-    const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as MessageV2.User
+    const parentMessage = input.messages.findLast((m) => m.info.id === input.parentID)
+    if (!parentMessage) throw new Error(`compaction parent message ${input.parentID} not found`)
+    const userMessage = parentMessage.info as MessageV2.User
     const agent = await Agent.get("compaction")
     const config = await Config.get()
     const model =
@@ -159,7 +161,7 @@ export namespace SessionCompaction {
       .join("\n\n")
     const result = await processor.process({
       user: userMessage,
-      agent: agent!,
+      agent: agent ?? (() => { throw new Error("compaction agent not found") })(),
       abort: input.abort,
       sessionID: input.sessionID,
       tools: {},
