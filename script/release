@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-BUMP_TYPE=${1:-patch}
-
-gh workflow run publish.yml -f bump="$BUMP_TYPE"
+exec bash "$(dirname "$0")/release-local.sh" "$@"

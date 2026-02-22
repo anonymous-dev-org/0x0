@@ -3,7 +3,6 @@
 <p align="center">
   <a href="https://discord.gg"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
-  <a href="https://github.com/anonymous-dev-org/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anonymous-dev-org/0x0/publish.yml?style=flat-square&branch=main" /></a>
 </p>
 
 <p align="center">
@@ -26,8 +25,6 @@
   <a href="README.th.md">ไทย</a> |
   <a href="README.tr.md">Türkçe</a>
 </p>
-
-[![Terminal UI](packages/web/src/assets/lander/screenshot.png)](#installation)
 
 ---
 
@@ -97,11 +94,11 @@ The CLI includes two built-in agents you can switch between with the `Tab` key.
 It also includes a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://0x0.ai/docs/agents).
+Learn more about [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Documentation
 
-For more info on configuration, [**head over to the docs**](https://0x0.ai/docs).
+For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0).
 
 ### Contributing
 
