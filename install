@@ -20,8 +20,8 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://0x0.ai/install | bash
-    curl -fsSL https://0x0.ai/install | bash -s -- --version 1.0.180
+    curl -fsSL https://docs.anonymous.dev/packages/0x0-cli/install | bash
+    curl -fsSL https://docs.anonymous.dev/packages/0x0-cli/install | bash -s -- --version 1.0.180
     ./install --binary /path/to/0x0
 EOF
 }
@@ -441,6 +441,6 @@ echo -e ""
 echo -e "cd <project>  ${MUTED}# Open directory${NC}"
 echo -e "0x0      ${MUTED}# Run command${NC}"
 echo -e ""
-echo -e "${MUTED}For more information visit ${NC}https://0x0.ai/docs"
+echo -e "${MUTED}For more information visit ${NC}https://docs.anonymous.dev/packages/0x0-cli"
 echo -e ""
 echo -e ""

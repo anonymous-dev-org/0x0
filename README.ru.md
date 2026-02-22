@@ -1,9 +1,8 @@
 <p align="center"><strong>Terminal Agent</strong></p>
 <p align="center">Открытый AI-агент для программирования.</p>
 <p align="center">
-  <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://discord.gg"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
 <p align="center">
@@ -19,6 +18,7 @@
   <a href="README.ja.md">日本語</a> |
   <a href="README.pl.md">Polski</a> |
   <a href="README.ru.md">Русский</a> |
+  <a href="README.bs.md">Bosanski</a> |
   <a href="README.ar.md">العربية</a> |
   <a href="README.no.md">Norsk</a> |
   <a href="README.br.md">Português (Brasil)</a> |
@@ -26,61 +26,13 @@
   <a href="README.tr.md">Türkçe</a>
 </p>
 
-[![Terminal Agent Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://0x0.ai)
-
 ---
 
 ### Установка
 
 ```bash
-# YOLO
-curl -fsSL https://0x0.ai/install | bash
-
-# Менеджеры пакетов
 npm i -g @anonymous-dev/0x0@latest        # или bun/pnpm/yarn
-scoop install 0x0             # Windows
-choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/0x0 # macOS и Linux (рекомендуем, всегда актуально)
-brew install 0x0              # macOS и Linux (официальная формула brew, обновляется реже)
-paru -S 0x0-bin               # Arch Linux
-mise use -g 0x0               # любая ОС
-nix run nixpkgs#0x0           # или github:anomalyco/0x0 для самой свежей ветки dev
-```
-
-> [!TIP]
-> Перед установкой удалите версии старше 0.1.x.
-
-### Десктопное приложение (BETA)
-
-Terminal Agent также доступен как десктопное приложение. Скачайте его со [страницы релизов](https://github.com/anomalyco/0x0/releases) или с [0x0.ai/download](https://0x0.ai/download).
-
-| Платформа             | Загрузка                         |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
-| Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm` или AppImage      |
-
-```bash
-# macOS (Homebrew)
-brew install --cask 0x0-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/0x0-desktop
-```
-
-#### Каталог установки
-
-Скрипт установки выбирает путь установки в следующем порядке приоритета:
-
-1. `$ZEROXZERO_INSTALL_DIR` - Пользовательский каталог установки
-2. `$XDG_BIN_DIR` - Путь, совместимый со спецификацией XDG Base Directory
-3. `$HOME/bin` - Стандартный каталог пользовательских бинарников (если существует или можно создать)
-4. `$HOME/.0x0/bin` - Fallback по умолчанию
-
-```bash
-# Примеры
-ZEROXZERO_INSTALL_DIR=/usr/local/bin curl -fsSL https://0x0.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://0x0.ai/install | bash
+brew install anonymous-dev-org/tap/0x0 # macOS и Linux
 ```
 
 ### Agents
@@ -96,11 +48,11 @@ XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://0x0.ai/install | bash
 Также включен сабагент **general** для сложных поисков и многошаговых задач.
 Он используется внутренне и может быть вызван в сообщениях через `@general`.
 
-Подробнее об [agents](https://0x0.ai/docs/agents).
+Подробнее об [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
 
 ### Документация
 
-Больше информации о том, как настроить Terminal Agent: [**наши docs**](https://0x0.ai/docs).
+Больше информации о том, как настроить Terminal Agent: [**наши docs**](https://docs.anonymous.dev/packages/0x0-cli).
 
 ### Вклад
 
@@ -109,18 +61,6 @@ XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://0x0.ai/install | bash
 ### Разработка на базе Terminal Agent
 
 Если вы делаете проект, связанный с Terminal Agent, и используете "0x0" как часть имени (например, "0x0-dashboard" или "0x0-mobile"), добавьте примечание в README, чтобы уточнить, что проект не создан командой Terminal Agent и не аффилирован с нами.
-
-### FAQ
-
-#### Чем это отличается от Claude Code?
-
-По возможностям это очень похоже на Claude Code. Вот ключевые отличия:
-
-- 100% open source
-- Не привязано к одному провайдеру. Мы рекомендуем модели из [Terminal Agent Zen](https://0x0.ai/zen); но Terminal Agent можно использовать с Claude, OpenAI, Google или даже локальными моделями. По мере развития моделей разрыв будет сокращаться, а цены падать, поэтому важна независимость от провайдера.
-- Поддержка LSP из коробки
-- Фокус на TUI. Terminal Agent построен пользователями neovim и создателями [terminal.shop](https://terminal.shop); мы будем раздвигать границы того, что возможно в терминале.
-- Архитектура клиент/сервер. Например, это позволяет запускать Terminal Agent на вашем компьютере, а управлять им удаленно из мобильного приложения. Это значит, что TUI-фронтенд - лишь один из возможных клиентов.
 
 ---
 

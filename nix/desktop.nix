@@ -92,7 +92,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "0x0 Desktop App";
-    homepage = "https://0x0.ai";
+    homepage = "https://docs.anonymous.dev/packages/0x0-cli";
     license = lib.licenses.mit;
     mainProgram = "0x0-desktop";
     inherit (0x0.meta) platforms;

@@ -1,9 +1,8 @@
 <p align="center"><strong>Terminal Agent</strong></p>
 <p align="center">AI-kodeagent med åpen kildekode.</p>
 <p align="center">
-  <a href="https://0x0.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://discord.gg"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/@anonymous-dev/0x0"><img alt="npm" src="https://img.shields.io/npm/v/@anonymous-dev/0x0?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/0x0/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/0x0/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
 <p align="center">
@@ -26,61 +25,13 @@
   <a href="README.tr.md">Türkçe</a>
 </p>
 
-[![Terminal Agent Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://0x0.ai)
-
 ---
 
 ### Installasjon
 
 ```bash
-# YOLO
-curl -fsSL https://0x0.ai/install | bash
-
-# Pakkehåndterere
 npm i -g @anonymous-dev/0x0@latest        # eller bun/pnpm/yarn
-scoop install 0x0             # Windows
-choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/0x0 # macOS og Linux (anbefalt, alltid oppdatert)
-brew install 0x0              # macOS og Linux (offisiell brew-formel, oppdateres sjeldnere)
-paru -S 0x0-bin               # Arch Linux
-mise use -g 0x0               # alle OS
-nix run nixpkgs#0x0           # eller github:anomalyco/0x0 for nyeste dev-branch
-```
-
-> [!TIP]
-> Fjern versjoner eldre enn 0.1.x før du installerer.
-
-### Desktop-app (BETA)
-
-Terminal Agent er også tilgjengelig som en desktop-app. Last ned direkte fra [releases-siden](https://github.com/anomalyco/0x0/releases) eller [0x0.ai/download](https://0x0.ai/download).
-
-| Plattform             | Nedlasting                       |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
-| Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm` eller AppImage    |
-
-```bash
-# macOS (Homebrew)
-brew install --cask 0x0-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/0x0-desktop
-```
-
-#### Installasjonsmappe
-
-Installasjonsskriptet bruker følgende prioritet for installasjonsstien:
-
-1. `$ZEROXZERO_INSTALL_DIR` - Egendefinert installasjonsmappe
-2. `$XDG_BIN_DIR` - Sti som følger XDG Base Directory Specification
-3. `$HOME/bin` - Standard brukerbinar-mappe (hvis den finnes eller kan opprettes)
-4. `$HOME/.0x0/bin` - Standard fallback
-
-```bash
-# Eksempler
-ZEROXZERO_INSTALL_DIR=/usr/local/bin curl -fsSL https://0x0.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://0x0.ai/install | bash
+brew install anonymous-dev-org/tap/0x0 # macOS og Linux
 ```
 
 ### Agents
@@ -96,11 +47,11 @@ Terminal Agent har to innebygde agents du kan bytte mellom med `Tab`-tasten.
 Det finnes også en **general**-subagent for komplekse søk og flertrinnsoppgaver.
 Den brukes internt og kan kalles via `@general` i meldinger.
 
-Les mer om [agents](https://0x0.ai/docs/agents).
+Les mer om [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
 
 ### Dokumentasjon
 
-For mer info om hvordan du konfigurerer Terminal Agent, [**se dokumentasjonen**](https://0x0.ai/docs).
+For mer info om hvordan du konfigurerer Terminal Agent, [**se dokumentasjonen**](https://docs.anonymous.dev/packages/0x0-cli).
 
 ### Bidra
 
@@ -108,19 +59,7 @@ Hvis du vil bidra til Terminal Agent, les [contributing docs](./CONTRIBUTING.md)
 
 ### Bygge på Terminal Agent
 
-Hvis du jobber med et prosjekt som er relatert til Terminal Agent og bruker "0x0" som en del av navnet; for eksempel "0x0-dashboard" eller "0x0-mobile", legg inn en merknad i README som presiserer at det ikke er bygget av Terminal Agent-teamet og ikke er tilknyttet oss på noen måte.
-
-### FAQ
-
-#### Hvordan er dette forskjellig fra Claude Code?
-
-Det er veldig likt Claude Code når det gjelder funksjonalitet. Her er de viktigste forskjellene:
-
-- 100% open source
-- Ikke knyttet til en bestemt leverandør. Selv om vi anbefaler modellene vi tilbyr gjennom [Terminal Agent Zen](https://0x0.ai/zen); kan Terminal Agent brukes med Claude, OpenAI, Google eller til og med lokale modeller. Etter hvert som modellene utvikler seg vil gapene lukkes og prisene gå ned, så det er viktig å være provider-agnostic.
-- LSP-støtte rett ut av boksen
-- Fokus på TUI. Terminal Agent er bygget av neovim-brukere og skaperne av [terminal.shop](https://terminal.shop); vi kommer til å presse grensene for hva som er mulig i terminalen.
-- Klient/server-arkitektur. Dette kan for eksempel la Terminal Agent kjøre på maskinen din, mens du styrer den eksternt fra en mobilapp. Det betyr at TUI-frontend'en bare er en av de mulige klientene.
+Hvis du jobber med et prosjekt som bruker denne kodebasen og gjenbruker denne merkevaren, legg inn en merknad i README som presiserer at det ikke er bygget av kjerneteamet og ikke er tilknyttet oss på noen måte.
 
 ---
 

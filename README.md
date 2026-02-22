@@ -31,54 +31,8 @@
 ### Installation
 
 ```bash
-# YOLO
-curl -fsSL https://0x0.ai/install | bash
-
-# Package managers
 npm i -g @anonymous-dev/0x0@latest        # or bun/pnpm/yarn
-scoop install 0x0             # Windows
-choco install 0x0             # Windows
-brew install anonymous-dev-org/tap/0x0 # macOS and Linux (recommended, always up to date)
-brew install 0x0              # macOS and Linux (official brew formula, updated less)
-paru -S 0x0-bin               # Arch Linux
-mise use -g 0x0               # Any OS
-nix run nixpkgs#0x0           # or github:anonymous-dev-org/0x0 for latest dev branch
-```
-
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
-
-### Desktop App (BETA)
-
-The project is also available as a desktop application. Download directly from the [releases page](https://github.com/anonymous-dev-org/0x0/releases) or [download page](https://0x0.ai/download).
-
-| Platform              | Download                         |
-| --------------------- | -------------------------------- |
-| macOS (Apple Silicon) | `0x0-desktop-darwin-aarch64.dmg` |
-| macOS (Intel)         | `0x0-desktop-darwin-x64.dmg`     |
-| Windows               | `0x0-desktop-windows-x64.exe`    |
-| Linux                 | `.deb`, `.rpm`, or AppImage      |
-
-```bash
-# macOS (Homebrew)
-brew install --cask 0x0-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/0x0-desktop
-```
-
-#### Installation Directory
-
-The install script respects the following priority order for the installation path:
-
-1. `$ZEROXZERO_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.0x0/bin` - Default fallback
-
-```bash
-# Examples
-ZEROXZERO_INSTALL_DIR=/usr/local/bin curl -fsSL https://0x0.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://0x0.ai/install | bash
+brew install anonymous-dev-org/tap/0x0 # macOS and Linux
 ```
 
 ### Agents
@@ -94,11 +48,11 @@ The CLI includes two built-in agents you can switch between with the `Tab` key.
 It also includes a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://docs.anonymous.dev/packages/0x0/agents).
+Learn more about [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
 
 ### Documentation
 
-For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0).
+For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0-cli).
 
 ### Contributing
 
@@ -107,18 +61,6 @@ If you're interested in contributing, please read our [contributing docs](./CONT
 ### Building on Terminal Agent
 
 If you are working on a project using this codebase and reusing this branding, please add a note to your README to clarify that it is not built by the core team and is not affiliated.
-
-### FAQ
-
-#### How is this different from Claude Code?
-
-It's very similar to Claude Code in terms of capability. Here are the key differences:
-
-- 100% open source
-- Not coupled to any provider. Although we recommend the models we provide through [Terminal Agent Zen](https://0x0.ai/zen), Terminal Agent can be used with Claude, OpenAI, Google, or even local models. As models evolve, the gaps between them will close and pricing will drop, so being provider-agnostic is important.
-- Out-of-the-box LSP support
-- A focus on TUI. Terminal Agent is built by neovim users and the creators of [terminal.shop](https://terminal.shop); we are going to push the limits of what's possible in the terminal.
-- A client/server architecture. This, for example, can allow Terminal Agent to run on your computer while you drive it remotely from a mobile app, meaning that the TUI frontend is just one of the possible clients.
 
 ---
 

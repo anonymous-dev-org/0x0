@@ -88,7 +88,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   meta = {
     description = "The open source coding agent";
-    homepage = "https://0x0.ai/";
+    homepage = "https://docs.anonymous.dev/packages/0x0-cli";
     license = lib.licenses.mit;
     mainProgram = "0x0";
     inherit (node_modules.meta) platforms;

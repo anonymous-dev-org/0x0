@@ -20977,9 +20977,9 @@
     "id": "0x0",
     "env": ["ZEROXZERO_API_KEY"],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "https://0x0.ai/zen/v1",
+    "api": "https://docs.anonymous.dev/packages/0x0-cli/zen/v1",
     "name": "0x0 Zen",
-    "doc": "https://0x0.ai/docs/zen",
+    "doc": "https://docs.anonymous.dev/packages/0x0-cli/zen",
     "models": {
       "glm-4.7": {
         "id": "glm-4.7",
