@@ -378,44 +378,45 @@ function Glob(props: ToolProps<typeof GlobTool>) {
 }
 
 function Search(props: ToolProps<typeof SearchTool>) {
-  const mode = props.input.mode
-  if (mode === "files") {
-    return (
+  return (
+    <Show
+      when={props.input.mode === "files"}
+      fallback={
+        <InlineTool
+          icon="✱"
+          pending="Searching content..."
+          complete={props.input.pattern}
+          part={props.part}
+          ctx={props.ctx}
+        >
+          Search content "{props.input.pattern}"{" "}
+          <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
+          <Show when={props.input.include}>include={props.input.include} </Show>
+          <Show when={props.metadata.matches !== undefined}>
+            ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
+          </Show>
+        </InlineTool>
+      }
+    >
       <InlineTool icon="✱" pending="Finding files..." complete={props.input.pattern} part={props.part} ctx={props.ctx}>
         Search files "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
         <Show when={props.metadata.count !== undefined}>
           ({props.metadata.count} {props.metadata.count === 1 ? "match" : "matches"})
         </Show>
       </InlineTool>
-    )
-  }
-
-  return (
-    <InlineTool
-      icon="✱"
-      pending="Searching content..."
-      complete={props.input.pattern}
-      part={props.part}
-      ctx={props.ctx}
-    >
-      Search content "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
-      <Show when={props.input.include}>include={props.input.include} </Show>
-      <Show when={props.metadata.matches !== undefined}>
-        ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
-      </Show>
-    </InlineTool>
+    </Show>
   )
 }
 
 function Read(props: ToolProps<typeof ReadTool>) {
   const { theme } = useTheme()
-  const loaded = createMemo(() => {
+  const loaded = () => {
     if (props.part.state.status !== "completed") return []
     if (props.part.state.time.compacted) return []
     const value = props.metadata.loaded
     if (!value || !Array.isArray(value)) return []
     return value.filter((p): p is string => typeof p === "string")
-  })
+  }
   return (
     <>
       <InlineTool icon="→" pending="Reading file..." complete={props.input.filePath} part={props.part} ctx={props.ctx}>
@@ -472,44 +473,44 @@ function List(props: ToolProps<typeof ListTool>) {
 }
 
 function WebFetch(props: ToolProps<typeof WebFetchTool>) {
-  const url = (props.input as { url?: string }).url
+  const url = () => (props.input as { url?: string }).url
   return (
-    <InlineTool icon="%" pending="Fetching from the web..." complete={url} part={props.part} ctx={props.ctx}>
-      WebFetch {url}
+    <InlineTool icon="%" pending="Fetching from the web..." complete={url()} part={props.part} ctx={props.ctx}>
+      WebFetch {url()}
     </InlineTool>
   )
 }
 
 function SearchRemote(props: ToolProps<typeof SearchRemoteTool>) {
-  const mode = props.input.mode
-  const complete = mode === "fetch" ? props.input.url : props.input.query
+  const mode = () => props.input.mode
+  const complete = () => (mode() === "fetch" ? props.input.url : props.input.query)
 
   return (
-    <InlineTool icon="◈" pending="Searching remote..." complete={complete} part={props.part} ctx={props.ctx}>
-      <Show when={mode === "fetch"}>Fetch {props.input.url}</Show>
-      <Show when={mode === "web"}>Web search "{props.input.query}"</Show>
-      <Show when={mode === "code"}>Code search "{props.input.query}"</Show>
-      <Show when={!mode}>Search remote</Show>
+    <InlineTool icon="◈" pending="Searching remote..." complete={complete()} part={props.part} ctx={props.ctx}>
+      <Show when={mode() === "fetch"}>Fetch {props.input.url}</Show>
+      <Show when={mode() === "web"}>Web search "{props.input.query}"</Show>
+      <Show when={mode() === "code"}>Code search "{props.input.query}"</Show>
+      <Show when={!mode()}>Search remote</Show>
     </InlineTool>
   )
 }
 
 function CodeSearch(props: ToolProps<Tool.Info>) {
-  const input = props.input as { query?: string }
-  const metadata = props.metadata as { results?: number }
+  const input = () => props.input as { query?: string }
+  const metadata = () => props.metadata as { results?: number }
   return (
-    <InlineTool icon="◇" pending="Searching code..." complete={input.query} part={props.part} ctx={props.ctx}>
-      Exa Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
+    <InlineTool icon="◇" pending="Searching code..." complete={input().query} part={props.part} ctx={props.ctx}>
+      Exa Code Search "{input().query}" <Show when={metadata().results}>({metadata().results} results)</Show>
     </InlineTool>
   )
 }
 
 function WebSearch(props: ToolProps<Tool.Info>) {
-  const input = props.input as { query?: string }
-  const metadata = props.metadata as { numResults?: number }
+  const input = () => props.input as { query?: string }
+  const metadata = () => props.metadata as { numResults?: number }
   return (
-    <InlineTool icon="◈" pending="Searching web..." complete={input.query} part={props.part} ctx={props.ctx}>
-      Exa Web Search "{input.query}" <Show when={metadata.numResults}>({metadata.numResults} results)</Show>
+    <InlineTool icon="◈" pending="Searching web..." complete={input().query} part={props.part} ctx={props.ctx}>
+      Exa Web Search "{input().query}" <Show when={metadata().numResults}>({metadata().numResults} results)</Show>
     </InlineTool>
   )
 }
@@ -542,7 +543,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
     )
   })
 
-  const current = createMemo(() => tools().findLast((x) => x.state.status !== "pending"))
+  const current = () => tools().findLast((x) => x.state.status !== "pending")
 
   const isRunning = () => props.part.state.status === "running"
 
@@ -690,7 +691,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
 function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   const { theme, syntax } = useTheme()
 
-  const files = createMemo(() => props.metadata.files ?? [])
+  const files = () => props.metadata.files ?? []
 
   const view = () => {
     const diffStyle = props.ctx.sync.data.config.tui?.diff_style

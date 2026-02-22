@@ -10,7 +10,6 @@ import { GlobalBus } from "@/bus/global"
 import { Bus } from "@/bus"
 import type { Event } from "@0x0-ai/sdk/v2"
 import type { BunWebSocketData } from "hono/bun"
-import { Flag } from "@/flag/flag"
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -121,7 +120,7 @@ timing("worker.ready")
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
-    const auth = getAuthorizationHeader()
+    const auth = await getAuthorizationHeader()
     if (auth && !headers["authorization"] && !headers["Authorization"]) {
       headers["Authorization"] = auth
     }
@@ -172,9 +171,10 @@ export const rpc = {
 
 Rpc.listen(rpc)
 
-function getAuthorizationHeader(): string | undefined {
-  const password = Flag.ZEROXZERO_SERVER_PASSWORD
+async function getAuthorizationHeader(): Promise<string | undefined> {
+  const config = await Config.get()
+  const password = config.server?.password
   if (!password) return undefined
-  const username = Flag.ZEROXZERO_SERVER_USERNAME ?? "zeroxzero"
+  const username = config.server?.username ?? "zeroxzero"
   return `Basic ${btoa(`${username}:${password}`)}`
 }

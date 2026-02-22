@@ -3,22 +3,75 @@ import { useKeyboard } from "@opentui/solid"
 import { useKeybind } from "@tui/context/keybind"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "@tui/ui/dialog"
+import { useSDK } from "@tui/context/sdk"
+import { useSync } from "@tui/context/sync"
+import { useKV } from "@tui/context/kv"
+import { useToast } from "@tui/ui/toast"
 import { createSignal, Show } from "solid-js"
 
-export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; onUseCustom: () => Promise<void> }) {
+export function DialogOnboarding() {
   const dialog = useDialog()
+  const sdk = useSDK()
+  const sync = useSync()
+  const kv = useKV()
+  const toast = useToast()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const [choice, setChoice] = createSignal<"default" | "custom">("default")
   const [busy, setBusy] = createSignal(false)
   const [hover, setHover] = createSignal<"default" | "custom" | undefined>()
 
+  const keepDefaults = async () => {
+    await sync.bootstrap()
+    kv.set("onboarding_v1_done", true)
+    dialog.clear()
+  }
+
+  const useCustom = async () => {
+    const current = await sdk.client.global.config.get({ throwOnError: true })
+    const config = JSON.parse(JSON.stringify(current.data ?? {}))
+    config.agent = config.agent ?? {}
+
+    for (const name of ["builder", "planner"]) {
+      const current = config.agent[name] ?? {}
+      config.agent[name] = {
+        ...current,
+        disable: true,
+      }
+    }
+
+    const custom = sync.data.agent.find((item) => !item.native && item.hidden !== true)?.name ?? "my_agent"
+    config.agent[custom] = {
+      ...(config.agent[custom] ?? {}),
+      name: config.agent[custom]?.name ?? "My Agent",
+      color: config.agent[custom]?.color ?? "#22C55E",
+      tools_allowed: config.agent[custom]?.tools_allowed ?? ["bash", "read", "search", "apply_patch", "task"],
+      thinking_effort: config.agent[custom]?.thinking_effort ?? "medium",
+      hidden: false,
+      description: config.agent[custom]?.description ?? "My custom agent",
+    }
+
+    if (["builder", "planner"].includes(config.default_agent)) {
+      config.default_agent = custom
+    }
+
+    await sdk.client.global.config.update({ config }, { throwOnError: true })
+    await sync.bootstrap()
+    kv.set("onboarding_v1_done", true)
+    toast.show({
+      message: `Custom agent setup enabled (${custom})`,
+      variant: "success",
+      duration: 3000,
+    })
+    dialog.clear()
+  }
+
   const submit = async () => {
     if (busy()) return
     setBusy(true)
     try {
-      if (choice() === "default") await props.onKeepDefaults()
-      if (choice() === "custom") await props.onUseCustom()
+      if (choice() === "default") await keepDefaults()
+      if (choice() === "custom") await useCustom()
     } finally {
       setBusy(false)
     }
@@ -53,13 +106,6 @@ export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; o
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          Welcome to 0x0
-        </text>
-        <text fg={theme.textMuted}>quick start</text>
-      </box>
-
       <box flexDirection="column" paddingBottom={1}>
         <text fg={theme.textMuted}>Switch agents with {keybind.print("agent_cycle")}</text>
         <text fg={theme.textMuted}>Type / to open command suggestions</text>
@@ -70,7 +116,7 @@ export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; o
       <text fg={theme.textMuted}>You can always change this later in 0x0.yaml.</text>
 
       <box flexDirection="column" gap={1} paddingBottom={1}>
-        <Option
+        <OnboardingOption
           title="Use default agents"
           description="Start with builder and planner"
           active={choice() === "default"}
@@ -84,7 +130,7 @@ export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; o
           }}
         />
 
-        <Option
+        <OnboardingOption
           title="Use my own agents"
           description="Disable defaults and keep only your custom setup"
           active={choice() === "custom"}
@@ -109,7 +155,7 @@ export function DialogOnboarding(props: { onKeepDefaults: () => Promise<void>; o
   )
 }
 
-function Option(props: {
+function OnboardingOption(props: {
   title: string
   description: string
   active: boolean

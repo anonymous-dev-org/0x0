@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useKeybind } from "../../context/keybind"
@@ -93,14 +93,12 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   }
 
   function pick(answer: string, custom: boolean = false) {
-    const answers = [...store.answers]
-    answers[store.tab] = [answer]
-    setStore("answers", answers)
-    if (custom) {
-      const inputs = [...store.custom]
-      inputs[store.tab] = answer
-      setStore("custom", inputs)
-    }
+    batch(() => {
+      setStore("answers", store.tab, [answer])
+      if (custom) {
+        setStore("custom", store.tab, answer)
+      }
+    })
     if (single()) {
       sdk.client.question.reply({
         requestID: props.request.id,
@@ -108,19 +106,17 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       })
       return
     }
-    setStore("tab", store.tab + 1)
-    setStore("selected", 0)
+    batch(() => {
+      setStore("tab", store.tab + 1)
+      setStore("selected", 0)
+    })
   }
 
   function toggle(answer: string) {
     const existing = store.answers[store.tab] ?? []
-    const next = [...existing]
-    const index = next.indexOf(answer)
-    if (index === -1) next.push(answer)
-    if (index !== -1) next.splice(index, 1)
-    const answers = [...store.answers]
-    answers[store.tab] = next
-    setStore("answers", answers)
+    const index = existing.indexOf(answer)
+    const next = index === -1 ? [...existing, answer] : existing.filter((x) => x !== answer)
+    setStore("answers", store.tab, next)
   }
 
   function moveTo(index: number) {
@@ -128,10 +124,9 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   }
 
   function selectTab(index: number) {
-    setStore("tab", index)
-    setStore("selected", 0)
-    queueMicrotask(() => {
-      ensureTabVisible(index === questions().length ? "confirm" : index)
+    batch(() => {
+      setStore("tab", index)
+      setStore("selected", 0)
     })
   }
 
@@ -170,7 +165,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
   useKeyboard((evt) => {
     // Skip processing if a dialog (e.g., command palette) is open
-    if (dialog.stack.length > 0) return
+    if (dialog.visible) return
 
     // When editing custom answer textarea
     if (store.editing && !confirm()) {
@@ -196,34 +191,28 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
         if (!text) {
           if (prev) {
-            const inputs = [...store.custom]
-            inputs[store.tab] = ""
-            setStore("custom", inputs)
-
-            const answers = [...store.answers]
-            answers[store.tab] = (answers[store.tab] ?? []).filter((x) => x !== prev)
-            setStore("answers", answers)
+            batch(() => {
+              setStore("custom", store.tab, "")
+              setStore("answers", store.tab, (a) => (a ?? []).filter((x) => x !== prev))
+            })
           }
           setStore("editing", false)
           return
         }
 
         if (multi()) {
-          const inputs = [...store.custom]
-          inputs[store.tab] = text
-          setStore("custom", inputs)
-
-          const existing = store.answers[store.tab] ?? []
-          const next = [...existing]
-          if (prev) {
-            const index = next.indexOf(prev)
-            if (index !== -1) next.splice(index, 1)
-          }
-          if (!next.includes(text)) next.push(text)
-          const answers = [...store.answers]
-          answers[store.tab] = next
-          setStore("answers", answers)
-          setStore("editing", false)
+          batch(() => {
+            setStore("custom", store.tab, text)
+            const existing = store.answers[store.tab] ?? []
+            const next = [...existing]
+            if (prev) {
+              const index = next.indexOf(prev)
+              if (index !== -1) next.splice(index, 1)
+            }
+            if (!next.includes(text)) next.push(text)
+            setStore("answers", store.tab, next)
+            setStore("editing", false)
+          })
           return
         }
 
@@ -308,10 +297,6 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
           <scrollbox
             ref={(r) => {
               tabsScroll = r
-              queueMicrotask(() => {
-                const index = confirm() ? "confirm" : store.tab
-                ensureTabVisible(index)
-              })
             }}
             scrollX={true}
             scrollY={false}
@@ -436,10 +421,10 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         ref={(val: TextareaRenderable) => {
                           textarea = val
                           queueMicrotask(() => {
-                            val.focus()
                             val.gotoLineEnd()
                           })
                         }}
+                        focused
                         initialValue={input()}
                         placeholder="Type your own answer"
                         minHeight={1}

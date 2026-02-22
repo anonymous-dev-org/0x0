@@ -1,24 +1,8 @@
-import { Instance } from "@/project/instance"
-import { Plugin } from "../plugin"
-import { map, filter, pipe, fromEntries, mapValues } from "remeda"
 import z from "zod"
 import { fn } from "@/util/fn"
-import type { AuthOuathResult, Hooks } from "@0x0-ai/plugin"
 import { NamedError } from "@0x0-ai/util/error"
-import { Auth } from "@/auth"
-import { writeTemplate } from "@/config/providers"
 
 export namespace ProviderAuth {
-  const state = Instance.state(async () => {
-    const methods = pipe(
-      await Plugin.list(),
-      filter((x) => x.auth?.provider !== undefined),
-      map((x) => [x.auth!.provider, x.auth!] as const),
-      fromEntries(),
-    )
-    return { methods, pending: {} as Record<string, AuthOuathResult> }
-  })
-
   export const Method = z
     .object({
       type: z.union([z.literal("oauth"), z.literal("api")]),
@@ -29,16 +13,9 @@ export namespace ProviderAuth {
     })
   export type Method = z.infer<typeof Method>
 
-  export async function methods() {
-    const s = await state().then((x) => x.methods)
-    return mapValues(s, (x) =>
-      x.methods.map(
-        (y): Method => ({
-          type: y.type,
-          label: y.label,
-        }),
-      ),
-    )
+  export async function methods(): Promise<Record<string, Method[]>> {
+    // CLI providers manage their own auth — no methods to show
+    return {}
   }
 
   export const Authorization = z
@@ -52,23 +29,28 @@ export namespace ProviderAuth {
     })
   export type Authorization = z.infer<typeof Authorization>
 
+  /** Check whether the CLI binary for the given provider is on PATH.
+   *  @param envPath  Override the PATH used for lookup (useful in tests).
+   */
+  export function isAvailable(providerID: string, envPath?: string): Promise<boolean> {
+    const opts = envPath !== undefined ? { PATH: envPath } : undefined
+    if (providerID === "claude-code") {
+      return Promise.resolve(Bun.which("claude", opts) !== null)
+    }
+    if (providerID === "codex") {
+      return Promise.resolve(Bun.which("codex", opts) !== null)
+    }
+    return Promise.resolve(false)
+  }
+
   export const authorize = fn(
     z.object({
       providerID: z.string(),
       method: z.number(),
     }),
-    async (input): Promise<Authorization | undefined> => {
-      const auth = await state().then((s) => s.methods[input.providerID])
-      const method = auth.methods[input.method]
-      if (method.type === "oauth") {
-        const result = await method.authorize()
-        await state().then((s) => (s.pending[input.providerID] = result))
-        return {
-          url: result.url,
-          method: result.method,
-          instructions: result.instructions,
-        }
-      }
+    async (_input): Promise<Authorization | undefined> => {
+      // CLI providers manage their own auth — no OAuth flow
+      return undefined
     },
   )
 
@@ -78,50 +60,8 @@ export namespace ProviderAuth {
       method: z.number(),
       code: z.string().optional(),
     }),
-    async (input) => {
-      const match = await state().then((s) => s.pending[input.providerID])
-      if (!match) throw new OauthMissing({ providerID: input.providerID })
-      let result
-
-      if (match.method === "code") {
-        if (!input.code) throw new OauthCodeMissing({ providerID: input.providerID })
-        result = await match.callback(input.code)
-      }
-
-      if (match.method === "auto") {
-        result = await match.callback()
-      }
-
-      if (result?.type === "success") {
-        if ("key" in result) {
-          await Auth.set(input.providerID, {
-            type: "api",
-            key: result.key,
-          })
-        }
-        if ("refresh" in result) {
-          const info: Auth.Info = {
-            type: "oauth",
-            access: result.access,
-            refresh: result.refresh,
-            expires: result.expires,
-          }
-          if (result.accountId) {
-            info.accountId = result.accountId
-          }
-          await Auth.set(input.providerID, info)
-        }
-        const auth = await state().then((s) => s.methods[input.providerID])
-        if (auth?.methods[input.method]?.label.toLowerCase().includes("antigravity")) {
-          await writeTemplate("antigravity")
-        }
-        if (auth?.methods[input.method]?.label.toLowerCase().includes("chatgpt")) {
-          await writeTemplate("codex")
-        }
-        return
-      }
-
-      throw new OauthCallbackFailed({})
+    async (_input) => {
+      // No-op for CLI providers
     },
   )
 
@@ -130,11 +70,8 @@ export namespace ProviderAuth {
       providerID: z.string(),
       key: z.string(),
     }),
-    async (input) => {
-      await Auth.set(input.providerID, {
-        type: "api",
-        key: input.key,
-      })
+    async (_input) => {
+      // No-op for CLI providers
     },
   )
 

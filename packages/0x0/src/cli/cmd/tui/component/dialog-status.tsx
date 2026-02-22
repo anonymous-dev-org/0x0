@@ -1,9 +1,7 @@
-import { TextAttributes } from "@opentui/core"
 import { fileURLToPath } from "bun"
 import { useTheme } from "../context/theme"
-import { useDialog } from "@tui/ui/dialog"
 import { useSync } from "@tui/context/sync"
-import { For, Match, Switch, Show, createMemo, createSignal } from "solid-js"
+import { For, Match, Switch, Show, createMemo } from "solid-js"
 import { Installation } from "@/installation"
 
 export type DialogStatusProps = {}
@@ -11,8 +9,6 @@ export type DialogStatusProps = {}
 export function DialogStatus() {
   const sync = useSync()
   const { theme } = useTheme()
-  const dialog = useDialog()
-  const [hover, setHover] = createSignal(false)
 
   const enabledFormatters = createMemo(() => sync.data.formatter.filter((f) => f.enabled))
 
@@ -43,21 +39,6 @@ export function DialogStatus() {
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          Status
-        </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
-      </box>
       <text fg={theme.textMuted}>Terminal Agent v{Installation.VERSION}</text>
       <Show when={Object.keys(sync.data.mcp).length > 0} fallback={<text fg={theme.text}>No MCP Servers</text>}>
         <box>
@@ -102,7 +83,7 @@ export function DialogStatus() {
           </For>
         </box>
       </Show>
-      {sync.data.lsp.length > 0 && (
+      <Show when={sync.data.lsp.length > 0}>
         <box>
           <text fg={theme.text}>{sync.data.lsp.length} LSP Servers</text>
           <For each={sync.data.lsp}>
@@ -126,7 +107,7 @@ export function DialogStatus() {
             )}
           </For>
         </box>
-      )}
+      </Show>
       <Show when={enabledFormatters().length > 0} fallback={<text fg={theme.text}>No Formatters</text>}>
         <box>
           <text fg={theme.text}>{enabledFormatters().length} Formatters</text>
@@ -165,7 +146,9 @@ export function DialogStatus() {
                 </text>
                 <text wrapMode="word" fg={theme.text}>
                   <b>{item.name}</b>
-                  {item.version && <span style={{ fg: theme.textMuted }}> @{item.version}</span>}
+                  <Show when={item.version}>
+                    <span style={{ fg: theme.textMuted }}> @{item.version}</span>
+                  </Show>
                 </text>
               </box>
             )}

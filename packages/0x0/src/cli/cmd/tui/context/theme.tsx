@@ -1,46 +1,10 @@
 import { SyntaxStyle, RGBA, type TerminalColors } from "@opentui/core"
-import path from "path"
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { createSimpleContext } from "./helper"
-import aura from "./theme/aura.json" with { type: "json" }
-import ayu from "./theme/ayu.json" with { type: "json" }
-import catppuccin from "./theme/catppuccin.json" with { type: "json" }
-import catppuccinFrappe from "./theme/catppuccin-frappe.json" with { type: "json" }
-import catppuccinMacchiato from "./theme/catppuccin-macchiato.json" with { type: "json" }
-import cobalt2 from "./theme/cobalt2.json" with { type: "json" }
-import cursor from "./theme/cursor.json" with { type: "json" }
-import dracula from "./theme/dracula.json" with { type: "json" }
-import everforest from "./theme/everforest.json" with { type: "json" }
-import flexoki from "./theme/flexoki.json" with { type: "json" }
-import github from "./theme/github.json" with { type: "json" }
-import gruvbox from "./theme/gruvbox.json" with { type: "json" }
-import kanagawa from "./theme/kanagawa.json" with { type: "json" }
-import material from "./theme/material.json" with { type: "json" }
-import matrix from "./theme/matrix.json" with { type: "json" }
-import mercury from "./theme/mercury.json" with { type: "json" }
-import monokai from "./theme/monokai.json" with { type: "json" }
-import nightowl from "./theme/nightowl.json" with { type: "json" }
-import nord from "./theme/nord.json" with { type: "json" }
-import osakaJade from "./theme/osaka-jade.json" with { type: "json" }
-import onedark from "./theme/one-dark.json" with { type: "json" }
-import zeroxzero from "./theme/zeroxzero.json" with { type: "json" }
-import orng from "./theme/orng.json" with { type: "json" }
-import lucentOrng from "./theme/lucent-orng.json" with { type: "json" }
-import palenight from "./theme/palenight.json" with { type: "json" }
-import rosepine from "./theme/rosepine.json" with { type: "json" }
-import solarized from "./theme/solarized.json" with { type: "json" }
-import synthwave84 from "./theme/synthwave84.json" with { type: "json" }
-import tokyonight from "./theme/tokyonight.json" with { type: "json" }
-import vercel from "./theme/vercel.json" with { type: "json" }
-import vesper from "./theme/vesper.json" with { type: "json" }
-import zenburn from "./theme/zenburn.json" with { type: "json" }
-import carbonfox from "./theme/carbonfox.json" with { type: "json" }
 import { useKV } from "./kv"
 import { useRenderer } from "@opentui/solid"
-import { createStore, produce } from "solid-js/store"
-import { Global } from "@/global"
-import { Filesystem } from "@/util/filesystem"
+import { createStore } from "solid-js/store"
 import { getSyntaxRules } from "./syntax-rules"
 
 type ThemeColors = {
@@ -136,42 +100,6 @@ type ThemeJson = {
     backgroundMenu?: ColorValue
     thinkingOpacity?: number
   }
-}
-
-export const DEFAULT_THEMES: Record<string, ThemeJson> = {
-  aura,
-  ayu,
-  catppuccin,
-  ["catppuccin-frappe"]: catppuccinFrappe,
-  ["catppuccin-macchiato"]: catppuccinMacchiato,
-  cobalt2,
-  cursor,
-  dracula,
-  everforest,
-  flexoki,
-  github,
-  gruvbox,
-  kanagawa,
-  material,
-  matrix,
-  mercury,
-  monokai,
-  nightowl,
-  nord,
-  ["one-dark"]: onedark,
-  ["osaka-jade"]: osakaJade,
-  zeroxzero,
-  orng,
-  ["lucent-orng"]: lucentOrng,
-  palenight,
-  rosepine,
-  solarized,
-  synthwave84,
-  tokyonight,
-  vesper,
-  vercel,
-  zenburn,
-  carbonfox,
 }
 
 function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
@@ -299,96 +227,77 @@ function defaultTintStrength(config: unknown) {
   return value ?? DEFAULT_TINT_STRENGTH
 }
 
+const FALLBACK_PALETTE = [
+  "#000000",
+  "#800000",
+  "#008000",
+  "#808000",
+  "#000080",
+  "#800080",
+  "#008080",
+  "#c0c0c0",
+  "#808080",
+  "#ff0000",
+  "#00ff00",
+  "#ffff00",
+  "#0000ff",
+  "#ff00ff",
+  "#00ffff",
+  "#ffffff",
+]
+
+function fallback(mode: "dark" | "light"): ThemeJson {
+  return generateSystem(
+    {
+      palette: FALLBACK_PALETTE,
+      defaultBackground: mode === "dark" ? "#000000" : "#ffffff",
+      defaultForeground: mode === "dark" ? "#c0c0c0" : "#000000",
+    } as TerminalColors,
+    mode,
+  )
+}
+
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode: "dark" | "light" }) => {
     const sync = useSync()
     const kv = useKV()
     const [store, setStore] = createStore({
-      themes: DEFAULT_THEMES,
-      mode: props.mode,
-      active: (sync.data.config.theme ?? "zeroxzero") as string,
       ready: false,
     })
+    const [theme, setTheme] = createSignal<ThemeJson>(fallback(props.mode))
 
-    createEffect(() => {
-      if (!kv.ready) return
-
-      const mode = kv.get("theme_mode")
-      if (mode === "dark" || mode === "light") {
-        setStore("mode", mode)
-      }
-
-      if (!sync.data.config.theme) {
-        const theme = kv.get("theme")
-        if (typeof theme === "string" && theme.length > 0) {
-          setStore("active", theme)
-        }
-      }
-    })
-
-    createEffect(() => {
-      const theme = sync.data.config.theme
-      if (theme) setStore("active", theme)
-    })
+    const mode = () => {
+      if (!kv.ready) return props.mode
+      const stored = kv.get("theme_mode")
+      if (stored === "dark" || stored === "light") return stored
+      return props.mode
+    }
 
     createEffect(() => {
       const local = parseTintStrength(kv.get("tint_strength"))
-      const fallback = defaultTintStrength(sync.data.config.tui)
-      setTintStrength(local ?? fallback)
+      const fb = defaultTintStrength(sync.data.config.tui)
+      setTintStrength(local ?? fb)
     })
 
+    const renderer = useRenderer()
+
     function init() {
-      resolveSystemTheme()
-      getCustomThemes()
-        .then((custom) => {
-          setStore(
-            produce((draft) => {
-              Object.assign(draft.themes, custom)
-            }),
-          )
+      renderer
+        .getPalette({ size: 16 })
+        .then((colors) => {
+          if (colors.palette[0]) {
+            setTheme(generateSystem(colors, mode()))
+          }
+          setStore("ready", true)
         })
         .catch(() => {
-          setStore("active", "zeroxzero")
-        })
-        .finally(() => {
-          if (store.active !== "system") {
-            setStore("ready", true)
-          }
+          setStore("ready", true)
         })
     }
 
     onMount(init)
 
-    function resolveSystemTheme() {
-      renderer
-        .getPalette({
-          size: 16,
-        })
-        .then((colors) => {
-          if (!colors.palette[0]) {
-            if (store.active === "system") {
-              setStore(
-                produce((draft) => {
-                  draft.active = "zeroxzero"
-                  draft.ready = true
-                }),
-              )
-            }
-            return
-          }
-          setStore(
-            produce((draft) => {
-              draft.themes.system = generateSystem(colors, store.mode)
-              if (store.active === "system") {
-                draft.ready = true
-              }
-            }),
-          )
-        })
-    }
-
-    const renderer = useRenderer()
     const refresh = async () => {
       renderer.clearPaletteCache()
       init()
@@ -396,10 +305,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     process.on("SIGUSR2", refresh)
     onCleanup(() => process.off("SIGUSR2", refresh))
 
-    const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.zeroxzero, store.mode)
-    })
-
+    const values = createMemo(() => resolveTheme(theme(), mode()))
     const syntax = createMemo(() => generateSyntax(values()))
     const subtleSyntax = createMemo(() => generateSubtleSyntax(values()))
 
@@ -410,24 +316,11 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           return values()[prop]
         },
       }),
-      get selected() {
-        return store.active
-      },
-      all() {
-        return store.themes
-      },
       syntax,
       subtleSyntax,
-      mode() {
-        return store.mode
-      },
-      setMode(mode: "dark" | "light") {
-        setStore("mode", mode)
-        kv.set("theme_mode", mode)
-      },
-      set(theme: string) {
-        setStore("active", theme)
-        kv.set("theme", theme)
+      mode,
+      setMode(m: "dark" | "light") {
+        kv.set("theme_mode", m)
       },
       tintStrength() {
         return tintStrength()
@@ -448,33 +341,6 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     }
   },
 })
-
-const CUSTOM_THEME_GLOB = new Bun.Glob("themes/*.json")
-async function getCustomThemes() {
-  const directories = [
-    Global.Path.config,
-    ...(await Array.fromAsync(
-      Filesystem.up({
-        targets: [".zeroxzero"],
-        start: process.cwd(),
-      }),
-    )),
-  ]
-
-  const result: Record<string, ThemeJson> = {}
-  for (const dir of directories) {
-    for await (const item of CUSTOM_THEME_GLOB.scan({
-      absolute: true,
-      followSymlinks: true,
-      dot: true,
-      cwd: dir,
-    })) {
-      const name = path.basename(item, ".json")
-      result[name] = await Bun.file(item).json()
-    }
-  }
-  return result
-}
 
 export function tint(base: RGBA, overlay: RGBA, alpha: number): RGBA {
   const mix = Math.max(0, Math.min(1, alpha)) * tintStrength()
@@ -517,8 +383,8 @@ function generateSystem(colors: TerminalColors, mode: "dark" | "light"): ThemeJs
   const diffAlpha = isDark ? 0.22 : 0.14
   const diffAddedBg = tint(bg, ansiColors.green, diffAlpha)
   const diffRemovedBg = tint(bg, ansiColors.red, diffAlpha)
-  const diffAddedLineNumberBg = tint(grays[3], ansiColors.green, diffAlpha)
-  const diffRemovedLineNumberBg = tint(grays[3], ansiColors.red, diffAlpha)
+  const diffAddedLineNumberBg = tint(grays[3] ?? bg, ansiColors.green, diffAlpha)
+  const diffRemovedLineNumberBg = tint(grays[3] ?? bg, ansiColors.red, diffAlpha)
 
   return {
     theme: {
@@ -540,26 +406,26 @@ function generateSystem(colors: TerminalColors, mode: "dark" | "light"): ThemeJs
 
       // Background colors - use transparent to respect terminal transparency
       background: transparent,
-      backgroundPanel: grays[2],
-      backgroundElement: grays[3],
-      backgroundMenu: grays[3],
+      backgroundPanel: grays[2] ?? bg,
+      backgroundElement: grays[3] ?? bg,
+      backgroundMenu: grays[3] ?? bg,
 
       // Border colors
-      borderSubtle: grays[6],
-      border: grays[7],
-      borderActive: grays[8],
+      borderSubtle: grays[6] ?? fg,
+      border: grays[7] ?? fg,
+      borderActive: grays[8] ?? fg,
 
       // Diff colors
       diffAdded: ansiColors.green,
       diffRemoved: ansiColors.red,
-      diffContext: grays[7],
-      diffHunkHeader: grays[7],
+      diffContext: grays[7] ?? fg,
+      diffHunkHeader: grays[7] ?? fg,
       diffHighlightAdded: ansiColors.greenBright,
       diffHighlightRemoved: ansiColors.redBright,
       diffAddedBg,
       diffRemovedBg,
-      diffContextBg: grays[1],
-      diffLineNumber: grays[6],
+      diffContextBg: grays[1] ?? bg,
+      diffLineNumber: grays[6] ?? fg,
       diffAddedLineNumberBg,
       diffRemovedLineNumberBg,
 
@@ -572,7 +438,7 @@ function generateSystem(colors: TerminalColors, mode: "dark" | "light"): ThemeJs
       markdownBlockQuote: ansiColors.yellow,
       markdownEmph: ansiColors.yellow,
       markdownStrong: fg,
-      markdownHorizontalRule: grays[7],
+      markdownHorizontalRule: grays[7] ?? fg,
       markdownListItem: ansiColors.blue,
       markdownListEnumeration: ansiColors.cyan,
       markdownImage: ansiColors.blue,

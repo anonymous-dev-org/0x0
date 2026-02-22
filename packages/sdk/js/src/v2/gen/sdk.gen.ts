@@ -156,7 +156,6 @@ import type {
   TuiOpenHelpResponses,
   TuiOpenModelsResponses,
   TuiOpenSessionsResponses,
-  TuiOpenThemesResponses,
   TuiPublishErrors,
   TuiPublishResponses,
   TuiSelectSessionErrors,
@@ -2716,25 +2715,6 @@ export class Tui extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).post<TuiOpenSessionsResponses, unknown, ThrowOnError>({
       url: "/tui/open-sessions",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Open themes dialog
-   *
-   * Open the theme dialog
-   */
-  public openThemes<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiOpenThemesResponses, unknown, ThrowOnError>({
-      url: "/tui/open-themes",
       ...options,
       ...params,
     })

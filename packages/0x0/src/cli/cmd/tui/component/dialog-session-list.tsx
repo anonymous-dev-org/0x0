@@ -2,7 +2,7 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, createResource, onMount, Show } from "solid-js"
+import { createMemo, createSignal, createResource, Show } from "solid-js"
 import { Locale } from "@/util/locale"
 import { useKeybind } from "../context/keybind"
 import { useTheme } from "../context/theme"
@@ -60,13 +60,8 @@ export function DialogSessionList() {
       })
   })
 
-  onMount(() => {
-    dialog.setSize("large")
-  })
-
   return (
     <DialogSelect
-      title="Sessions"
       options={options()}
       skipFilter={true}
       current={currentSessionID()}
@@ -100,7 +95,11 @@ export function DialogSessionList() {
           keybind: keybind.all.session_rename?.[0],
           title: "rename",
           onTrigger: async (option) => {
-            dialog.replace(() => <DialogSessionRename session={option.value} />)
+            dialog.show({
+              title: "Rename Session",
+              size: "medium",
+              body: () => <DialogSessionRename session={option.value} />,
+            })
           },
         },
       ]}

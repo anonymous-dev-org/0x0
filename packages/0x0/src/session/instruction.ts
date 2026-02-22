@@ -4,7 +4,6 @@ import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
-import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import type { MessageV2 } from "./message-v2"
 
@@ -12,33 +11,15 @@ const log = Log.create({ service: "instruction" })
 
 const FILES = [
   "AGENTS.md",
-  "CLAUDE.md",
   "CONTEXT.md", // deprecated
 ]
 
 function globalFiles() {
-  const files = []
-  if (Flag.ZEROXZERO_CONFIG_DIR) {
-    files.push(path.join(Flag.ZEROXZERO_CONFIG_DIR, "AGENTS.md"))
-  }
-  files.push(path.join(Global.Path.config, "AGENTS.md"))
-  if (!Flag.ZEROXZERO_DISABLE_CLAUDE_CODE_PROMPT) {
-    files.push(path.join(os.homedir(), ".claude", "CLAUDE.md"))
-  }
-  return files
+  return [path.join(Global.Path.config, "AGENTS.md")]
 }
 
 async function resolveRelative(instruction: string): Promise<string[]> {
-  if (!Flag.ZEROXZERO_DISABLE_PROJECT_CONFIG) {
-    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
-  }
-  if (!Flag.ZEROXZERO_CONFIG_DIR) {
-    log.warn(
-      `Skipping relative instruction "${instruction}" - no ZEROXZERO_CONFIG_DIR set while project config is disabled`,
-    )
-    return []
-  }
-  return Filesystem.globUp(instruction, Flag.ZEROXZERO_CONFIG_DIR, Flag.ZEROXZERO_CONFIG_DIR).catch(() => [])
+  return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
 }
 
 export namespace InstructionPrompt {
@@ -72,15 +53,13 @@ export namespace InstructionPrompt {
     const config = await Config.get()
     const paths = new Set<string>()
 
-    if (!Flag.ZEROXZERO_DISABLE_PROJECT_CONFIG) {
-      for (const file of FILES) {
-        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
-        if (matches.length > 0) {
-          matches.forEach((p) => {
-            paths.add(path.resolve(p))
-          })
-          break
-        }
+    for (const file of FILES) {
+      const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+      if (matches.length > 0) {
+        matches.forEach((p) => {
+          paths.add(path.resolve(p))
+        })
+        break
       }
     }
 

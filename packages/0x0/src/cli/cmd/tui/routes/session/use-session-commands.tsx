@@ -47,6 +47,12 @@ export function useSessionCommands(props: {
   const session = () => props.sync.session.get(props.route.sessionID)
   const messages = () => props.sync.data.message[props.route.sessionID] ?? []
 
+  const scrollTo = (messageID: string) => {
+    const scroll = props.scroll()
+    const child = scroll.getChildren().find((c) => c.id === messageID)
+    if (child) scroll.scrollBy(child.y - scroll.y - 1)
+  }
+
   props.command.register(() => [
     {
       title: "Share session",
@@ -83,7 +89,11 @@ export function useSessionCommands(props: {
         name: "rename",
       },
       onSelect: (dialog) => {
-        dialog.replace(() => <DialogSessionRename session={props.route.sessionID} />)
+        dialog.show({
+          title: "Rename Session",
+          size: "medium",
+          body: () => <DialogSessionRename session={props.route.sessionID} />,
+        })
       },
     },
     {
@@ -95,19 +105,17 @@ export function useSessionCommands(props: {
         name: "timeline",
       },
       onSelect: (dialog) => {
-        dialog.replace(() => (
-          <DialogTimeline
-            onMove={(messageID) => {
-              const scroll = props.scroll()
-              const child = scroll.getChildren().find((child) => {
-                return child.id === messageID
-              })
-              if (child) scroll.scrollBy(child.y - scroll.y - 1)
-            }}
-            sessionID={props.route.sessionID}
-            setPrompt={(promptInfo) => props.setPrompt(promptInfo)}
-          />
-        ))
+        dialog.show({
+          title: "Timeline",
+          size: "large",
+          body: () => (
+            <DialogTimeline
+              onMove={scrollTo}
+              sessionID={props.route.sessionID}
+              setPrompt={(promptInfo) => props.setPrompt(promptInfo)}
+            />
+          ),
+        })
       },
     },
     {
@@ -119,18 +127,11 @@ export function useSessionCommands(props: {
         name: "fork",
       },
       onSelect: (dialog) => {
-        dialog.replace(() => (
-          <DialogForkFromTimeline
-            onMove={(messageID) => {
-              const scroll = props.scroll()
-              const child = scroll.getChildren().find((child) => {
-                return child.id === messageID
-              })
-              if (child) scroll.scrollBy(child.y - scroll.y - 1)
-            }}
-            sessionID={props.route.sessionID}
-          />
-        ))
+        dialog.show({
+          title: "Fork from message",
+          size: "large",
+          body: () => <DialogForkFromTimeline onMove={scrollTo} sessionID={props.route.sessionID} />,
+        })
       },
     },
     {
@@ -147,7 +148,7 @@ export function useSessionCommands(props: {
         if (!selectedModel) {
           props.toast.show({
             variant: "warning",
-            message: "Connect a provider to summarize this session",
+            message: "Select a model to summarize this session",
             duration: 3000,
           })
           return
@@ -263,7 +264,7 @@ export function useSessionCommands(props: {
     {
       title: props.conceal() ? "Disable code concealment" : "Enable code concealment",
       value: "session.toggle.conceal",
-      keybind: "messages_toggle_conceal" as any,
+      keybind: "messages_toggle_conceal",
       category: "Session",
       onSelect: (dialog) => {
         props.setConceal((prev) => !prev)
@@ -302,6 +303,9 @@ export function useSessionCommands(props: {
       value: "session.toggle.actions",
       keybind: "tool_details",
       category: "Session",
+      slash: {
+        name: "details",
+      },
       onSelect: (dialog) => {
         props.setShowDetails((prev) => !prev)
         dialog.clear()
@@ -432,11 +436,7 @@ export function useSessionCommands(props: {
           )
 
           if (hasValidTextPart) {
-            const scroll = props.scroll()
-            const child = scroll.getChildren().find((child) => {
-              return child.id === message.id
-            })
-            if (child) scroll.scrollBy(child.y - scroll.y - 1)
+            scrollTo(message.id)
             break
           }
         }

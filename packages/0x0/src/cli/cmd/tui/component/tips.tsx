@@ -1,8 +1,5 @@
 import { For } from "solid-js"
-import { DEFAULT_THEMES, useTheme } from "@tui/context/theme"
-
-const themeCount = Object.keys(DEFAULT_THEMES).length
-const themeTip = `Use {highlight}/theme{/highlight} or {highlight}Ctrl+X T{/highlight} to switch between ${themeCount} built-in themes`
+import { useTheme } from "@tui/context/theme"
 
 type TipPart = { text: string; highlight: boolean }
 
@@ -60,7 +57,6 @@ const TIPS = [
   "Press {highlight}Ctrl+X E{/highlight} or {highlight}/editor{/highlight} to compose messages in your external editor",
   "Run {highlight}/init{/highlight} to auto-generate project rules based on your codebase",
   "Run {highlight}/models{/highlight} or {highlight}Ctrl+X M{/highlight} to see and switch between available AI models",
-  themeTip,
   "Press {highlight}Ctrl+X N{/highlight} or {highlight}/new{/highlight} to start a fresh conversation session",
   "Use {highlight}/sessions{/highlight} or {highlight}Ctrl+X L{/highlight} to list and continue previous conversations",
   "Run {highlight}/compact{/highlight} to summarize long sessions near context limits",
@@ -117,10 +113,6 @@ const TIPS = [
   "Run {highlight}0x0 github install{/highlight} to set up the GitHub workflow",
   "Comment {highlight}/0x0 fix this{/highlight} on issues to auto-create PRs",
   "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
-  'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
-  "Create JSON theme files in {highlight}.zeroxzero/themes/{/highlight} directory",
-  "Themes support dark/light variants for both modes",
-  "Reference ANSI colors 0-255 in custom themes",
   "Use {highlight}{env:VAR_NAME}{/highlight} syntax to reference environment variables in config",
   "Use {highlight}{file:path}{/highlight} to include file contents in config values",
   "Use {highlight}instructions{/highlight} in config to load additional rules files",

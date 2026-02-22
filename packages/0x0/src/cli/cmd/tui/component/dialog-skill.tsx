@@ -10,7 +10,6 @@ export type DialogSkillProps = {
 export function DialogSkill(props: DialogSkillProps) {
   const dialog = useDialog()
   const sdk = useSDK()
-  dialog.setSize("large")
 
   const [skills] = createResource(async () => {
     const result = await sdk.client.app.skills()
@@ -32,5 +31,5 @@ export function DialogSkill(props: DialogSkillProps) {
     }))
   })
 
-  return <DialogSelect title="Skills" placeholder="Search skills..." options={options()} />
+  return <DialogSelect placeholder="Search skills..." options={options()} />
 }

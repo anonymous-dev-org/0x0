@@ -83,6 +83,7 @@ export namespace ToolRegistry {
   }
 
   async function all(): Promise<Tool.Info[]> {
+    const config = await Config.get()
     const custom = await state().then((x) => x.custom)
 
     return [
@@ -95,7 +96,7 @@ export namespace ToolRegistry {
       TodoWriteTool,
       // TodoReadTool,
       ApplyPatchTool,
-      ...(Flag.ZEROXZERO_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
+      ...(config.experimental?.lsp_tool ? [LspTool] : []),
       ...custom,
     ]
   }

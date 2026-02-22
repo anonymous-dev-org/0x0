@@ -25,12 +25,16 @@ process.env["XDG_DATA_HOME"] = path.join(dir, "share")
 process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
 process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
 process.env["XDG_STATE_HOME"] = path.join(dir, "state")
-process.env["ZEROXZERO_MODELS_PATH"] = path.join(import.meta.dir, "tool", "fixtures", "models-api.json")
+
+// Write an empty config.yaml to initialize the config directory
+const configDir = path.join(dir, "config", "0x0")
+await fs.mkdir(configDir, { recursive: true })
+await fs.writeFile(path.join(configDir, "config.yaml"), "")
 
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "zeroxzero")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+await fs.writeFile(path.join(cacheDir, "version"), "21")
 
 // Clear provider env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]

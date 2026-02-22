@@ -12,7 +12,6 @@ import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
 import type ParcelWatcher from "@parcel/watcher"
 import { $ } from "bun"
-import { Flag } from "@/flag/flag"
 import { readdir } from "fs/promises"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
@@ -49,6 +48,7 @@ export namespace FileWatcher {
       if (Instance.project.vcs !== "git") return {}
       log.info("init")
       const cfg = await Config.get()
+      if (cfg.experimental?.disable_filewatcher) return {}
       const backend = (() => {
         if (process.platform === "win32") return "windows"
         if (process.platform === "darwin") return "fs-events"
@@ -75,7 +75,7 @@ export namespace FileWatcher {
       const subs: ParcelWatcher.AsyncSubscription[] = []
       const cfgIgnores = cfg.watcher?.ignore ?? []
 
-      if (Flag.ZEROXZERO_EXPERIMENTAL_FILEWATCHER) {
+      {
         const pending = w.subscribe(Instance.directory, subscribe, {
           ignore: [...FileIgnore.PATTERNS, ...cfgIgnores],
           backend,
@@ -118,10 +118,7 @@ export namespace FileWatcher {
     },
   )
 
-  export function init() {
-    if (Flag.ZEROXZERO_EXPERIMENTAL_DISABLE_FILEWATCHER) {
-      return
-    }
+  export async function init() {
     state()
   }
 }

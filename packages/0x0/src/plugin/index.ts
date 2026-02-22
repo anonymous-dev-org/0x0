@@ -6,20 +6,15 @@ import { createZeroxzeroClient } from "@0x0-ai/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
-import { Flag } from "../flag/flag"
-import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
 import { NamedError } from "@0x0-ai/util/error"
-import { CopilotAuthPlugin } from "./copilot"
-import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
-import { AntigravityCLIOAuthPlugin } from "opencode-antigravity-auth"
 import { Global } from "@/global"
 import path from "path"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["zeroxzero-anthropic-auth@0.0.13"]
+  const BUILTIN: string[] = []
   const INSTALL_RETRY_BACKOFF_MS = 15 * 60 * 1000
   const installFailurePath = path.join(Global.Path.state, "plugin-install-failures.json")
 
@@ -39,14 +34,6 @@ export namespace Plugin {
     await Bun.write(installFailurePath, JSON.stringify(entries, null, 2))
   }
 
-  // Built-in plugins that are directly imported (not installed from npm)
-  const INTERNAL_PLUGINS: PluginInstance[] = [
-    CodexAuthPlugin,
-    CopilotAuthPlugin,
-    GitlabAuthPlugin as unknown as PluginInstance,
-    AntigravityCLIOAuthPlugin as unknown as PluginInstance,
-  ]
-
   const state = Instance.state(async () => {
     const client = createZeroxzeroClient({
       baseUrl: "http://localhost:4096",
@@ -65,16 +52,10 @@ export namespace Plugin {
       $: Bun.$,
     }
 
-    for (const plugin of INTERNAL_PLUGINS) {
-      log.info("loading internal plugin", { name: plugin.name })
-      const init = await plugin(input)
-      hooks.push(init)
-    }
-
     let plugins = config.plugin ?? []
     const failures = await installFailures()
     if (plugins.length) await Config.waitForDependencies()
-    if (!Flag.ZEROXZERO_DISABLE_DEFAULT_PLUGINS) {
+    if (!config.disable_default_plugins) {
       plugins = [...BUILTIN, ...plugins]
     }
 

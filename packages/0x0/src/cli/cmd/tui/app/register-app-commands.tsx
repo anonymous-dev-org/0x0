@@ -23,7 +23,6 @@ export function registerAppCommands(props: {
   kv: ReturnType<typeof useKV>
   local: ReturnType<typeof useLocal>
   mode: Accessor<"dark" | "light">
-  defaultTintStrength: Accessor<number>
   promptRef: ReturnType<typeof usePromptRef>
   renderer: ReturnType<typeof useRenderer>
   route: RouteContext
@@ -33,7 +32,6 @@ export function registerAppCommands(props: {
   sync: ReturnType<typeof useSync>
   terminalTitleEnabled: Accessor<boolean>
   toast: ReturnType<typeof useToast>
-  showOnboarding: () => void
 }) {
   const load = {
     session: () => import("@tui/component/dialog-session-list").then((x) => x.DialogSessionList),
@@ -42,25 +40,23 @@ export function registerAppCommands(props: {
     mcp: () => import("@tui/component/dialog-mcp").then((x) => x.DialogMcp),
     provider: () => import("@tui/component/dialog-provider").then((x) => x.DialogProvider),
     status: () => import("@tui/component/dialog-status").then((x) => x.DialogStatus),
-    theme: () => import("@tui/component/dialog-theme-list").then((x) => x.DialogThemeList),
     help: () => import("../ui/dialog-help").then((x) => x.DialogHelp),
     open: () => import("open").then((x) => x.default),
-    heap: () => import("v8").then((x) => x.writeHeapSnapshot),
   }
 
-  const show = (name: string, input: Loader<Component>) => async () => {
+  const show = (title: string, input: Loader<Component>, size?: "medium" | "large") => async () => {
     const Dialog = await input().catch((error) => {
-      console.error(`failed to load ${name} dialog`, error)
+      console.error(`failed to load ${title} dialog`, error)
       return undefined
     })
     if (!Dialog) {
       props.toast.show({
         variant: "error",
-        message: `Failed to open ${name}`,
+        message: `Failed to open ${title}`,
       })
       return
     }
-    props.dialog.replace(() => <Dialog />)
+    props.dialog.show({ title, body: () => <Dialog />, size })
   }
 
   props.command.register(() => [
@@ -74,7 +70,7 @@ export function registerAppCommands(props: {
         name: "sessions",
         aliases: ["resume", "continue"],
       },
-      onSelect: show("sessions", load.session),
+      onSelect: show("Sessions", load.session, "large"),
     },
     {
       title: "New session",
@@ -114,7 +110,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "models",
       },
-      onSelect: show("models", load.model),
+      onSelect: show("Select model", load.model),
     },
     {
       title: "Model cycle",
@@ -161,7 +157,11 @@ export function registerAppCommands(props: {
       value: "agent.list",
       keybind: "agent_list",
       category: "Agent",
-      onSelect: show("agents", load.agent),
+      slash: {
+        name: "agents",
+        aliases: ["agent"],
+      },
+      onSelect: show("Select agent", load.agent),
     },
     {
       title: "Show resolved prompt",
@@ -191,7 +191,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "mcps",
       },
-      onSelect: show("MCP servers", load.mcp),
+      onSelect: show("MCPs", load.mcp),
     },
     {
       title: "Agent cycle",
@@ -224,13 +224,14 @@ export function registerAppCommands(props: {
       },
     },
     {
-      title: "Connect provider",
+      title: "Providers",
       value: "provider.connect",
       suggested: !props.connected(),
       slash: {
-        name: "connect",
+        name: "providers",
+        aliases: ["connect", "install"],
       },
-      onSelect: show("provider connection", load.provider),
+      onSelect: show("Providers", load.provider),
       category: "Provider",
     },
     {
@@ -240,17 +241,7 @@ export function registerAppCommands(props: {
       slash: {
         name: "status",
       },
-      onSelect: show("status", load.status),
-      category: "System",
-    },
-    {
-      title: "Switch theme",
-      value: "theme.switch",
-      keybind: "theme_list",
-      slash: {
-        name: "themes",
-      },
-      onSelect: show("themes", load.theme),
+      onSelect: show("Status", load.status),
       category: "System",
     },
     {
@@ -263,29 +254,12 @@ export function registerAppCommands(props: {
       category: "System",
     },
     {
-      title: "Set tint strength",
-      value: "theme.tint.set",
-      slash: {
-        name: "tint",
-      },
-      onSelect: (dialog) => {
-        const value = props.defaultTintStrength().toFixed(2)
-        props.promptRef.current?.set({
-          input: `/tint ${value}`,
-          parts: [],
-        })
-        props.promptRef.current?.focus()
-        dialog.clear()
-      },
-      category: "System",
-    },
-    {
       title: "Help",
       value: "help.show",
       slash: {
         name: "help",
       },
-      onSelect: show("help", load.help),
+      onSelect: show("Help", load.help),
       category: "System",
     },
     {
@@ -295,8 +269,12 @@ export function registerAppCommands(props: {
         name: "onboarding",
         aliases: ["welcome", "intro", "tutorial"],
       },
-      onSelect: () => {
-        props.showOnboarding()
+      onSelect: async () => {
+        const { DialogOnboarding } = await import("@tui/component/dialog-onboarding")
+        props.dialog.show({
+          title: "Welcome to 0x0",
+          body: () => <DialogOnboarding />,
+        })
       },
       category: "System",
     },
@@ -336,50 +314,6 @@ export function registerAppCommands(props: {
       },
       onSelect: () => props.exit(),
       category: "System",
-    },
-    {
-      title: "Toggle debug panel",
-      category: "System",
-      value: "app.debug",
-      onSelect: (dialog) => {
-        props.renderer.toggleDebugOverlay()
-        dialog.clear()
-      },
-    },
-    {
-      title: "Toggle console",
-      category: "System",
-      value: "app.console",
-      onSelect: (dialog) => {
-        props.renderer.console.toggle()
-        dialog.clear()
-      },
-    },
-    {
-      title: "Write heap snapshot",
-      category: "System",
-      value: "app.heap_snapshot",
-      onSelect: async (dialog) => {
-        const writeHeapSnapshot = await load.heap().catch((error) => {
-          console.error("failed to load heap snapshot module", error)
-          return undefined
-        })
-        if (!writeHeapSnapshot) {
-          props.toast.show({
-            variant: "error",
-            message: "Failed to write heap snapshot",
-          })
-          dialog.clear()
-          return
-        }
-        const path = writeHeapSnapshot()
-        props.toast.show({
-          variant: "info",
-          message: `Heap snapshot written to ${path}`,
-          duration: 5000,
-        })
-        dialog.clear()
-      },
     },
     {
       title: "Suspend terminal",

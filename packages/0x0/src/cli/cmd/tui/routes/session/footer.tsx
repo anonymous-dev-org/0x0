@@ -1,4 +1,4 @@
-import { createMemo, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
 import { useDirectory } from "../../context/directory"
@@ -12,7 +12,7 @@ export function Footer() {
   const route = useRoute()
   const mcp = () => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
   const mcpError = () => Object.values(sync.data.mcp).some((x) => x.status === "failed")
-  const lsp = createMemo(() => Object.keys(sync.data.lsp))
+  const lsp = () => Object.keys(sync.data.lsp)
   const permissions = () => {
     return sync.data.permission[route.data.sessionID] ?? []
   }
@@ -55,7 +55,7 @@ export function Footer() {
         <Switch>
           <Match when={store.welcome}>
             <text fg={theme.text}>
-              Get started <span style={{ fg: theme.textMuted }}>/connect</span>
+              Get started <span style={{ fg: theme.textMuted }}>/providers</span>
             </text>
           </Match>
           <Match when={connected()}>

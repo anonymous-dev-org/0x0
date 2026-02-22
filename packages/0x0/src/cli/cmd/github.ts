@@ -155,7 +155,10 @@ type RepoEvent = (typeof REPO_EVENTS)[number]
 export function parseGitHubRemote(url: string): { owner: string; repo: string } | null {
   const match = url.match(/^(?:(?:https?|ssh):\/\/)?(?:git@)?github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
   if (!match) return null
-  return { owner: match[1], repo: match[2] }
+  const owner = match[1]
+  const repo = match[2]
+  if (!owner || !repo) return null
+  return { owner, repo }
 }
 
 /**
@@ -215,7 +218,7 @@ export const GithubInstallCommand = cmd({
               step2 = [
                 `    2. Add the following secrets in org or repo (${app.owner}/${app.repo}) settings`,
                 "",
-                ...providers[provider].env.map((e) => `       - ${e}`),
+                ...(providers[provider]?.env ?? []).map((e) => `       - ${e}`),
               ].join("\n")
             }
 
@@ -358,7 +361,7 @@ export const GithubInstallCommand = cmd({
             const envStr =
               provider === "amazon-bedrock"
                 ? ""
-                : `\n        env:${providers[provider].env.map((e) => `\n          ${e}: \${{ secrets.${e} }}`).join("")}`
+                : `\n        env:${(providers[provider]?.env ?? []).map((e) => `\n          ${e}: \${{ secrets.${e} }}`).join("")}`
 
             await Bun.write(
               path.join(app.root, WORKFLOW_FILE),
@@ -644,11 +647,11 @@ export const GithubRunCommand = cmd({
         const value = process.env["MODEL"]
         if (!value) throw new Error(`Environment variable "MODEL" is not set`)
 
-        const { providerID, modelID } = Provider.parseModel(value)
+        const parsed = Provider.parseModel(value)
 
-        if (!providerID.length || !modelID.length)
+        if (!parsed.providerID?.length || !parsed.modelID.length)
           throw new Error(`Invalid model ${value}. Model must be in the format "provider/model".`)
-        return { providerID, modelID }
+        return { providerID: parsed.providerID, modelID: parsed.modelID }
       }
 
       function normalizeRunId() {
@@ -772,6 +775,7 @@ export const GithubRunCommand = cmd({
         for (const m of matches) {
           const tag = m[0]
           const url = m[1]
+          if (!url) continue
           const start = m.index
           const filename = path.basename(url)
 
@@ -1258,9 +1262,10 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
             }),
           )
 
-          if (existing.data.length > 0) {
-            console.log(`PR #${existing.data[0].number} already exists for branch ${branch}`)
-            return existing.data[0].number
+          const first = existing.data[0]
+          if (first) {
+            console.log(`PR #${first.number} already exists for branch ${branch}`)
+            return first.number
           }
         } catch (e) {
           // If the check fails, proceed to create - we'll get a clear error if a PR already exists

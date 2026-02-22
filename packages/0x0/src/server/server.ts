@@ -18,7 +18,7 @@ import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
 import { Skill } from "../skill/skill"
 import { Auth } from "../auth"
-import { Flag } from "../flag/flag"
+import { Config } from "../config/config"
 import { Command } from "../command"
 import { Global } from "../global"
 import { ProjectRoutes } from "./routes/project"
@@ -79,10 +79,11 @@ export namespace Server {
             status: 500,
           })
         })
-        .use((c, next) => {
-          const password = Flag.ZEROXZERO_SERVER_PASSWORD
+        .use(async (c, next) => {
+          const config = await Config.get()
+          const password = config.server?.password
           if (!password) return next()
-          const username = Flag.ZEROXZERO_SERVER_USERNAME ?? "zeroxzero"
+          const username = config.server?.username ?? "zeroxzero"
           return basicAuth({ username, password })(c, next)
         })
         .use(async (c, next) => {

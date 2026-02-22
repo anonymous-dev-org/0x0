@@ -1049,9 +1049,11 @@ export namespace ACP {
         this.sessionManager.get(sessionId).modeId ||
         (await (async () => {
           if (!availableModes.length) return undefined
+          const first = availableModes[0]
+          if (!first) return undefined
           const defaultAgentName = await AgentModule.defaultAgent()
           const resolvedModeId =
-            availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? availableModes[0].id
+            availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? first.id
           this.sessionManager.setMode(sessionId, resolvedModeId)
           return resolvedModeId
         })())
@@ -1624,9 +1626,9 @@ export namespace ACP {
       .then((resp) => {
         const cfg = resp.data
         if (!cfg || !cfg.model) return undefined
-        const parsed = Provider.parseModel(cfg.model)
+        const parsed = Provider.parseModel(cfg.model as string)
         return {
-          providerID: parsed.providerID,
+          providerID: parsed.providerID ?? "",
           modelID: parsed.modelID,
         }
       })
@@ -1650,20 +1652,6 @@ export namespace ACP {
 
     if (specified && !providers.length) return specified
 
-    const zeroxzero = providers.find((p) => p.id === "zeroxzero")
-    if (zeroxzero) {
-      if (zeroxzero.models["big-pickle"]) {
-        return { providerID: "zeroxzero", modelID: "big-pickle" }
-      }
-      const [best] = Provider.sort(Object.values(zeroxzero.models))
-      if (best) {
-        return {
-          providerID: best.providerID,
-          modelID: best.id,
-        }
-      }
-    }
-
     const models = providers.flatMap((p) => Object.values(p.models))
     const [best] = Provider.sort(models)
     if (best) {
@@ -1675,7 +1663,7 @@ export namespace ACP {
 
     if (specified) return specified
 
-    return { providerID: "zeroxzero", modelID: "big-pickle" }
+    return { providerID: "claude-code", modelID: "claude-sonnet-4-6" }
   }
 
   function parseUri(
@@ -1799,31 +1787,34 @@ export namespace ACP {
     modelId: string,
     providers: Array<{ id: string; models: Record<string, { variants?: Record<string, any> }> }>,
   ): { model: { providerID: string; modelID: string }; variant?: string } {
-    const parsed = Provider.parseModel(modelId)
-    const provider = providers.find((p) => p.id === parsed.providerID)
+    const raw = Provider.parseModel(modelId)
+    const model = { providerID: raw.providerID ?? "", modelID: raw.modelID }
+    const provider = providers.find((p) => p.id === model.providerID)
     if (!provider) {
-      return { model: parsed, variant: undefined }
+      return { model, variant: undefined }
     }
 
     // Check if modelID exists directly
-    if (provider.models[parsed.modelID]) {
-      return { model: parsed, variant: undefined }
+    if (provider.models[model.modelID]) {
+      return { model, variant: undefined }
     }
 
     // Try to extract variant from end of modelID (e.g., "claude-sonnet-4/high" -> model: "claude-sonnet-4", variant: "high")
-    const segments = parsed.modelID.split("/")
+    const segments = model.modelID.split("/")
     if (segments.length > 1) {
       const candidateVariant = segments[segments.length - 1]
-      const baseModelId = segments.slice(0, -1).join("/")
-      const baseModelInfo = provider.models[baseModelId]
-      if (baseModelInfo?.variants && candidateVariant in baseModelInfo.variants) {
-        return {
-          model: { providerID: parsed.providerID, modelID: baseModelId },
-          variant: candidateVariant,
+      if (candidateVariant) {
+        const baseModelId = segments.slice(0, -1).join("/")
+        const baseModelInfo = provider.models[baseModelId]
+        if (baseModelInfo?.variants && candidateVariant in baseModelInfo.variants) {
+          return {
+            model: { providerID: model.providerID, modelID: baseModelId },
+            variant: candidateVariant,
+          }
         }
       }
     }
 
-    return { model: parsed, variant: undefined }
+    return { model, variant: undefined }
   }
 }

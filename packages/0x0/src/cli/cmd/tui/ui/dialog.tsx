@@ -1,14 +1,24 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { batch, createContext, Show, useContext, type Accessor, type JSX, type ParentProps } from "solid-js"
+import {
+  createContext,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  useContext,
+  type Accessor,
+  type JSX,
+  type ParentProps,
+} from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { Renderable, RGBA } from "@opentui/core"
+import { Renderable, RGBA, TextAttributes } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "./toast"
 
-export function Dialog(
+function Dialog(
   props: ParentProps<{
-    size?: "medium" | "large"
+    size: "medium" | "large"
     onClose: () => void
   }>,
 ) {
@@ -49,18 +59,19 @@ export function Dialog(
 
 function init() {
   const [store, setStore] = createStore({
-    stack: [] as {
-      element: JSX.Element | Accessor<JSX.Element>
+    current: null as null | {
+      title: string
+      header?: JSX.Element
+      body: JSX.Element | Accessor<JSX.Element>
       onClose?: () => void
-    }[],
-    size: "medium" as "medium" | "large",
+      size: "medium" | "large"
+    },
   })
 
   useKeyboard((evt) => {
-    if (evt.name === "escape" && store.stack.length > 0) {
-      const current = store.stack.at(-1)!
-      current.onClose?.()
-      setStore("stack", store.stack.slice(0, -1))
+    if (evt.name === "escape" && store.current) {
+      store.current.onClose?.()
+      setStore("current", null)
       evt.preventDefault()
       evt.stopPropagation()
       refocus()
@@ -87,40 +98,39 @@ function init() {
   }
 
   return {
-    clear() {
-      for (const item of store.stack) {
-        if (item.onClose) item.onClose()
-      }
-      batch(() => {
-        setStore("size", "medium")
-        setStore("stack", [])
-      })
-      refocus()
-    },
-    replace(element: JSX.Element | Accessor<JSX.Element>, onClose?: () => void) {
-      if (store.stack.length === 0) {
+    show(opts: {
+      title: string
+      header?: JSX.Element
+      body: JSX.Element | Accessor<JSX.Element>
+      onClose?: () => void
+      size?: "medium" | "large"
+    }) {
+      if (!store.current) {
         focus = renderer.currentFocusedRenderable
         focus?.blur()
       }
-      for (const item of store.stack) {
-        if (item.onClose) item.onClose()
-      }
-      setStore("size", "medium")
-      setStore("stack", [
-        {
-          element,
-          onClose,
-        },
-      ])
+      store.current?.onClose?.()
+      setStore("current", {
+        title: opts.title,
+        header: opts.header,
+        body: opts.body,
+        onClose: opts.onClose,
+        size: opts.size ?? "medium",
+      })
     },
-    get stack() {
-      return store.stack
+    clear() {
+      store.current?.onClose?.()
+      setStore("current", null)
+      refocus()
     },
-    get size() {
-      return store.size
+    get visible() {
+      return store.current !== null
     },
-    setSize(size: "medium" | "large") {
-      setStore("size", size)
+    get size(): "medium" | "large" {
+      return store.current?.size ?? "medium"
+    },
+    get current() {
+      return store.current
     },
   }
 }
@@ -133,11 +143,13 @@ export function DialogProvider(props: ParentProps) {
   const value = init()
   const renderer = useRenderer()
   const toast = useToast()
-  const current = () => {
-    const element = value.stack.at(-1)?.element
-    if (!element) return undefined
-    if (typeof element === "function") return element()
-    return element
+  const { theme } = useTheme()
+  const [hover, setHover] = createSignal(false)
+  const body = () => {
+    const b = value.current?.body
+    if (!b) return undefined
+    if (typeof b === "function") return b()
+    return b
   }
   return (
     <ctx.Provider value={value}>
@@ -152,9 +164,25 @@ export function DialogProvider(props: ParentProps) {
           }
         }}
       >
-        <Show when={value.stack.length}>
+        <Show when={value.visible}>
           <Dialog onClose={() => value.clear()} size={value.size}>
-            {current()}
+            <box flexDirection="row" justifyContent="space-between" paddingLeft={1} paddingRight={1}>
+              <text attributes={TextAttributes.BOLD} fg={theme.text}>
+                {value.current!.title}
+              </text>
+              <box
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={hover() ? theme.primary : undefined}
+                onMouseOver={() => setHover(true)}
+                onMouseOut={() => setHover(false)}
+                onMouseUp={() => value.clear()}
+              >
+                <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
+              </box>
+            </box>
+            {value.current!.header}
+            {body()}
           </Dialog>
         </Show>
       </box>
@@ -168,4 +196,19 @@ export function useDialog() {
     throw new Error("useDialog must be used within a DialogProvider")
   }
   return value
+}
+
+export function DialogMount(props: { title: string; body: () => JSX.Element; size?: "medium" | "large" }) {
+  const dialog = useDialog()
+  onMount(() => {
+    dialog.show({
+      title: props.title,
+      body: props.body,
+      size: props.size,
+    })
+  })
+  onCleanup(() => {
+    dialog.clear()
+  })
+  return null
 }

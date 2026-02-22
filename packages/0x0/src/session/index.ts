@@ -6,7 +6,6 @@ import { Decimal } from "decimal.js"
 import z from "zod"
 import { type LanguageModelUsage, type ProviderMetadata } from "ai"
 import { Config } from "../config/config"
-import { Flag } from "../flag/flag"
 import { Identifier } from "../id/id"
 import { Installation } from "../installation"
 
@@ -86,6 +85,8 @@ export namespace Session {
           diff: z.string().optional(),
         })
         .optional(),
+      cliSessionId: z.string().optional(),
+      codexThreadId: z.string().optional(),
     })
     .meta({
       ref: "Session",
@@ -230,7 +231,7 @@ export namespace Session {
       info: result,
     })
     const cfg = await Config.get()
-    if (!result.parentID && (Flag.ZEROXZERO_AUTO_SHARE || cfg.share === "auto"))
+    if (!result.parentID && cfg.share === "auto")
       share(result.id)
         .then((share) => {
           update(result.id, (draft) => {

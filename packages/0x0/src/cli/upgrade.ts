@@ -1,6 +1,5 @@
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
-import { Flag } from "@/flag/flag"
 import { Installation } from "@/installation"
 
 export async function upgrade() {
@@ -10,7 +9,7 @@ export async function upgrade() {
   if (!latest) return
   if (Installation.VERSION === latest) return
 
-  if (config.autoupdate === false || Flag.ZEROXZERO_DISABLE_AUTOUPDATE) {
+  if (config.autoupdate === false) {
     return
   }
   if (config.autoupdate === "notify") {

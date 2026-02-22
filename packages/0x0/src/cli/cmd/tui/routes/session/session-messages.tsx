@@ -14,19 +14,18 @@ export function SessionMessages(props: {
   return (
     <Show when={props.messages.length > 0} fallback={props.fallback}>
       <For each={props.messages}>
-        {(message, index) => {
-          const i = index()
-          return (
-            <Switch>
-              <Match when={message.id === props.revertMessageID}>{props.renderRevertMarker()}</Match>
-              <Match when={props.revertMessageID && message.id >= props.revertMessageID}>
-                <></>
-              </Match>
-              <Match when={message.role === "user"}>{props.renderUser(message as UserMessage, i)}</Match>
-              <Match when={message.role === "assistant"}>{props.renderAssistant(message as AssistantMessage, i)}</Match>
-            </Switch>
-          )
-        }}
+        {(message, index) => (
+          <Switch>
+            <Match when={message.id === props.revertMessageID}>{props.renderRevertMarker()}</Match>
+            <Match when={props.revertMessageID && message.id >= props.revertMessageID}>
+              <></>
+            </Match>
+            <Match when={message.role === "user"}>{props.renderUser(message as UserMessage, index())}</Match>
+            <Match when={message.role === "assistant"}>
+              {props.renderAssistant(message as AssistantMessage, index())}
+            </Match>
+          </Switch>
+        )}
       </For>
     </Show>
   )

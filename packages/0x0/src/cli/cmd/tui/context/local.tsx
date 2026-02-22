@@ -99,6 +99,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             if (next < 0) next = agents().length - 1
             if (next >= agents().length) next = 0
             const value = agents()[next]
+            if (!value) return
             setAgentStore("current", value.name)
           })
         },
@@ -183,21 +184,21 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const args = useArgs()
       const fallbackModel = createMemo(() => {
         if (args.model) {
-          const { providerID, modelID } = Provider.parseModel(args.model)
-          if (isModelValid({ providerID, modelID })) {
+          const parsed = Provider.parseModel(args.model)
+          if (parsed.providerID && isModelValid({ providerID: parsed.providerID, modelID: parsed.modelID })) {
             return {
-              providerID,
-              modelID,
+              providerID: parsed.providerID,
+              modelID: parsed.modelID,
             }
           }
         }
 
         if (sync.data.config.model) {
-          const { providerID, modelID } = Provider.parseModel(sync.data.config.model)
-          if (isModelValid({ providerID, modelID })) {
+          const parsed = Provider.parseModel(sync.data.config.model as string)
+          if (parsed.providerID && isModelValid({ providerID: parsed.providerID, modelID: parsed.modelID })) {
             return {
-              providerID,
-              modelID,
+              providerID: parsed.providerID,
+              modelID: parsed.modelID,
             }
           }
         }

@@ -47,20 +47,19 @@ function init() {
   const isVisible = (option: CommandOption) => isEnabled(option) && !option.hidden
 
   const visibleOptions = createMemo(() => entries().filter((option) => isVisible(option)))
-  const suggestedOptions = createMemo(() =>
+  const suggestedOptions = () =>
     visibleOptions()
       .filter((option) => option.suggested)
       .map((option) => ({
         ...option,
         value: `suggested:${option.value}`,
         category: "Suggested",
-      })),
-  )
+      }))
   const suspended = () => suspendCount() > 0
 
   useKeyboard((evt) => {
     if (suspended()) return
-    if (dialog.stack.length > 0) return
+    if (dialog.visible) return
     for (const option of entries()) {
       if (!isEnabled(option)) continue
       if (option.keybind && keybind.match(option.keybind, evt)) {
@@ -98,7 +97,10 @@ function init() {
     },
     suspended,
     show() {
-      dialog.replace(() => <DialogCommand options={visibleOptions()} suggestedOptions={suggestedOptions()} />)
+      dialog.show({
+        title: "Commands",
+        body: () => <DialogCommand options={visibleOptions()} suggestedOptions={suggestedOptions()} />,
+      })
     },
     register(cb: () => CommandOption[]) {
       const results = createMemo(cb)
@@ -126,7 +128,7 @@ export function CommandProvider(props: ParentProps) {
 
   useKeyboard((evt) => {
     if (value.suspended()) return
-    if (dialog.stack.length > 0) return
+    if (dialog.visible) return
     if (evt.defaultPrevented) return
     if (keybind.match("command_list", evt)) {
       evt.preventDefault()
@@ -144,5 +146,5 @@ function DialogCommand(props: { options: CommandOption[]; suggestedOptions: Comm
     if (ref?.filter) return props.options
     return [...props.suggestedOptions, ...props.options]
   }
-  return <DialogSelect ref={(r) => (ref = r)} title="Commands" options={list()} />
+  return <DialogSelect ref={(r) => (ref = r)} options={list()} />
 }

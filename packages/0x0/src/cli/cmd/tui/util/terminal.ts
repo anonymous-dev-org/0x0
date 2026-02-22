@@ -20,24 +20,25 @@ export namespace Terminal {
         if (!match) return
         cleanup()
         const color = match[1]
+        if (!color) return
         let r = 0
         let g = 0
         let b = 0
 
         if (color.startsWith("rgb:")) {
           const parts = color.substring(4).split("/")
-          r = parseInt(parts[0], 16) >> 8
-          g = parseInt(parts[1], 16) >> 8
-          b = parseInt(parts[2], 16) >> 8
+          r = parseInt(parts[0] ?? "0", 16) >> 8
+          g = parseInt(parts[1] ?? "0", 16) >> 8
+          b = parseInt(parts[2] ?? "0", 16) >> 8
         } else if (color.startsWith("#")) {
           r = parseInt(color.substring(1, 3), 16)
           g = parseInt(color.substring(3, 5), 16)
           b = parseInt(color.substring(5, 7), 16)
         } else if (color.startsWith("rgb(")) {
           const parts = color.substring(4, color.length - 1).split(",")
-          r = parseInt(parts[0])
-          g = parseInt(parts[1])
-          b = parseInt(parts[2])
+          r = parseInt(parts[0] ?? "0")
+          g = parseInt(parts[1] ?? "0")
+          b = parseInt(parts[2] ?? "0")
         }
 
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255

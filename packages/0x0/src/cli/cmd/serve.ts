@@ -1,7 +1,7 @@
 import { Server } from "../../server/server"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Flag } from "../../flag/flag"
+import { Config } from "../../config/config"
 
 export const ServeCommand = cmd({
   command: "server",
@@ -9,8 +9,9 @@ export const ServeCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless 0x0 server",
   handler: async (args) => {
-    if (!Flag.ZEROXZERO_SERVER_PASSWORD) {
-      console.log("Warning: ZEROXZERO_SERVER_PASSWORD is not set; server is unsecured.")
+    const config = await Config.get()
+    if (!config.server?.password) {
+      console.log("Warning: server.password is not set in config.yaml; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
     const server = Server.listen(opts)

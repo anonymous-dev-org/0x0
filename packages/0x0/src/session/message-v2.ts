@@ -7,7 +7,6 @@ import { LSP } from "../lsp"
 import { Snapshot } from "@/snapshot"
 import { fn } from "@/util/fn"
 import { Storage } from "@/storage/storage"
-import { ProviderTransform } from "@/provider/transform"
 import { STATUS_CODES } from "http"
 import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
@@ -760,10 +759,6 @@ export namespace MessageV2 {
               if (err) return err
             }
             return "Unknown error"
-          }
-          const transformed = ProviderTransform.error(ctx.providerID, e)
-          if (transformed !== msg) {
-            return transformed
           }
           if (!e.responseBody || (e.statusCode && msg !== STATUS_CODES[e.statusCode])) {
             return msg

@@ -1,277 +1,66 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js"
+import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
-import { map, pipe, sortBy } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
-import { useSDK } from "../context/sdk"
-import { DialogPrompt } from "../ui/dialog-prompt"
-import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
-import { TextAttributes } from "@opentui/core"
-import type { ProviderAuthAuthorization } from "@0x0-ai/sdk/v2"
+import { Link } from "../ui/link"
 import { DialogModel } from "./dialog-model"
-import { useKeyboard } from "@opentui/solid"
-import { Clipboard } from "@tui/util/clipboard"
-import { useToast } from "../ui/toast"
 
-const PROVIDER_PRIORITY: Record<string, number> = {
-  zeroxzero: 0,
-  anthropic: 1,
-  "github-copilot": 2,
-  openai: 3,
-  google: 4,
-}
-
-function hasAntigravityGoogleAuth(methods: Array<{ type: string; label: string }> | undefined) {
-  return (methods ?? []).some((method) => method.type === "oauth" && method.label.toLowerCase().includes("antigravity"))
+const INSTALL_INFO: Record<string, { cmd: string; url: string }> = {
+  "claude-code": {
+    cmd: "npm install -g @anthropic-ai/claude-code",
+    url: "https://docs.anthropic.com/claude-code",
+  },
+  codex: {
+    cmd: "npm install -g @openai/codex",
+    url: "https://github.com/openai/codex",
+  },
 }
 
 export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
-  const sdk = useSDK()
-  const connected = createMemo(() => new Set(sync.data.provider_next.connected))
   const options = createMemo(() => {
-    const antigravity = hasAntigravityGoogleAuth(sync.data.provider_auth.google)
-    return pipe(
-      sync.data.provider_next.all,
-      sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
-      map((provider) => {
-        const isConnected = connected().has(provider.id)
-        return {
-          title: provider.name,
-          value: provider.id,
-          description: {
-            zeroxzero: "(Recommended)",
-            anthropic: "(Claude Max or API key)",
-            openai: "(ChatGPT Plus/Pro or API key)",
-          }[provider.id],
-          category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
-          footer: isConnected ? "Connected" : undefined,
-          async onSelect() {
-            const pluginMethods = sync.data.provider_auth[provider.id]
-            const methods =
-              provider.id === "google" &&
-              antigravity &&
-              pluginMethods &&
-              !pluginMethods.some((method) => method.type === "api")
-                ? [...pluginMethods, { type: "api" as const, label: "API key" }]
-                : (pluginMethods ?? [
-                    {
-                      type: "api" as const,
-                      label: "API key",
-                    },
-                  ])
-            let index: number | null = 0
-            if (methods.length > 1) {
-              index = await new Promise<number | null>((resolve) => {
-                dialog.replace(
-                  () => (
-                    <DialogSelect
-                      title="Select auth method"
-                      options={methods.map((x, index) => ({
-                        title: x.label,
-                        value: index,
-                      }))}
-                      onSelect={(option) => resolve(option.value)}
-                    />
-                  ),
-                  () => resolve(null),
-                )
-              })
-            }
-            if (index == null) return
-            const method = methods[index]
-            if (method.type === "oauth") {
-              const result = await sdk.client.provider.oauth.authorize({
-                providerID: provider.id,
-                method: index,
-              })
-              if (result.data?.method === "code") {
-                dialog.replace(() => (
-                  <CodeMethod
-                    providerID={provider.id}
-                    title={method.label}
-                    index={index}
-                    authorization={result.data!}
-                  />
-                ))
-              }
-              if (result.data?.method === "auto") {
-                dialog.replace(() => (
-                  <AutoMethod
-                    providerID={provider.id}
-                    title={method.label}
-                    index={index}
-                    authorization={result.data!}
-                  />
-                ))
-              }
-            }
-            if (method.type === "api") {
-              return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
-            }
-          },
-        }
-      }),
-    )
+    const connected = new Set(sync.data.provider_next.connected)
+    return sync.data.provider_next.all.map((provider) => {
+      const isConnected = connected.has(provider.id)
+      return {
+        title: provider.name,
+        value: provider.id,
+        footer: isConnected ? "Installed" : "Not installed",
+        async onSelect() {
+          if (isConnected) {
+            dialog.show({
+              title: "Select model",
+              body: () => <DialogModel providerID={provider.id} />,
+            })
+          } else {
+            dialog.show({
+              title: `Install ${provider.name}`,
+              body: () => <InstallGuide providerID={provider.id} />,
+            })
+          }
+        },
+      }
+    })
   })
   return options
 }
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
-  return <DialogSelect title="Connect a provider" options={options()} />
+  return <DialogSelect options={options()} />
 }
 
-interface AutoMethodProps {
-  index: number
-  providerID: string
-  title: string
-  authorization: ProviderAuthAuthorization
-}
-function AutoMethod(props: AutoMethodProps) {
+function InstallGuide(props: { providerID: string }) {
   const { theme } = useTheme()
-  const sdk = useSDK()
-  const dialog = useDialog()
-  const sync = useSync()
-  const toast = useToast()
-  const [hover, setHover] = createSignal(false)
-
-  useKeyboard((evt) => {
-    if (evt.name === "c" && !evt.ctrl && !evt.meta) {
-      const code = props.authorization.instructions.match(/[A-Z0-9]{4}-[A-Z0-9]{4,5}/)?.[0] ?? props.authorization.url
-      Clipboard.copyWithToast(code, toast)
-    }
-  })
-
-  onMount(async () => {
-    const result = await sdk.client.provider.oauth.callback({
-      providerID: props.providerID,
-      method: props.index,
-    })
-    if (result.error) {
-      dialog.clear()
-      return
-    }
-    await sdk.client.instance.dispose()
-    await sync.bootstrap()
-    dialog.replace(() => <DialogModel providerID={props.providerID} />)
-  })
+  const info = INSTALL_INFO[props.providerID]
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          {props.title}
-        </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
-      </box>
-      <box gap={1}>
-        <Link href={props.authorization.url} fg={theme.primary} />
-        <text fg={theme.textMuted}>{props.authorization.instructions}</text>
-      </box>
-      <text fg={theme.textMuted}>Waiting for authorization...</text>
-      <text fg={theme.text}>
-        c <span style={{ fg: theme.textMuted }}>copy</span>
-      </text>
+      <text fg={theme.text}>Run the following command to install, then restart 0x0:</text>
+      <text fg={theme.primary}>{info?.cmd ?? `Install ${props.providerID}`}</text>
+      {info?.url && <Link href={info.url} fg={theme.textMuted} />}
     </box>
-  )
-}
-
-interface CodeMethodProps {
-  index: number
-  title: string
-  providerID: string
-  authorization: ProviderAuthAuthorization
-}
-function CodeMethod(props: CodeMethodProps) {
-  const { theme } = useTheme()
-  const sdk = useSDK()
-  const sync = useSync()
-  const dialog = useDialog()
-  const [error, setError] = createSignal(false)
-
-  return (
-    <DialogPrompt
-      title={props.title}
-      placeholder="Authorization code"
-      onConfirm={async (value) => {
-        const { error } = await sdk.client.provider.oauth.callback({
-          providerID: props.providerID,
-          method: props.index,
-          code: value,
-        })
-        if (!error) {
-          await sdk.client.instance.dispose()
-          await sync.bootstrap()
-          dialog.replace(() => <DialogModel providerID={props.providerID} />)
-          return
-        }
-        setError(true)
-      }}
-      description={() => (
-        <box gap={1}>
-          <text fg={theme.textMuted}>{props.authorization.instructions}</text>
-          <Link href={props.authorization.url} fg={theme.primary} />
-          <Show when={error()}>
-            <text fg={theme.error}>Invalid code</text>
-          </Show>
-        </box>
-      )}
-    />
-  )
-}
-
-interface ApiMethodProps {
-  providerID: string
-  title: string
-}
-function ApiMethod(props: ApiMethodProps) {
-  const dialog = useDialog()
-  const sdk = useSDK()
-  const sync = useSync()
-  const { theme } = useTheme()
-
-  return (
-    <DialogPrompt
-      title={props.title}
-      placeholder="API key"
-      description={
-        props.providerID === "zeroxzero" ? (
-          <box gap={1}>
-            <text fg={theme.textMuted}>
-              Terminal Agent Zen gives you access to all the best coding models at the cheapest prices with a single API
-              key.
-            </text>
-            <text fg={theme.text}>
-              Go to <span style={{ fg: theme.primary }}>https://zeroxzero.ai/zen</span> to get a key
-            </text>
-          </box>
-        ) : undefined
-      }
-      onConfirm={async (value) => {
-        if (!value) return
-        await sdk.client.auth.set({
-          providerID: props.providerID,
-          auth: {
-            type: "api",
-            key: value,
-          },
-        })
-        await sdk.client.instance.dispose()
-        await sync.bootstrap()
-        dialog.replace(() => <DialogModel providerID={props.providerID} />)
-      }}
-    />
   )
 }

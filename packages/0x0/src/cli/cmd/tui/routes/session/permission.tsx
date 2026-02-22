@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { For, Match, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeybind } from "../../context/keybind"
@@ -89,6 +89,125 @@ function TextBody(props: { title: string; description?: string; icon?: string })
   )
 }
 
+function SearchBody(props: { input: Record<string, unknown> }) {
+  const mode = () => props.input.mode as string | undefined
+  return (
+    <Show
+      when={mode() === "files"}
+      fallback={<TextBody icon="✱" title={`Search content "` + (props.input.pattern ?? "") + `"`} />}
+    >
+      <TextBody icon="✱" title={`Search files "` + (props.input.pattern ?? "") + `"`} />
+    </Show>
+  )
+}
+
+function TaskHandoffBody(props: { request: PermissionRequest; input: Record<string, unknown> }) {
+  const target = () =>
+    (props.request.metadata?.targetAgent as string | undefined) ??
+    (props.input.agent as string | undefined) ??
+    "Unknown"
+  const reason = () =>
+    (props.request.metadata?.reason as string | undefined) ?? (props.input.description as string | undefined)
+  return (
+    <TextBody icon="↪" title={`Allow handoff to ${target()}`} description={reason() ? "◉ " + reason() : undefined} />
+  )
+}
+
+function SearchRemoteBody(props: { input: Record<string, unknown> }) {
+  const mode = () => props.input.mode as string | undefined
+  return (
+    <Switch>
+      <Match when={mode() === "fetch"}>
+        <TextBody icon="%" title={`Fetch ` + (props.input.url ?? "")} />
+      </Match>
+      <Match when={mode() === "web"}>
+        <TextBody icon="◈" title={`Web search "` + (props.input.query ?? "") + `"`} />
+      </Match>
+      <Match when={true}>
+        <TextBody icon="◇" title={`Code search "` + (props.input.query ?? "") + `"`} />
+      </Match>
+    </Switch>
+  )
+}
+
+function ExternalDirectoryBody(props: { request: PermissionRequest }) {
+  const dir = () => {
+    const meta = props.request.metadata ?? {}
+    const parent = typeof meta["parentDir"] === "string" ? meta["parentDir"] : undefined
+    const filepath = typeof meta["filepath"] === "string" ? meta["filepath"] : undefined
+    const pattern = props.request.patterns?.[0]
+    const derived = typeof pattern === "string" ? (pattern.includes("*") ? path.dirname(pattern) : pattern) : undefined
+    return normalizePath(parent ?? filepath ?? derived)
+  }
+  return <TextBody icon="←" title={`Access external directory ` + dir()} />
+}
+
+function PermissionBody(props: { request: PermissionRequest; input: Record<string, unknown> }) {
+  return (
+    <Switch>
+      <Match when={props.request.permission === "edit"}>
+        <EditBody request={props.request} />
+      </Match>
+      <Match when={props.request.permission === "read"}>
+        <TextBody icon="→" title={`Read ` + normalizePath(props.input.filePath as string)} />
+      </Match>
+      <Match when={props.request.permission === "search"}>
+        <SearchBody input={props.input} />
+      </Match>
+      <Match when={props.request.permission === "glob"}>
+        <TextBody icon="✱" title={`Glob "` + (props.input.pattern ?? "") + `"`} />
+      </Match>
+      <Match when={props.request.permission === "grep"}>
+        <TextBody icon="✱" title={`Grep "` + (props.input.pattern ?? "") + `"`} />
+      </Match>
+      <Match when={props.request.permission === "list"}>
+        <TextBody icon="→" title={`List ` + normalizePath(props.input.path as string)} />
+      </Match>
+      <Match when={props.request.permission === "bash"}>
+        <TextBody
+          icon="#"
+          title={(props.input.description as string) ?? ""}
+          description={("$ " + props.input.command) as string}
+        />
+      </Match>
+      <Match when={props.request.permission === "task"}>
+        <TextBody
+          icon="#"
+          title={`${Locale.titlecase((props.input.agent as string) ?? "Unknown")} Task`}
+          description={"◉ " + props.input.description}
+        />
+      </Match>
+      <Match when={props.request.permission === "task_handoff"}>
+        <TaskHandoffBody request={props.request} input={props.input} />
+      </Match>
+      <Match when={props.request.permission === "search_remote"}>
+        <SearchRemoteBody input={props.input} />
+      </Match>
+      <Match when={props.request.permission === "webfetch"}>
+        <TextBody icon="%" title={`WebFetch ` + (props.input.url ?? "")} />
+      </Match>
+      <Match when={props.request.permission === "websearch"}>
+        <TextBody icon="◈" title={`Exa Web Search "` + (props.input.query ?? "") + `"`} />
+      </Match>
+      <Match when={props.request.permission === "codesearch"}>
+        <TextBody icon="◇" title={`Exa Code Search "` + (props.input.query ?? "") + `"`} />
+      </Match>
+      <Match when={props.request.permission === "external_directory"}>
+        <ExternalDirectoryBody request={props.request} />
+      </Match>
+      <Match when={props.request.permission === "doom_loop"}>
+        <TextBody icon="⟳" title="Continue after repeated failures" />
+      </Match>
+      <Match when={props.request.permission === "lsp"}>
+        <TextBody icon="λ" title={`LSP ` + normalizePath(props.input.filePath as string)} />
+      </Match>
+      <Match when={true}>
+        <TextBody icon="⚙" title={`Call tool ` + props.request.permission} />
+      </Match>
+    </Switch>
+  )
+}
+
 export function PermissionPrompt(props: { request: PermissionRequest }) {
   const sdk = useSDK()
   const sync = useSync()
@@ -98,7 +217,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const session = () => sync.data.session.find((s) => s.id === props.request.sessionID)
 
-  const input = createMemo(() => {
+  const input = () => {
     const tool = props.request.tool
     if (!tool) return {}
     const parts = sync.data.part[tool.messageID] ?? []
@@ -108,7 +227,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       }
     }
     return {}
-  })
+  }
 
   const { theme } = useTheme()
 
@@ -170,153 +289,38 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         />
       </Match>
       <Match when={store.stage === "permission"}>
-        {(() => {
-          const options: Record<string, string> =
+        <Prompt
+          title="Permission required"
+          body={<PermissionBody request={props.request} input={input()} />}
+          options={
             props.request.permission === "task_handoff"
               ? { once: "Allow once", reject: "Deny" }
               : { once: "Allow once", always: "Allow always", reject: "Reject" }
-
-          const body = (
-            <Prompt
-              title="Permission required"
-              body={
-                <Switch>
-                  <Match when={props.request.permission === "edit"}>
-                    <EditBody request={props.request} />
-                  </Match>
-                  <Match when={props.request.permission === "read"}>
-                    <TextBody icon="→" title={`Read ` + normalizePath(input().filePath as string)} />
-                  </Match>
-                  <Match when={props.request.permission === "search"}>
-                    {(() => {
-                      const mode = input().mode as string | undefined
-                      if (mode === "files") {
-                        return <TextBody icon="✱" title={`Search files "` + (input().pattern ?? "") + `"`} />
-                      }
-                      return <TextBody icon="✱" title={`Search content "` + (input().pattern ?? "") + `"`} />
-                    })()}
-                  </Match>
-                  <Match when={props.request.permission === "glob"}>
-                    <TextBody icon="✱" title={`Glob "` + (input().pattern ?? "") + `"`} />
-                  </Match>
-                  <Match when={props.request.permission === "grep"}>
-                    <TextBody icon="✱" title={`Grep "` + (input().pattern ?? "") + `"`} />
-                  </Match>
-                  <Match when={props.request.permission === "list"}>
-                    <TextBody icon="→" title={`List ` + normalizePath(input().path as string)} />
-                  </Match>
-                  <Match when={props.request.permission === "bash"}>
-                    <TextBody
-                      icon="#"
-                      title={(input().description as string) ?? ""}
-                      description={("$ " + input().command) as string}
-                    />
-                  </Match>
-                  <Match when={props.request.permission === "task"}>
-                    <TextBody
-                      icon="#"
-                      title={`${Locale.titlecase((input().agent as string) ?? "Unknown")} Task`}
-                      description={"◉ " + input().description}
-                    />
-                  </Match>
-                  <Match when={props.request.permission === "task_handoff"}>
-                    {(() => {
-                      const target =
-                        (props.request.metadata?.targetAgent as string | undefined) ??
-                        (input().agent as string | undefined) ??
-                        "Unknown"
-                      const reason =
-                        (props.request.metadata?.reason as string | undefined) ??
-                        (input().description as string | undefined)
-                      return (
-                        <TextBody
-                          icon="↪"
-                          title={`Allow handoff to ${target}`}
-                          description={reason ? "◉ " + reason : undefined}
-                        />
-                      )
-                    })()}
-                  </Match>
-                  <Match when={props.request.permission === "search_remote"}>
-                    {(() => {
-                      const mode = input().mode as string | undefined
-                      if (mode === "fetch") {
-                        return <TextBody icon="%" title={`Fetch ` + (input().url ?? "")} />
-                      }
-                      if (mode === "web") {
-                        return <TextBody icon="◈" title={`Web search "` + (input().query ?? "") + `"`} />
-                      }
-                      return <TextBody icon="◇" title={`Code search "` + (input().query ?? "") + `"`} />
-                    })()}
-                  </Match>
-                  <Match when={props.request.permission === "webfetch"}>
-                    <TextBody icon="%" title={`WebFetch ` + (input().url ?? "")} />
-                  </Match>
-                  <Match when={props.request.permission === "websearch"}>
-                    <TextBody icon="◈" title={`Exa Web Search "` + (input().query ?? "") + `"`} />
-                  </Match>
-                  <Match when={props.request.permission === "codesearch"}>
-                    <TextBody icon="◇" title={`Exa Code Search "` + (input().query ?? "") + `"`} />
-                  </Match>
-                  <Match when={props.request.permission === "external_directory"}>
-                    {(() => {
-                      const meta = props.request.metadata ?? {}
-                      const parent = typeof meta["parentDir"] === "string" ? meta["parentDir"] : undefined
-                      const filepath = typeof meta["filepath"] === "string" ? meta["filepath"] : undefined
-                      const pattern = props.request.patterns?.[0]
-                      const derived =
-                        typeof pattern === "string"
-                          ? pattern.includes("*")
-                            ? path.dirname(pattern)
-                            : pattern
-                          : undefined
-
-                      const raw = parent ?? filepath ?? derived
-                      const dir = normalizePath(raw)
-
-                      return <TextBody icon="←" title={`Access external directory ` + dir} />
-                    })()}
-                  </Match>
-                  <Match when={props.request.permission === "doom_loop"}>
-                    <TextBody icon="⟳" title="Continue after repeated failures" />
-                  </Match>
-                  <Match when={props.request.permission === "lsp"}>
-                    <TextBody icon="λ" title={`LSP ` + normalizePath(input().filePath as string)} />
-                  </Match>
-                  <Match when={true}>
-                    <TextBody icon="⚙" title={`Call tool ` + props.request.permission} />
-                  </Match>
-                </Switch>
+          }
+          escapeKey="reject"
+          fullscreen
+          onSelect={(option) => {
+            if (option === "always") {
+              setStore("stage", "always")
+              return
+            }
+            if (option === "reject") {
+              if (session()?.parentID) {
+                setStore("stage", "reject")
+                return
               }
-              options={options}
-              escapeKey="reject"
-              fullscreen
-              onSelect={(option) => {
-                if (option === "always") {
-                  setStore("stage", "always")
-                  return
-                }
-                if (option === "reject") {
-                  if (session()?.parentID) {
-                    setStore("stage", "reject")
-                    return
-                  }
-                  sdk.client.permission.reply({
-                    reply: "reject",
-                    requestID: props.request.id,
-                  })
-                  return
-                }
-                sdk.client.permission.reply({
-                  reply: "once",
-                  requestID: props.request.id,
-                })
-              }}
-            />
-          )
-
-          return body
-        })()}
+              sdk.client.permission.reply({
+                reply: "reject",
+                requestID: props.request.id,
+              })
+              return
+            }
+            sdk.client.permission.reply({
+              reply: "once",
+              requestID: props.request.id,
+            })
+          }}
+        />
       </Match>
     </Switch>
   )
@@ -332,7 +336,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const dialog = useDialog()
 
   useKeyboard((evt) => {
-    if (dialog.stack.length > 0) return
+    if (dialog.visible) return
 
     if (evt.name === "escape" || keybind.match("app_exit", evt)) {
       evt.preventDefault()
@@ -415,7 +419,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   const dialog = useDialog()
 
   useKeyboard((evt) => {
-    if (dialog.stack.length > 0) return
+    if (dialog.visible) return
 
     if (evt.name === "left" || evt.name == "h") {
       evt.preventDefault()

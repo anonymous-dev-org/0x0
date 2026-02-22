@@ -11,7 +11,7 @@ import { Language } from "web-tree-sitter"
 import { $ } from "bun"
 import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
-import { Flag } from "@/flag/flag.ts"
+import { Config } from "@/config/config"
 import { Shell } from "@/shell/shell"
 
 import { BashArity } from "@/permission/arity"
@@ -19,7 +19,7 @@ import { Truncate } from "./truncation"
 import { Plugin } from "@/plugin"
 
 const MAX_METADATA_LENGTH = 30_000
-const DEFAULT_TIMEOUT = Flag.ZEROXZERO_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
+const DEFAULT_TIMEOUT = 2 * 60 * 1000
 
 export const log = Log.create({ service: "bash-tool" })
 
@@ -53,7 +53,7 @@ const parser = lazy(async () => {
 
 // TODO: we may wanna rename this tool so it works better on other shells
 export const BashTool = Tool.define("bash", async () => {
-  const shell = Shell.acceptable()
+  const shell = await Shell.acceptable()
   log.info("bash tool using shell", { shell })
 
   return {
@@ -80,7 +80,8 @@ export const BashTool = Tool.define("bash", async () => {
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
-      const timeout = params.timeout ?? DEFAULT_TIMEOUT
+      const config = await Config.get()
+      const timeout = params.timeout ?? (config.experimental?.bash_default_timeout_ms || DEFAULT_TIMEOUT)
       const tree = await parser().then((p) => p.parse(params.command))
       if (!tree) {
         throw new Error("Failed to parse command")

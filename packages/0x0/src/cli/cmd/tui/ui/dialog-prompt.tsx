@@ -1,11 +1,10 @@
-import { TextareaRenderable, TextAttributes } from "@opentui/core"
+import { TextareaRenderable } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { createSignal, onMount, type JSX } from "solid-js"
+import { onMount, type JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 
 export type DialogPromptProps = {
-  title: string
   description?: () => JSX.Element
   placeholder?: string
   value?: string
@@ -14,10 +13,8 @@ export type DialogPromptProps = {
 }
 
 export function DialogPrompt(props: DialogPromptProps) {
-  const dialog = useDialog()
   const { theme } = useTheme()
   let textarea: TextareaRenderable
-  const [hover, setHover] = createSignal(false)
 
   useKeyboard((evt) => {
     if (evt.name === "return") {
@@ -26,7 +23,6 @@ export function DialogPrompt(props: DialogPromptProps) {
   })
 
   onMount(() => {
-    dialog.setSize("medium")
     setTimeout(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
@@ -36,21 +32,6 @@ export function DialogPrompt(props: DialogPromptProps) {
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          {props.title}
-        </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
-      </box>
       <box gap={1}>
         {props.description}
         <textarea
@@ -76,13 +57,13 @@ export function DialogPrompt(props: DialogPromptProps) {
   )
 }
 
-DialogPrompt.show = (dialog: DialogContext, title: string, options?: Omit<DialogPromptProps, "title">) => {
+DialogPrompt.show = (dialog: DialogContext, title: string, options?: Omit<DialogPromptProps, never>) => {
   return new Promise<string | null>((resolve) => {
-    dialog.replace(
-      () => (
-        <DialogPrompt title={title} {...options} onConfirm={(value) => resolve(value)} onCancel={() => resolve(null)} />
-      ),
-      () => resolve(null),
-    )
+    dialog.show({
+      title,
+      size: "medium",
+      body: () => <DialogPrompt {...options} onConfirm={(value) => resolve(value)} onCancel={() => resolve(null)} />,
+      onClose: () => resolve(null),
+    })
   })
 }

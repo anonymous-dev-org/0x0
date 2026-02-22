@@ -13,7 +13,6 @@ import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema }
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
-import { ProviderTransform } from "../provider/transform"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
@@ -25,7 +24,6 @@ import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { ListTool } from "../tool/ls"
 import { FileTime } from "../file/time"
-import { Flag } from "../flag/flag"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -51,7 +49,6 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
-  export const OUTPUT_TOKEN_MAX = Flag.ZEROXZERO_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
   const QUEUED_USER_REMINDER = [
     "The user sent the following message:",
     "{{message}}",
@@ -66,8 +63,10 @@ export namespace SessionPrompt {
   function skill(messages: MessageV2.WithParts[]) {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
+      if (!msg) continue
       for (let j = msg.parts.length - 1; j >= 0; j--) {
         const part = msg.parts[j]
+        if (!part) continue
         if (part.type !== "tool" || part.tool !== "skill" || part.state.status !== "completed") continue
         if (part.state.time.compacted) continue
         if (!part.state.output.trim()) continue
@@ -210,8 +209,8 @@ export namespace SessionPrompt {
     const seen = new Set<string>()
     await Promise.all(
       files.map(async (match) => {
-        const name = match[1]
-        if (seen.has(name)) return
+        const name = match[1] ?? ""
+        if (!name || seen.has(name)) return
         seen.add(name)
         const filepath = name.startsWith("~/")
           ? path.join(os.homedir(), name.slice(2))
@@ -292,8 +291,9 @@ export namespace SessionPrompt {
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        const callbacks = state()[sessionID].callbacks
-        callbacks.push({ resolve, reject })
+        const match = state()[sessionID]
+        if (!match) return reject(new Error("session not found"))
+        match.callbacks.push({ resolve, reject })
       })
     }
 
@@ -313,6 +313,7 @@ export namespace SessionPrompt {
       let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
       for (let i = msgs.length - 1; i >= 0; i--) {
         const msg = msgs[i]
+        if (!msg) continue
         if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
         if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
         if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
@@ -438,7 +439,7 @@ export namespace SessionPrompt {
             await PermissionNext.ask({
               ...req,
               sessionID: sessionID,
-              ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
+               ruleset: PermissionNext.merge(taskAgent?.permission ?? [], session.permission ?? []),
             })
           },
         }
@@ -556,6 +557,7 @@ export namespace SessionPrompt {
 
       // normal processing
       const agent = await Agent.get(lastUser.agent)
+      if (!agent) throw new Error(`Agent not found: ${lastUser.agent}`)
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
@@ -644,7 +646,6 @@ export namespace SessionPrompt {
       const result = await processor.process({
         user: lastUser,
         agent,
-        permission: session.permission,
         abort,
         sessionID,
         system: skillPrompt ? [skillPrompt] : [],
@@ -754,7 +755,7 @@ export namespace SessionPrompt {
           `Invalid schema for tool "${item.id}": schema must be a JSON Schema object, got ${JSON.stringify(json.type ?? null)}.`,
         )
       }
-      const schema = ProviderTransform.schema(input.model, json)
+      const schema = json
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -788,7 +789,7 @@ export namespace SessionPrompt {
     }
 
     const invalid = await InvalidTool.init()
-    const invalidSchema = ProviderTransform.schema(input.model, z.toJSONSchema(invalid.parameters))
+    const invalidSchema = z.toJSONSchema(invalid.parameters)
     tools[InvalidTool.id] = tool({
       id: InvalidTool.id as any,
       description: invalid.description,
@@ -804,8 +805,7 @@ export namespace SessionPrompt {
       const execute = item.execute
       if (!execute) continue
 
-      const transformed = ProviderTransform.schema(input.model, asSchema(item.inputSchema).jsonSchema)
-      item.inputSchema = jsonSchema(transformed)
+      item.inputSchema = jsonSchema(asSchema(item.inputSchema).jsonSchema)
       // Wrap execute to add plugin hooks and format output
       item.execute = async (args, opts) => {
         const ctx = context(args, opts)
@@ -898,8 +898,10 @@ export namespace SessionPrompt {
 
   async function createUserMessage(input: PromptInput) {
     const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+    if (!agent) throw new Error(`Agent not found: ${input.agent}`)
 
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const resolved = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const model = { providerID: resolved.providerID ?? "", modelID: resolved.modelID }
     const variant =
       input.variant ??
       (agent.variant &&
@@ -1050,7 +1052,7 @@ export namespace SessionPrompt {
                   end: url.searchParams.get("end"),
                 }
                 if (range.start != null) {
-                  const filePathURI = part.url.split("?")[0]
+                  const filePathURI = part.url.split("?")[0] ?? part.url
                   let start = parseInt(range.start)
                   let end = range.end ? parseInt(range.end) : undefined
                   // some LSP servers (eg, gopls) don't give full range in
@@ -1294,6 +1296,7 @@ export namespace SessionPrompt {
       await SessionRevert.cleanup(session)
     }
     const agent = await Agent.get(input.agent)
+    if (!agent) throw new Error(`Agent not found: ${input.agent}`)
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const userMsg: MessageV2.User = {
       id: Identifier.ascending("message"),
@@ -1304,7 +1307,7 @@ export namespace SessionPrompt {
       role: "user",
       agent: input.agent,
       model: {
-        providerID: model.providerID,
+        providerID: model.providerID ?? "",
         modelID: model.modelID,
       },
     }
@@ -1341,7 +1344,7 @@ export namespace SessionPrompt {
         cache: { read: 0, write: 0 },
       },
       modelID: model.modelID,
-      providerID: model.providerID,
+      providerID: model.providerID ?? "",
     }
     await Session.updateMessage(msg)
     const part: MessageV2.Part = {
@@ -1362,7 +1365,7 @@ export namespace SessionPrompt {
       },
     }
     await Session.updatePart(part)
-    const shell = Shell.preferred()
+    const shell = await Shell.preferred()
     const shellName = (
       process.platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
     ).toLowerCase()
@@ -1415,11 +1418,11 @@ export namespace SessionPrompt {
     }
 
     const matchingInvocation = invocations[shellName] ?? invocations[""]
-    const args = matchingInvocation?.args
+    const resolved = matchingInvocation?.args ?? ["-c", input.command]
 
     const cwd = Instance.directory
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
-    const proc = spawn(shell, args, {
+    const proc = spawn(shell, resolved, {
       cwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
@@ -1539,7 +1542,9 @@ export namespace SessionPrompt {
 
   export async function command(input: CommandInput) {
     log.info("command", input)
-    const command = await Command.get(input.command)
+    const found = await Command.get(input.command)
+    if (!found) throw new Error(`Command not found: ${input.command}`)
+    const command = found
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
     const raw = input.arguments.match(argsRegex) ?? []
@@ -1560,7 +1565,7 @@ export namespace SessionPrompt {
       const argIndex = position - 1
       if (argIndex >= args.length) return ""
       if (position === last) return args.slice(argIndex).join(" ")
-      return args[argIndex]
+      return args[argIndex] ?? ""
     })
     const usesArgumentsPlaceholder = templateCommand.includes("$ARGUMENTS")
     let template = withArgs.replaceAll("$ARGUMENTS", input.arguments)
@@ -1583,7 +1588,7 @@ export namespace SessionPrompt {
         }),
       )
       let index = 0
-      template = template.replace(bashRegex, () => results[index++])
+      template = template.replace(bashRegex, () => results[index++] ?? "")
     }
     template = template.trim()
 
@@ -1602,7 +1607,7 @@ export namespace SessionPrompt {
     })()
 
     try {
-      await Provider.getModel(taskModel.providerID, taskModel.modelID)
+      await Provider.getModel(taskModel.providerID ?? "", taskModel.modelID)
     } catch (e) {
       if (Provider.ModelNotFoundError.isInstance(e)) {
         const { providerID, modelID, suggestions } = e.data
@@ -1636,7 +1641,7 @@ export namespace SessionPrompt {
             description: command.description ?? "",
             command: input.command,
             model: {
-              providerID: taskModel.providerID,
+              providerID: taskModel.providerID ?? "",
               modelID: taskModel.modelID,
             },
             // TODO: how can we make task tool accept a more complex input?
@@ -1665,9 +1670,12 @@ export namespace SessionPrompt {
     const result = (await prompt({
       sessionID: input.sessionID,
       messageID: input.messageID,
-      model: userModel,
+      model: {
+        providerID: userModel.providerID ?? "",
+        modelID: userModel.modelID,
+      },
       agent: userAgent,
-      parts,
+      parts: parts as PromptInput["parts"],
       variant: input.variant,
     })) as MessageV2.WithParts
 
@@ -1705,6 +1713,7 @@ export namespace SessionPrompt {
     // This includes any shell/subtask executions that preceded the user's first prompt
     const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
     const firstRealUser = contextMessages[firstRealUserIdx]
+    if (!firstRealUser) return
 
     // For subtask-only messages (from command invocations), extract the prompt directly
     // since toModelMessage converts subtask parts to generic "The following tool was executed by the user"
@@ -1719,7 +1728,7 @@ export namespace SessionPrompt {
         (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
       )
     })
-    const result = await LLM.stream({
+    const text = await LLM.getText({
       agent,
       user: firstRealUser.info as MessageV2.User,
       system: [],
@@ -1738,8 +1747,7 @@ export namespace SessionPrompt {
           ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
           : MessageV2.toModelMessages(contextMessages, model)),
       ],
-    })
-    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+    }).catch((err) => { log.error("failed to generate title", { error: err }); return undefined })
     if (text)
       return Session.update(
         input.session.id,

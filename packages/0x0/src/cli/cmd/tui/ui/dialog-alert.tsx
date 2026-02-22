@@ -1,11 +1,8 @@
-import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { useKeyboard } from "@opentui/solid"
-import { createSignal } from "solid-js"
 
 export type DialogAlertProps = {
-  title: string
   message: string
   onConfirm?: () => void
 }
@@ -13,7 +10,6 @@ export type DialogAlertProps = {
 export function DialogAlert(props: DialogAlertProps) {
   const dialog = useDialog()
   const { theme } = useTheme()
-  const [hover, setHover] = createSignal(false)
 
   useKeyboard((evt) => {
     if (evt.name === "return") {
@@ -23,21 +19,6 @@ export function DialogAlert(props: DialogAlertProps) {
   })
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          {props.title}
-        </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
-      </box>
       <box paddingBottom={1}>
         <text fg={theme.textMuted}>{props.message}</text>
       </box>
@@ -60,9 +41,10 @@ export function DialogAlert(props: DialogAlertProps) {
 
 DialogAlert.show = (dialog: DialogContext, title: string, message: string) => {
   return new Promise<void>((resolve) => {
-    dialog.replace(
-      () => <DialogAlert title={title} message={message} onConfirm={() => resolve()} />,
-      () => resolve(),
-    )
+    dialog.show({
+      title,
+      body: () => <DialogAlert message={message} onConfirm={() => resolve()} />,
+      onClose: () => resolve(),
+    })
   })
 }

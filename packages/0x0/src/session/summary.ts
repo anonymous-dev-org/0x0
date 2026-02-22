@@ -134,7 +134,7 @@ export namespace SessionSummary {
     if (textPart && !userMsg.summary?.title) {
       const agent = await Agent.get("title")
       if (!agent) return
-      const stream = await LLM.stream({
+      const result = await LLM.getText({
         agent,
         user: userMsg,
         tools: {},
@@ -159,7 +159,6 @@ export namespace SessionSummary {
         system: [],
         retries: 3,
       })
-      const result = await stream.text
       log.info("title", { title: result })
       userMsg.summary.title = result
       await Session.updateMessage(userMsg)

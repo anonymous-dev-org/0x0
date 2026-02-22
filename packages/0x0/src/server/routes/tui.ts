@@ -182,30 +182,6 @@ export const TuiRoutes = lazy(() =>
       },
     )
     .post(
-      "/open-themes",
-      describeRoute({
-        summary: "Open themes dialog",
-        description: "Open the theme dialog",
-        operationId: "tui.openThemes",
-        responses: {
-          200: {
-            description: "Theme dialog opened successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "theme.switch",
-        })
-        return c.json(true)
-      },
-    )
-    .post(
       "/open-models",
       describeRoute({
         summary: "Open models dialog",

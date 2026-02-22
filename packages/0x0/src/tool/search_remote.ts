@@ -3,7 +3,7 @@ import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./search_remote.txt"
 import { abortAfterAny } from "../util/abort"
-import { Flag } from "@/flag/flag"
+import { Config } from "@/config/config"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 30 * 1000
@@ -207,9 +207,10 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         }
       }
 
-      if (ctx.extra?.model?.providerID !== "zeroxzero" && !Flag.ZEROXZERO_ENABLE_EXA) {
+      const config = await Config.get()
+      if (ctx.extra?.model?.providerID !== "zeroxzero" && !config.experimental?.exa) {
         throw new Error(
-          "Remote web/code search is unavailable for the current provider unless ZEROXZERO_ENABLE_EXA is set.",
+          "Remote web/code search is unavailable for the current provider unless experimental.exa is enabled in config.yaml",
         )
       }
 

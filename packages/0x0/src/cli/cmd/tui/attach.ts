@@ -1,5 +1,6 @@
 import { cmd } from "../cmd"
 import { tui } from "./app"
+import { Config } from "@/config/config"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -23,7 +24,7 @@ export const AttachCommand = cmd({
       .option("password", {
         alias: ["p"],
         type: "string",
-        describe: "basic auth password (defaults to ZEROXZERO_SERVER_PASSWORD)",
+        describe: "basic auth password (defaults to server.password in config.yaml)",
       }),
   handler: async (args) => {
     const directory = (() => {
@@ -36,10 +37,12 @@ export const AttachCommand = cmd({
         return args.dir
       }
     })()
-    const headers = (() => {
-      const password = args.password ?? process.env.ZEROXZERO_SERVER_PASSWORD
+    const headers = await (async () => {
+      const cfg = await Config.getGlobal()
+      const password = args.password ?? cfg.server?.password
       if (!password) return undefined
-      const auth = `Basic ${Buffer.from(`zeroxzero:${password}`).toString("base64")}`
+      const username = cfg.server?.username ?? "zeroxzero"
+      const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`
       return { Authorization: auth }
     })()
     await tui({

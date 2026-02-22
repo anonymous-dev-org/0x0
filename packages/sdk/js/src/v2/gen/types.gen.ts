@@ -951,10 +951,6 @@ export type KeybindsConfig = {
    */
   editor_open?: string
   /**
-   * List available themes
-   */
-  theme_list?: string
-  /**
    * Toggle sidebar
    */
   sidebar_toggle?: string
@@ -1349,13 +1345,21 @@ export type ServerConfig = {
    * Additional domains to allow for CORS
    */
   cors?: Array<string>
+  /**
+   * Password for server authentication
+   */
+  password?: string
+  /**
+   * Username for server authentication
+   */
+  username?: string
 }
 
 export type AgentConfig = {
   /**
    * Display name for this agent
    */
-  name: string
+  name?: string
   model?: string
   /**
    * Default model variant for this agent (applies only when using the agent's configured model).
@@ -1379,7 +1383,7 @@ export type AgentConfig = {
   /**
    * Hex color code
    */
-  color: string
+  color?: string
   /**
    * Maximum number of agentic iterations before forcing text-only response
    */
@@ -1387,15 +1391,56 @@ export type AgentConfig = {
   /**
    * Allowlist of tool IDs that this agent may use
    */
-  tools_allowed: Array<string>
+  tools_allowed?: Array<string>
   /**
    * Model-native reasoning effort value to pass as providerOptions.reasoningEffort
    */
-  thinking_effort: string
+  thinking_effort?: string
   /**
    * Agent-specific knowledge snippets
    */
   knowledge_base?: Array<string>
+  /**
+   * Agent mode
+   */
+  mode?: "primary" | "all"
+  /**
+   * Per-agent permission overrides
+   */
+  permission?: {
+    [key: string]: unknown
+  }
+  /**
+   * Legacy tools config (use permission instead)
+   */
+  tools?: {
+    [key: string]: boolean
+  }
+  /**
+   * Alias for steps
+   */
+  maxSteps?: number
+  [key: string]:
+    | unknown
+    | string
+    | number
+    | boolean
+    | {
+        [key: string]: unknown
+      }
+    | string
+    | number
+    | Array<string>
+    | Array<string>
+    | "primary"
+    | "all"
+    | {
+        [key: string]: unknown
+      }
+    | {
+        [key: string]: boolean
+      }
+    | undefined
 }
 
 export type ProviderConfig = {
@@ -1593,10 +1638,6 @@ export type Config = {
    * JSON schema reference for configuration validation
    */
   $schema?: string
-  /**
-   * Theme name to use for the interface
-   */
-  theme?: string
   keybinds?: KeybindsConfig
   logLevel?: LogLevel
   /**
@@ -1756,6 +1797,34 @@ export type Config = {
             }
       }
   /**
+   * Disable automatic LSP server downloads
+   */
+  disable_lsp_download?: boolean
+  /**
+   * Disable loading default plugins
+   */
+  disable_default_plugins?: boolean
+  /**
+   * Disable file modification time checks
+   */
+  disable_filetime_check?: boolean
+  /**
+   * Path to git bash executable
+   */
+  git_bash_path?: string
+  /**
+   * Custom URL for fetching model definitions
+   */
+  models_url?: string
+  /**
+   * Local file path for model definitions
+   */
+  models_path?: string
+  /**
+   * Disable fetching models from remote
+   */
+  disable_models_fetch?: boolean
+  /**
    * Additional instruction files or patterns to include
    */
   instructions?: Array<string>
@@ -1811,6 +1880,46 @@ export type Config = {
      * Timeout in milliseconds for model context protocol (MCP) requests
      */
     mcp_timeout?: number
+    /**
+     * Disable the file watcher
+     */
+    disable_filewatcher?: boolean
+    /**
+     * Enable icon discovery for projects
+     */
+    icon_discovery?: boolean
+    /**
+     * Enable Exa search integration
+     */
+    exa?: boolean
+    /**
+     * Default timeout in milliseconds for bash tool commands
+     */
+    bash_default_timeout_ms?: number
+    /**
+     * Maximum output tokens for LLM responses
+     */
+    output_token_max?: number
+    /**
+     * Enable oxfmt formatter
+     */
+    oxfmt?: boolean
+    /**
+     * Enable ty LSP server
+     */
+    lsp_ty?: boolean
+    /**
+     * Enable LSP diagnostics tool
+     */
+    lsp_tool?: boolean
+    /**
+     * Enable experimental markdown rendering
+     */
+    markdown?: boolean
+    /**
+     * Enable experimental model variants
+     */
+    enable_experimental_models?: boolean
   }
 }
 
@@ -4546,24 +4655,6 @@ export type TuiOpenSessionsResponses = {
 }
 
 export type TuiOpenSessionsResponse = TuiOpenSessionsResponses[keyof TuiOpenSessionsResponses]
-
-export type TuiOpenThemesData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/open-themes"
-}
-
-export type TuiOpenThemesResponses = {
-  /**
-   * Theme dialog opened successfully
-   */
-  200: boolean
-}
-
-export type TuiOpenThemesResponse = TuiOpenThemesResponses[keyof TuiOpenThemesResponses]
 
 export type TuiOpenModelsData = {
   body?: never

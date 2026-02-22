@@ -9,7 +9,6 @@ import z from "zod"
 import { Config } from "../config/config"
 import { spawn } from "child_process"
 import { Instance } from "../project/instance"
-import { Flag } from "@/flag/flag"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -61,21 +60,6 @@ export namespace LSP {
     })
   export type DocumentSymbol = z.infer<typeof DocumentSymbol>
 
-  const filterExperimentalServers = (servers: Record<string, LSPServer.Info>) => {
-    if (Flag.ZEROXZERO_EXPERIMENTAL_LSP_TY) {
-      // If experimental flag is enabled, disable pyright
-      if (servers["pyright"]) {
-        log.info("LSP server pyright is disabled because ZEROXZERO_EXPERIMENTAL_LSP_TY is enabled")
-        delete servers["pyright"]
-      }
-    } else {
-      // If experimental flag is disabled, disable ty
-      if (servers["ty"]) {
-        delete servers["ty"]
-      }
-    }
-  }
-
   const state = Instance.state(
     async () => {
       const clients: LSPClient.Info[] = []
@@ -96,7 +80,14 @@ export namespace LSP {
         servers[server.id] = server
       }
 
-      filterExperimentalServers(servers)
+      if (cfg.experimental?.lsp_ty) {
+        if (servers["pyright"]) {
+          log.info("LSP server pyright is disabled because experimental.lsp_ty is enabled in config")
+          delete servers["pyright"]
+        }
+      } else {
+        delete servers["ty"]
+      }
 
       for (const [name, item] of Object.entries(cfg.lsp ?? {})) {
         const existing = servers[name]

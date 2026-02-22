@@ -1,8 +1,8 @@
-import { TextareaRenderable, TextAttributes } from "@opentui/core"
+import { TextareaRenderable } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
-import { createSignal, onMount, Show, type JSX } from "solid-js"
+import { onMount, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 
 export type DialogExportOptionsProps = {
@@ -22,10 +22,8 @@ export type DialogExportOptionsProps = {
 }
 
 export function DialogExportOptions(props: DialogExportOptionsProps) {
-  const dialog = useDialog()
   const { theme } = useTheme()
   let textarea: TextareaRenderable
-  const [hover, setHover] = createSignal(false)
   const [store, setStore] = createStore({
     thinking: props.defaultThinking,
     toolDetails: props.defaultToolDetails,
@@ -67,7 +65,6 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
   })
 
   onMount(() => {
-    dialog.setSize("medium")
     setTimeout(() => {
       if (!textarea || textarea.isDestroyed) return
       textarea.focus()
@@ -77,21 +74,6 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          Export Options
-        </text>
-        <box
-          paddingLeft={1}
-          paddingRight={1}
-          backgroundColor={hover() ? theme.primary : undefined}
-          onMouseOver={() => setHover(true)}
-          onMouseOut={() => setHover(false)}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={hover() ? theme.selectedListItemText : theme.textMuted}>esc</text>
-        </box>
-      </box>
       <box gap={1}>
         <box>
           <text fg={theme.text}>Filename:</text>
@@ -197,8 +179,10 @@ DialogExportOptions.show = (
     assistantMetadata: boolean
     openWithoutSaving: boolean
   } | null>((resolve) => {
-    dialog.replace(
-      () => (
+    dialog.show({
+      title: "Export Options",
+      size: "medium",
+      body: () => (
         <DialogExportOptions
           defaultFilename={defaultFilename}
           defaultThinking={defaultThinking}
@@ -209,7 +193,7 @@ DialogExportOptions.show = (
           onCancel={() => resolve(null)}
         />
       ),
-      () => resolve(null),
-    )
+      onClose: () => resolve(null),
+    })
   })
 }

@@ -6,9 +6,7 @@ import { Instance } from "../project/instance"
 import { NamedError } from "@0x0-ai/util/error"
 import { ConfigMarkdown } from "../config/markdown"
 import { Log } from "../util/log"
-import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
-import { Flag } from "@/flag/flag"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
@@ -40,11 +38,6 @@ export namespace Skill {
       actual: z.string(),
     }),
   )
-
-  // External skill directories to search for (project-level and global)
-  // These follow the directory layout used by Claude Code and other agents.
-  const EXTERNAL_DIRS = [".claude", ".agents"]
-  const EXTERNAL_SKILL_GLOB = new Bun.Glob("skills/**/SKILL.md")
 
   const ZEROXZERO_SKILL_GLOB = new Bun.Glob("{skill,skills}/**/SKILL.md")
   const SKILL_GLOB = new Bun.Glob("**/SKILL.md")
@@ -84,40 +77,6 @@ export namespace Skill {
         description: parsed.data.description,
         location: match,
         content: md.content,
-      }
-    }
-
-    const scanExternal = async (root: string, scope: "global" | "project") => {
-      return Array.fromAsync(
-        EXTERNAL_SKILL_GLOB.scan({
-          cwd: root,
-          absolute: true,
-          onlyFiles: true,
-          followSymlinks: true,
-          dot: true,
-        }),
-      )
-        .then((matches) => Promise.all(matches.map(addSkill)))
-        .catch((error) => {
-          log.error(`failed to scan ${scope} skills`, { dir: root, error })
-        })
-    }
-
-    // Scan external skill directories (.claude/skills/, .agents/skills/, etc.)
-    // Load global (home) first, then project-level (so project-level overwrites)
-    if (!Flag.ZEROXZERO_DISABLE_EXTERNAL_SKILLS) {
-      for (const dir of EXTERNAL_DIRS) {
-        const root = path.join(Global.Path.home, dir)
-        if (!(await Filesystem.isDir(root))) continue
-        await scanExternal(root, "global")
-      }
-
-      for await (const root of Filesystem.up({
-        targets: EXTERNAL_DIRS,
-        start: Instance.directory,
-        stop: Instance.worktree,
-      })) {
-        await scanExternal(root, "project")
       }
     }
 

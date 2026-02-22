@@ -1,61 +1,70 @@
-import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
-import {
-  streamText,
-  wrapLanguageModel,
-  type ModelMessage,
-  type StreamTextResult,
-  type Tool,
-  type ToolSet,
-  tool,
-  jsonSchema,
-} from "ai"
-import { clone, mergeDeep, pipe } from "remeda"
-import { ProviderTransform } from "@/provider/transform"
-import { Config } from "@/config/config"
-import { Instance } from "@/project/instance"
+import type { ModelMessage } from "ai"
 import type { Agent } from "@/agent/agent"
 import type { MessageV2 } from "./message-v2"
-import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
-import { Flag } from "@/flag/flag"
-import { PermissionNext } from "@/permission/next"
-import { Auth } from "@/auth"
+import { claudeStream } from "@/provider/sdk/claude-code"
+import { codexStream } from "@/provider/sdk/codex-cli"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
 
-  export const OUTPUT_TOKEN_MAX = Flag.ZEROXZERO_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Event types emitted by CLI bridges
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  export type CliEvent =
+    | { type: "text-delta"; text: string }
+    | { type: "reasoning-delta"; id: string; text: string }
+    | { type: "tool-start"; id: string; tool: string; command?: string }
+    | { type: "tool-input-delta"; id: string; partial: string }
+    | { type: "tool-call"; id: string; tool: string; input: Record<string, any> }
+    | { type: "tool-end"; id: string; output: string; exitCode?: number }
+    | { type: "file-change"; id: string; files: Array<{ path: string; kind: string }> }
+    | { type: "step-start" }
+    | { type: "step-end" }
+    | { type: "done"; cliSessionId?: string; codexThreadId?: string }
+    | { type: "error"; error: Error }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // StreamInput — kept compatible with existing callers in prompt.ts
+  // (the CLI bridges only use the fields they need)
+  // ─────────────────────────────────────────────────────────────────────────────
 
   export type StreamInput = {
     user: MessageV2.User
     sessionID: string
     model: Provider.Model
     agent: Agent.Info
-    permission?: PermissionNext.Ruleset
     system: string[]
     abort: AbortSignal
     messages: ModelMessage[]
     small?: boolean
-    tools: Record<string, Tool>
+    tools?: Record<string, any>
     retries?: number
+    /** CLI session ID for resuming a Claude Code session */
+    cliSessionId?: string
+    /** Codex thread ID for resuming a Codex session */
+    codexThreadId?: string
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  // ─────────────────────────────────────────────────────────────────────────────
+  // System prompt composition (unchanged from before)
+  // ─────────────────────────────────────────────────────────────────────────────
 
   export async function composeSystemParts(input: {
     model: Provider.Model
     agent: Agent.Info
     system: string[]
     user: MessageV2.User
-  }) {
+  }): Promise<string[]> {
     const skill = input.system.find((item) => !!item?.trim())
     const agentPrompt = [input.agent.prompt, transparencySection(input.agent)].filter(Boolean).join("\n\n")
     return SystemPrompt.compose({ agent: agentPrompt, skill })
   }
 
-  export function transparencySection(agent: Agent.Info) {
+  export function transparencySection(agent: Agent.Info): string {
     const toolsAllowed = agent.toolsAllowed ?? []
     const knowledgeBase = agent.knowledgeBase ?? []
     const tools = toolsAllowed.length > 0 ? toolsAllowed.join(", ") : "(none)"
@@ -70,235 +79,161 @@ export namespace LLM {
     ].join("\n")
   }
 
-  export async function stream(input: StreamInput) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Extract the latest user prompt text from the messages array
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function extractUserPrompt(messages: ModelMessage[]): string {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (!msg || msg.role !== "user") continue
+      if (typeof msg.content === "string") return msg.content
+      if (Array.isArray(msg.content)) {
+        return msg.content
+          .filter((c: any) => c.type === "text")
+          .map((c: any) => c.text ?? "")
+          .join("\n")
+      }
+    }
+    return ""
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Main stream function — routes to the appropriate CLI bridge
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  export async function* stream(input: StreamInput): AsyncGenerator<CliEvent> {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
       .tag("modelID", input.model.id)
       .tag("sessionID", input.sessionID)
-      .tag("small", (input.small ?? false).toString())
-      .tag("agent", input.agent.name)
-    l.info("stream", {
-      modelID: input.model.id,
-      providerID: input.model.providerID,
-    })
-    const [language, cfg, provider, auth] = await Promise.all([
-      Provider.getLanguage(input.model),
-      Config.get(),
-      Provider.getProvider(input.model.providerID),
-      Auth.get(input.model.providerID),
-    ])
-    const isCodex = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = await composeSystemParts(input)
+    l.info("stream", { modelID: input.model.id, providerID: input.model.providerID })
 
-    const header = system[0]
-    const original = clone(system)
-    await Plugin.trigger(
-      "experimental.chat.system.transform",
-      { sessionID: input.sessionID, model: input.model },
-      { system },
-    )
-    if (system.length === 0) {
-      system.push(...original)
-    }
-    // rejoin to maintain 2-part structure for caching if header unchanged
-    if (system.length > 2 && system[0] === header) {
-      const rest = system.slice(1)
-      system.length = 0
-      system.push(header, rest.join("\n"))
+    const systemParts = await composeSystemParts(input)
+    const systemPrompt = systemParts.filter(Boolean).join("\n\n")
+    const userPrompt = extractUserPrompt(input.messages)
+
+    if (!userPrompt.trim()) {
+      l.warn("empty user prompt, skipping stream")
+      return
     }
 
-    const variant =
-      !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
-    const base = input.small
-      ? ProviderTransform.smallOptions(input.model)
-      : ProviderTransform.options({
-          model: input.model,
-          sessionID: input.sessionID,
-          providerOptions: provider.options,
-        })
-    const options: Record<string, any> = pipe(
-      base,
-      mergeDeep(input.model.options),
-      mergeDeep(input.agent.options),
-      mergeDeep(variant),
-    )
-    if (isCodex) {
-      options.instructions = system.join("\n")
-      system.length = 0
-    }
+    const providerID = input.model.providerID
 
-    const params = await Plugin.trigger(
-      "chat.params",
-      {
-        sessionID: input.sessionID,
-        agent: input.agent,
-        model: input.model,
-        provider,
-        message: input.user,
-      },
-      {
-        temperature: input.model.capabilities.temperature
-          ? (input.agent.temperature ?? ProviderTransform.temperature(input.model))
-          : undefined,
-        topP: input.agent.topP ?? ProviderTransform.topP(input.model),
-        topK: ProviderTransform.topK(input.model),
-        options,
-      },
-    )
-    if (input.agent.thinkingEffort) {
-      params.options = {
-        ...params.options,
-        reasoningEffort: input.agent.thinkingEffort,
+    if (providerID === "claude-code") {
+      yield* claudeCodeBridge(input, userPrompt, systemPrompt)
+    } else if (providerID === "codex") {
+      yield* codexBridge(input, userPrompt, systemPrompt)
+    } else {
+      yield {
+        type: "error",
+        error: new Error(`Unknown CLI provider: ${providerID}. Expected "claude-code" or "codex".`),
       }
     }
-
-    const { headers } = await Plugin.trigger(
-      "chat.headers",
-      {
-        sessionID: input.sessionID,
-        agent: input.agent,
-        model: input.model,
-        provider,
-        message: input.user,
-      },
-      {
-        headers: {},
-      },
-    )
-
-    const maxOutputTokens =
-      isCodex || provider.id.includes("github-copilot")
-        ? undefined
-        : ProviderTransform.maxOutputTokens(
-            input.model.api.npm,
-            params.options,
-            input.model.limit.output,
-            OUTPUT_TOKEN_MAX,
-          )
-
-    const tools = input.tools
-    if (input.permission) {
-      for (const name of PermissionNext.disabled(Object.keys(tools), input.permission)) {
-        delete tools[name]
-      }
-    }
-
-    // LiteLLM and some Anthropic proxies require the tools parameter to be present
-    // when message history contains tool calls, even if no tools are being used.
-    // Add a dummy tool that is never called to satisfy this validation.
-    // This is enabled for:
-    // 1. Providers with "litellm" in their ID or API ID (auto-detected)
-    // 2. Providers with explicit "litellmProxy: true" option (opt-in for custom gateways)
-    const isLiteLLMProxy =
-      provider.options?.["litellmProxy"] === true ||
-      input.model.providerID.toLowerCase().includes("litellm") ||
-      input.model.api.id.toLowerCase().includes("litellm")
-
-    if (isLiteLLMProxy && Object.keys(tools).length === 0 && hasToolCalls(input.messages)) {
-      tools["_noop"] = tool({
-        description:
-          "Placeholder for LiteLLM/Anthropic proxy compatibility - required when message history contains tool calls but no active tools are needed",
-        inputSchema: jsonSchema({ type: "object", properties: {} }),
-        execute: async () => ({ output: "", title: "", metadata: {} }),
-      })
-    }
-
-    return streamText({
-      onError(error) {
-        l.error("stream error", {
-          error,
-        })
-      },
-      async experimental_repairToolCall(failed) {
-        const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
-          l.info("repairing tool call", {
-            tool: failed.toolCall.toolName,
-            repaired: lower,
-          })
-          return {
-            ...failed.toolCall,
-            toolName: lower,
-          }
-        }
-        return {
-          ...failed.toolCall,
-          input: JSON.stringify({
-            tool: failed.toolCall.toolName,
-            error: failed.error.message,
-          }),
-          toolName: "invalid",
-        }
-      },
-      temperature: params.temperature,
-      topP: params.topP,
-      topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
-      tools,
-      maxOutputTokens,
-      abortSignal: input.abort,
-      headers: {
-        ...(input.model.providerID.startsWith("zeroxzero")
-          ? {
-              "x-zeroxzero-project": Instance.project.id,
-              "x-zeroxzero-session": input.sessionID,
-              "x-zeroxzero-request": input.user.id,
-              "x-zeroxzero-client": Flag.ZEROXZERO_CLIENT,
-            }
-          : input.model.providerID !== "anthropic"
-            ? {
-                "User-Agent": `zeroxzero/${Installation.VERSION}`,
-              }
-            : undefined),
-        ...input.model.headers,
-        ...headers,
-      },
-      maxRetries: input.retries ?? 0,
-      messages: [
-        ...system.map(
-          (x): ModelMessage => ({
-            role: "system",
-            content: x,
-          }),
-        ),
-        ...input.messages,
-      ],
-      model: wrapLanguageModel({
-        model: language,
-        middleware: [
-          {
-            async transformParams(args) {
-              if (args.type === "stream") {
-                // @ts-expect-error
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
-              }
-              return args.params
-            },
-          },
-        ],
-      }),
-      experimental_telemetry: {
-        isEnabled: cfg.experimental?.openTelemetry,
-        metadata: {
-          userId: cfg.username ?? "unknown",
-          sessionId: input.sessionID,
-        },
-      },
-    })
   }
 
-  // Check if messages contain any tool-call content
-  // Used to determine if a dummy tool should be added for LiteLLM proxy compatibility
-  export function hasToolCalls(messages: ModelMessage[]): boolean {
-    for (const msg of messages) {
-      if (!Array.isArray(msg.content)) continue
-      for (const part of msg.content) {
-        if (part.type === "tool-call" || part.type === "tool-result") return true
+  async function* claudeCodeBridge(
+    input: StreamInput,
+    userPrompt: string,
+    systemPrompt: string,
+  ): AsyncGenerator<CliEvent> {
+    for await (const event of claudeStream({
+      modelId: input.model.id,
+      prompt: userPrompt,
+      systemPrompt: systemPrompt || undefined,
+      cliSessionId: input.cliSessionId,
+      abort: input.abort,
+    })) {
+      switch (event.type) {
+        case "text-delta":
+          yield { type: "text-delta", text: event.text }
+          break
+        case "reasoning-delta":
+          yield { type: "reasoning-delta", id: event.id, text: event.text }
+          break
+        case "tool-start":
+          yield { type: "tool-start", id: event.id, tool: event.name }
+          break
+        case "tool-input-delta":
+          yield { type: "tool-input-delta", id: event.id, partial: event.partial }
+          break
+        case "tool-end":
+          yield { type: "tool-end", id: event.id, output: "" }
+          break
+        case "step-start":
+          yield { type: "step-start" }
+          break
+        case "step-end":
+          yield { type: "step-end" }
+          break
+        case "done":
+          yield { type: "done", cliSessionId: event.sessionId }
+          break
+        case "error":
+          yield { type: "error", error: new Error(event.message) }
+          break
       }
     }
-    return false
+  }
+
+  async function* codexBridge(
+    input: StreamInput,
+    userPrompt: string,
+    systemPrompt: string,
+  ): AsyncGenerator<CliEvent> {
+    for await (const event of codexStream({
+      modelId: input.model.id,
+      prompt: userPrompt,
+      systemPrompt: systemPrompt || undefined,
+      threadId: input.codexThreadId,
+      abort: input.abort,
+    })) {
+      switch (event.type) {
+        case "text-delta":
+          yield { type: "text-delta", text: event.text }
+          break
+        case "reasoning-delta":
+          yield { type: "reasoning-delta", id: event.id, text: event.text }
+          break
+        case "tool-start":
+          yield { type: "tool-start", id: event.id, tool: event.tool, command: event.command }
+          break
+        case "tool-output":
+          yield { type: "tool-input-delta", id: event.id, partial: event.output }
+          break
+        case "tool-end":
+          yield { type: "tool-end", id: event.id, output: event.output, exitCode: event.exitCode }
+          break
+        case "file-change":
+          yield { type: "file-change", id: event.id, files: event.files }
+          break
+        case "step-start":
+          yield { type: "step-start" }
+          break
+        case "step-end":
+          yield { type: "step-end" }
+          break
+        case "done":
+          yield { type: "done", codexThreadId: event.threadId }
+          break
+        case "error":
+          yield { type: "error", error: new Error(event.message) }
+          break
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Convenience: collect all text from a stream (for title generation etc.)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  export async function getText(input: StreamInput): Promise<string> {
+    let text = ""
+    for await (const event of stream(input)) {
+      if (event.type === "text-delta") text += event.text
+    }
+    return text
   }
 }

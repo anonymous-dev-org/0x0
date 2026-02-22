@@ -16,7 +16,7 @@ export function useAppEventHandlers(props: {
   toast: ReturnType<typeof useToast>
 }) {
   const notificationsEnabled = () => {
-    const tui = props.sync.data.config.tui as { terminal_notifications?: boolean } | undefined
+    const tui = props.sync.data.config.tui
     return tui?.terminal_notifications ?? true
   }
 

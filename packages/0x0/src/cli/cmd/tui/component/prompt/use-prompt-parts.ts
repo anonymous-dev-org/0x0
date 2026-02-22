@@ -4,9 +4,9 @@ import type { PromptInfo } from "./history"
 export function usePromptParts(props: {
   input: () => TextareaRenderable
   promptPartTypeId: () => number
-  fileStyleId: number
-  agentStyleId: number
-  pasteStyleId: number
+  fileStyleId: () => number
+  agentStyleId: () => number
+  pasteStyleId: () => number
   getParts: () => PromptInfo["parts"]
   getMap: () => Map<number, number>
   setParts: (parts: PromptInfo["parts"]) => void
@@ -27,17 +27,17 @@ export function usePromptParts(props: {
         start = part.source.text.start
         end = part.source.text.end
         virtualText = part.source.text.value
-        styleId = props.fileStyleId
+        styleId = props.fileStyleId()
       } else if (part.type === "agent" && part.source) {
         start = part.source.start
         end = part.source.end
         virtualText = part.source.value
-        styleId = props.agentStyleId
+        styleId = props.agentStyleId()
       } else if (part.type === "text" && part.source?.text) {
         start = part.source.text.start
         end = part.source.text.end
         virtualText = part.source.text.value
-        styleId = props.pasteStyleId
+        styleId = props.pasteStyleId()
       }
 
       if (!virtualText) continue

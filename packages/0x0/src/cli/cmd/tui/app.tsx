@@ -3,11 +3,10 @@ import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { Terminal } from "@tui/util/terminal"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { createEffect, untrack, ErrorBoundary, createSignal, Show, on, onMount } from "solid-js"
+import { createEffect, ErrorBoundary, createSignal, Show, onMount } from "solid-js"
 import { Installation } from "@/installation"
-import { Flag } from "@/flag/flag"
-import { DialogProvider, useDialog } from "@tui/ui/dialog"
-import { DialogProvider as DialogProviderList } from "@tui/component/dialog-provider"
+import { DialogMount, DialogProvider, useDialog } from "@tui/ui/dialog"
+import { NoCLIOverlay } from "@tui/component/no-cli-overlay"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
@@ -20,7 +19,6 @@ import { Prompt } from "./component/prompt"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
-import { DialogAlert } from "./ui/dialog-alert"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
@@ -35,10 +33,6 @@ import { Log } from "@/util/log"
 
 import type { EventSource } from "./context/sdk"
 
-const startupClock = {
-  started: 0,
-}
-
 export function tui(input: {
   url: string
   args: Args
@@ -50,24 +44,10 @@ export function tui(input: {
 }) {
   // promise to prevent immediate exit
   return new Promise<void>((resolve) => {
-    const started = performance.now()
-    startupClock.started = started
-    const timing = (stage: string, extra?: Record<string, unknown>) => {
-      Log.Default.debug("startup", {
-        stage,
-        elapsed_ms: Math.round(performance.now() - started),
-        ...extra,
-      })
-    }
-
-    timing("tui.start")
-
     const onExit = async () => {
       await input.onExit?.()
       resolve()
     }
-
-    timing("tui.render.invoked")
 
     render(
       () => {
@@ -133,8 +113,6 @@ export function tui(input: {
         },
       },
     )
-
-    timing("tui.render.ready")
   })
 }
 
@@ -149,18 +127,10 @@ function App() {
   const command = useCommandDialog()
   const sdk = useSDK()
   const toast = useToast()
-  const { theme, mode, setMode, defaultTintStrength } = useTheme()
+  const { theme, mode, setMode } = useTheme()
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
-
-  onMount(() => {
-    Log.Default.debug("startup", {
-      stage: "tui.first.frame",
-      elapsed_ms: Math.round(performance.now() - startupClock.started),
-    })
-  })
-
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
@@ -172,60 +142,8 @@ function App() {
   const onboardingDone = () => kv.get("onboarding_v1_done", false)
   let terminalModeResolved = false
 
-  const showOnboarding = () => {
-    dialog.replace(() => (
-      <DialogOnboarding
-        onKeepDefaults={async () => {
-          await sync.bootstrap()
-          kv.set("onboarding_v1_done", true)
-          dialog.clear()
-        }}
-        onUseCustom={async () => {
-          const current = await sdk.client.global.config.get({ throwOnError: true })
-          const config = JSON.parse(JSON.stringify(current.data ?? {}))
-          config.agent = config.agent ?? {}
-
-          for (const name of ["builder", "planner"]) {
-            const current = config.agent[name] ?? {}
-            config.agent[name] = {
-              ...current,
-              disable: true,
-            }
-          }
-
-          const custom = sync.data.agent.find((item) => !item.native && item.hidden !== true)?.name ?? "my_agent"
-          config.agent[custom] = {
-            ...(config.agent[custom] ?? {}),
-            name: config.agent[custom]?.name ?? "My Agent",
-            color: config.agent[custom]?.color ?? "#22C55E",
-            tools_allowed: config.agent[custom]?.tools_allowed ?? ["bash", "read", "search", "apply_patch", "task"],
-            thinking_effort: config.agent[custom]?.thinking_effort ?? "medium",
-            hidden: false,
-            description: config.agent[custom]?.description ?? "My custom agent",
-          }
-
-          if (["builder", "planner"].includes(config.default_agent)) {
-            config.default_agent = custom
-          }
-
-          await sdk.client.global.config.update({ config }, { throwOnError: true })
-          await sync.bootstrap()
-          kv.set("onboarding_v1_done", true)
-          toast.show({
-            message: `Custom agent setup enabled (${custom})`,
-            variant: "success",
-            duration: 3000,
-          })
-          dialog.clear()
-        }}
-      />
-    ))
-  }
-
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (!terminalTitleEnabled() || Flag.ZEROXZERO_DISABLE_TERMINAL_TITLE) return
-
     if (!route.data.sessionID) {
       renderer.setTerminalTitle("Terminal Agent")
       return
@@ -245,51 +163,15 @@ function App() {
   const args = useArgs()
   useStartupNavigation({ args, local, route, sdk, sync, toast })
 
-  createEffect(
-    on(
-      () => sync.status === "complete" && sync.data.provider.length === 0 && onboardingDone(),
-      (isEmpty, wasEmpty) => {
-        // only trigger when we transition into an empty-provider state
-        if (!isEmpty || wasEmpty) return
-        dialog.replace(() => <DialogProviderList />)
-      },
-    ),
-  )
-
-  createEffect(
-    on(
-      () => sync.ready && kv.ready && !onboardingDone(),
-      (show, shown) => {
-        if (!show || shown) return
-        showOnboarding()
-      },
-    ),
-  )
-
   createEffect(() => {
     if (terminalModeResolved) return
     if (!kv.ready) return
     terminalModeResolved = true
     if (kv.store["theme_mode"] !== undefined) return
 
-    const started = performance.now()
-    Terminal.getTerminalBackgroundColor({ timeoutMs: 100 })
-      .then((detected) => {
-        Log.Default.debug("startup", {
-          stage: "terminal.bg.detected",
-          mode: detected,
-          duration_ms: Math.round(performance.now() - started),
-        })
-        setMode(detected)
-      })
-      .catch(() => {
-        Log.Default.debug("startup", {
-          stage: "terminal.bg.detected",
-          mode: "dark",
-          duration_ms: Math.round(performance.now() - started),
-          fallback: true,
-        })
-      })
+    Terminal.getTerminalBackgroundColor({ timeoutMs: 100 }).then((detected) => {
+      setMode(detected)
+    })
   })
 
   const connected = useConnected()
@@ -303,7 +185,6 @@ function App() {
         kv,
         local,
         mode,
-        defaultTintStrength,
         promptRef,
         renderer,
         route,
@@ -313,25 +194,9 @@ function App() {
         sync,
         terminalTitleEnabled,
         toast,
-        showOnboarding,
       })
     })
   })
-
-  createEffect(() => {
-    const currentModel = local.model.current()
-    if (!currentModel) return
-    if (currentModel.providerID === "openrouter" && !kv.get("openrouter_warning", false)) {
-      untrack(() => {
-        DialogAlert.show(
-          dialog,
-          "Warning",
-          "While openrouter is a convenient way to access LLMs your request will often be routed to subpar providers that do not work well in our testing.\n\nFor reliable access to models check out Terminal Agent Zen\nhttps://zeroxzero.ai/zen",
-        ).then(() => kv.set("openrouter_warning", true))
-      })
-    }
-  })
-
   useAppEventHandlers({ command, route, sdk, sync, toast })
 
   return (
@@ -340,10 +205,6 @@ function App() {
       height={dimensions().height}
       backgroundColor={theme.background}
       onMouseUp={async () => {
-        if (Flag.ZEROXZERO_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) {
-          renderer.clearSelection()
-          return
-        }
         const text = renderer.getSelection()?.getSelectedText()
         if (text && text.length > 0) {
           await Clipboard.copyWithToast(text, toast)
@@ -369,6 +230,16 @@ function App() {
         }
       >
         <Session />
+      </Show>
+
+      {/* Onboarding: only show when at least one CLI is installed */}
+      <Show when={sync.ready && kv.ready && !onboardingDone() && sync.data.provider_next.connected.length > 0}>
+        <DialogMount title="Welcome to 0x0" body={() => <DialogOnboarding />} />
+      </Show>
+
+      {/* Blocking overlay when no CLI tool (claude or codex) is detected */}
+      <Show when={sync.ready && sync.data.provider_next.connected.length === 0}>
+        <NoCLIOverlay onRetry={() => sync.bootstrap()} />
       </Show>
     </box>
   )
@@ -437,7 +308,9 @@ function ErrorComponent(props: {
             Copy issue URL (exception info pre-filled)
           </text>
         </box>
-        {copied() && <text fg={colors.muted}>Successfully copied</text>}
+        <Show when={copied()}>
+          <text fg={colors.muted}>Successfully copied</text>
+        </Show>
       </box>
       <box flexDirection="row" gap={2} alignItems="center">
         <text fg={colors.text}>A fatal error occurred!</text>

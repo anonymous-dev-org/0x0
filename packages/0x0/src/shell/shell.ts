@@ -1,4 +1,4 @@
-import { Flag } from "@/flag/flag"
+import { Config } from "@/config/config"
 import { lazy } from "@/util/lazy"
 import path from "path"
 import { spawn, type ChildProcess } from "child_process"
@@ -35,9 +35,10 @@ export namespace Shell {
   }
   const BLACKLIST = new Set(["fish", "nu"])
 
-  function fallback() {
+  async function fallback() {
     if (process.platform === "win32") {
-      if (Flag.ZEROXZERO_GIT_BASH_PATH) return Flag.ZEROXZERO_GIT_BASH_PATH
+      const config = await Config.get()
+      if (config.git_bash_path) return config.git_bash_path
       const git = Bun.which("git")
       if (git) {
         // git.exe is typically at: C:\Program Files\Git\cmd\git.exe
@@ -53,13 +54,13 @@ export namespace Shell {
     return "/bin/sh"
   }
 
-  export const preferred = lazy(() => {
+  export const preferred = lazy(async () => {
     const s = process.env.SHELL
     if (s) return s
     return fallback()
   })
 
-  export const acceptable = lazy(() => {
+  export const acceptable = lazy(async () => {
     const s = process.env.SHELL
     if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
     return fallback()

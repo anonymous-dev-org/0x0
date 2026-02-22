@@ -10,8 +10,7 @@ import * as fuzzysort from "fuzzysort"
 
 export function useConnected() {
   const sync = useSync()
-  return () =>
-    sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0))
+  return () => sync.data.provider_next.connected.length > 0
 }
 
 export function DialogModel(props: { providerID?: string }) {
@@ -60,8 +59,6 @@ export function DialogModel(props: { providerID?: string }) {
               title: model.name ?? item.modelID,
               description: provider.name,
               category: "Favorites",
-              disabled: provider.id === "zeroxzero" && model.id.includes("-nano"),
-              footer: model.cost?.input === 0 && provider.id === "zeroxzero" ? "Free" : undefined,
               onSelect: () => {
                 dialog.clear()
                 local.model.set(
@@ -93,8 +90,6 @@ export function DialogModel(props: { providerID?: string }) {
               title: model.name ?? item.modelID,
               description: provider.name,
               category: "Recent",
-              disabled: provider.id === "zeroxzero" && model.id.includes("-nano"),
-              footer: model.cost?.input === 0 && provider.id === "zeroxzero" ? "Free" : undefined,
               onSelect: () => {
                 dialog.clear()
                 local.model.set(
@@ -112,10 +107,7 @@ export function DialogModel(props: { providerID?: string }) {
 
     const providerOptions = pipe(
       sync.data.provider,
-      sortBy(
-        (provider) => provider.id !== "zeroxzero",
-        (provider) => provider.name,
-      ),
+      sortBy((provider) => provider.name),
       flatMap((provider) =>
         pipe(
           provider.models,
@@ -136,8 +128,6 @@ export function DialogModel(props: { providerID?: string }) {
                 ? "(Favorite)"
                 : undefined,
               category: connected() ? provider.name : undefined,
-              disabled: provider.id === "zeroxzero" && model.includes("-nano"),
-              footer: info.cost?.input === 0 && provider.id === "zeroxzero" ? "Free" : undefined,
               onSelect() {
                 dialog.clear()
                 local.model.set(
@@ -163,10 +153,7 @@ export function DialogModel(props: { providerID?: string }) {
             if (inRecents) return false
             return true
           }),
-          sortBy(
-            (x) => x.footer !== "Free",
-            (x) => x.title,
-          ),
+          sortBy((x) => x.title),
         ),
       ),
     )
@@ -194,21 +181,14 @@ export function DialogModel(props: { providerID?: string }) {
     return [...favoriteOptions, ...recentOptions, ...providerOptions, ...popularProviders]
   })
 
-  const provider = () => (props.providerID ? sync.data.provider.find((x) => x.id === props.providerID) : null)
-
-  const title = () => {
-    if (provider()) return provider()!.name
-    return "Select model"
-  }
-
   return (
     <DialogSelect
       keybind={[
         {
           keybind: keybind.all.model_provider_list?.[0],
-          title: connected() ? "Connect provider" : "View all providers",
+          title: "Providers",
           onTrigger() {
-            dialog.replace(() => <DialogProvider />)
+            dialog.show({ title: "Providers", body: () => <DialogProvider /> })
           },
         },
         {
@@ -223,7 +203,6 @@ export function DialogModel(props: { providerID?: string }) {
       ref={setRef}
       onFilter={setQuery}
       skipFilter={true}
-      title={title()}
       current={local.model.current()}
       options={options()}
     />

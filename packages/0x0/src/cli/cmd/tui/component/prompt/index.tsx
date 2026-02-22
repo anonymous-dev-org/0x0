@@ -1,4 +1,14 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, TextAttributes, t, dim, fg } from "@opentui/core"
+import {
+  BoxRenderable,
+  TextareaRenderable,
+  MouseEvent,
+  KeyEvent,
+  PasteEvent,
+  TextAttributes,
+  t,
+  dim,
+  fg,
+} from "@opentui/core"
 import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { tint, useTheme } from "@tui/context/theme"
@@ -6,6 +16,7 @@ import { EmptyBorder } from "@tui/component/border"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
+import { Binary } from "@0x0-ai/util/binary"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -64,12 +75,12 @@ export function Prompt(props: PromptProps) {
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
-  const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
+  const status = () => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" }
   const history = usePromptHistory()
   const stash = usePromptStash()
   const command = useCommandDialog()
   const renderer = useRenderer()
-  const { theme, syntax, setTintStrength } = useTheme()
+  const { theme, syntax } = useTheme()
 
   function promptModelWarning() {
     toast.show({
@@ -78,15 +89,15 @@ export function Prompt(props: PromptProps) {
       duration: 3000,
     })
     if (sync.data.provider.length === 0) {
-      dialog.replace(() => <DialogProviderConnect />)
+      dialog.show({ title: "Connect a provider", body: () => <DialogProviderConnect /> })
     }
   }
 
   const textareaKeybindings = useTextareaKeybindings()
 
-  const fileStyleId = syntax().getStyleId("extmark.file")!
-  const agentStyleId = syntax().getStyleId("extmark.agent")!
-  const pasteStyleId = syntax().getStyleId("extmark.paste")!
+  const fileStyleId = createMemo(() => syntax().getStyleId("extmark.file")!)
+  const agentStyleId = createMemo(() => syntax().getStyleId("extmark.agent")!)
+  const pasteStyleId = createMemo(() => syntax().getStyleId("extmark.paste")!)
   let promptPartTypeId = 0
   const defer = (cb: () => void) => {
     queueMicrotask(() => {
@@ -107,17 +118,12 @@ export function Prompt(props: PromptProps) {
 
   onCleanup(off)
 
-  createEffect(() => {
-    if (props.disabled) input.cursorColor = theme.backgroundElement
-    if (!props.disabled) input.cursorColor = theme.text
-  })
-
-  const lastUserMessage = createMemo(() => {
+  const lastUserMessage = () => {
     if (!props.sessionID) return undefined
     const messages = sync.data.message[props.sessionID]
     if (!messages) return undefined
     return messages.findLast((m) => m.role === "user")
-  })
+  }
 
   const [store, setStore] = createStore<{
     prompt: PromptInfo
@@ -247,18 +253,22 @@ export function Prompt(props: PromptProps) {
   }
 
   function skills() {
-    dialog.replace(() => (
-      <DialogSkill
-        onSelect={(skill) => {
-          input.setText(`/${skill} `)
-          setStore("prompt", {
-            input: `/${skill} `,
-            parts: [],
-          })
-          input.gotoBufferEnd()
-        }}
-      />
-    ))
+    dialog.show({
+      title: "Skills",
+      size: "large",
+      body: () => (
+        <DialogSkill
+          onSelect={(skill) => {
+            input.setText(`/${skill} `)
+            setStore("prompt", {
+              input: `/${skill} `,
+              parts: [],
+            })
+            input.gotoBufferEnd()
+          }}
+        />
+      ),
+    })
   }
 
   const ref: PromptRef = {
@@ -337,16 +347,19 @@ export function Prompt(props: PromptProps) {
   }
 
   function stashList() {
-    dialog.replace(() => (
-      <DialogStash
-        onSelect={(entry) => {
-          input.setText(entry.input)
-          setStore("prompt", { input: entry.input, parts: entry.parts })
-          parts.restore(entry.parts)
-          input.gotoBufferEnd()
-        }}
-      />
-    ))
+    dialog.show({
+      title: "Stash",
+      body: () => (
+        <DialogStash
+          onSelect={(entry) => {
+            input.setText(entry.input)
+            setStore("prompt", { input: entry.input, parts: entry.parts })
+            parts.restore(entry.parts)
+            input.gotoBufferEnd()
+          }}
+        />
+      ),
+    })
   }
 
   usePromptCommands({
@@ -376,32 +389,6 @@ export function Prompt(props: PromptProps) {
 
   async function submit() {
     const first = store.prompt.input.split("\n")[0]?.trim() ?? ""
-    if (first === "/tint" || first.startsWith("/tint ")) {
-      const value = first.slice(5).trim()
-      const num = Number(value)
-      if (!value || !Number.isFinite(num) || num < 0 || num > 1) {
-        toast.show({
-          variant: "warning",
-          message: "Usage: /tint <value between 0.00 and 1.00>",
-        })
-        return
-      }
-
-      setTintStrength(num)
-      toast.show({
-        variant: "info",
-        message: `Tint strength set to ${num.toFixed(2)}`,
-      })
-      input.extmarks.clear()
-      input.clear()
-      setStore("prompt", {
-        input: "",
-        parts: [],
-      })
-      setStore("extmarkToPartIndex", new Map())
-      return
-    }
-
     await submitPrompt({
       disabled: props.disabled,
       autocompleteVisible: autocomplete.visible !== false,
@@ -429,6 +416,39 @@ export function Prompt(props: PromptProps) {
           duration: 5000,
         })
       },
+      onOptimistic: (message, optimisticParts) => {
+        const sid = message.sessionID
+        const messages = sync.data.message[sid]
+        if (!messages) {
+          sync.set("message", sid, [message as any])
+        } else {
+          sync.set(
+            "message",
+            sid,
+            produce((draft) => {
+              const match = Binary.search(draft, message.id, (m) => m.id)
+              if (match.found) return
+              draft.splice(match.index, 0, message as any)
+            }),
+          )
+        }
+        for (const part of optimisticParts) {
+          const existing = sync.data.part[part.messageID]
+          if (!existing) {
+            sync.set("part", part.messageID, [part as any])
+            continue
+          }
+          sync.set(
+            "part",
+            part.messageID,
+            produce((draft) => {
+              const match = Binary.search(draft, part.id, (p) => p.id)
+              if (match.found) return
+              draft.splice(match.index, 0, part as any)
+            }),
+          )
+        }
+      },
       exit,
     })
   }
@@ -445,7 +465,7 @@ export function Prompt(props: PromptProps) {
       start: extmarkStart,
       end: extmarkEnd,
       virtual: true,
-      styleId: pasteStyleId,
+      styleId: pasteStyleId(),
       typeId: promptPartTypeId,
     })
 
@@ -482,7 +502,7 @@ export function Prompt(props: PromptProps) {
       start: extmarkStart,
       end: extmarkEnd,
       virtual: true,
-      styleId: pasteStyleId,
+      styleId: pasteStyleId(),
       typeId: promptPartTypeId,
     })
 
@@ -511,6 +531,138 @@ export function Prompt(props: PromptProps) {
     return
   }
 
+  async function handleKeyDown(e: KeyEvent) {
+    if (props.disabled) {
+      e.preventDefault()
+      return
+    }
+    if (keybind.match("input_paste", e)) {
+      const content = await Clipboard.read()
+      if (content?.mime.startsWith("image/")) {
+        e.preventDefault()
+        await pasteImage({
+          filename: "clipboard",
+          mime: content.mime,
+          content: content.data,
+        })
+        return
+      }
+    }
+    if (keybind.match("input_clear", e) && store.prompt.input !== "") {
+      input.clear()
+      input.extmarks.clear()
+      setStore("prompt", { input: "", parts: [] })
+      setStore("extmarkToPartIndex", new Map())
+      return
+    }
+    if (keybind.match("app_exit", e)) {
+      if (store.prompt.input === "") {
+        await exit()
+        e.preventDefault()
+        return
+      }
+    }
+    if (e.name === "!" && input.visualCursor.offset === 0) {
+      setStore("mode", "shell")
+      e.preventDefault()
+      return
+    }
+    if (store.mode === "shell") {
+      if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
+        setStore("mode", "normal")
+        e.preventDefault()
+        return
+      }
+    }
+    if (store.mode === "normal" && autocomplete.visible) {
+      if (keybind.match("agent_cycle", e)) {
+        local.agent.move(1)
+        e.preventDefault()
+        return
+      }
+      if (keybind.match("agent_cycle_reverse", e)) {
+        local.agent.move(-1)
+        e.preventDefault()
+        return
+      }
+    }
+    if (store.mode === "normal") autocomplete.onKeyDown(e)
+    if (!autocomplete.visible) {
+      if (
+        (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
+        (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
+      ) {
+        const direction = keybind.match("history_previous", e) ? -1 : 1
+        const item = history.move(direction, input.plainText)
+
+        if (item) {
+          input.setText(item.input)
+          setStore("prompt", item)
+          setStore("mode", item.mode ?? "normal")
+          parts.restore(item.parts)
+          e.preventDefault()
+          if (direction === -1) input.cursorOffset = 0
+          if (direction === 1) input.cursorOffset = input.plainText.length
+        }
+        return
+      }
+
+      if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
+      if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
+        input.cursorOffset = input.plainText.length
+    }
+  }
+
+  async function handlePaste(event: PasteEvent) {
+    if (props.disabled) {
+      event.preventDefault()
+      return
+    }
+
+    const normalizedText = event.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    const pastedContent = normalizedText.trim()
+    if (!pastedContent) {
+      command.trigger("prompt.paste")
+      return
+    }
+
+    const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+    const isUrl = /^(https?):\/\//.test(filepath)
+    if (!isUrl) {
+      try {
+        const file = Bun.file(filepath)
+        if (file.type === "image/svg+xml") {
+          event.preventDefault()
+          const content = await file.text().catch(() => {})
+          if (content) return pasteText(content, `[SVG: ${file.name ?? "image"}]`)
+        }
+        if (file.type.startsWith("image/")) {
+          event.preventDefault()
+          const content = await file
+            .arrayBuffer()
+            .then((buffer) => Buffer.from(buffer).toString("base64"))
+            .catch(() => {})
+          if (content) {
+            await pasteImage({ filename: file.name, mime: file.type, content })
+            return
+          }
+        }
+      } catch {}
+    }
+
+    const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+    if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
+      event.preventDefault()
+      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+      return
+    }
+
+    defer(() => {
+      input.getLayoutNode().markDirty()
+      renderer.requestRender()
+    })
+  }
+
   const agent = () => local.agent.color(local.agent.current().name)
 
   const line = createMemo(() => {
@@ -521,7 +673,7 @@ export function Prompt(props: PromptProps) {
     return tint(theme.text, agent(), 0.52)
   })
 
-  const parsed = createMemo(() => local.model.parsed())
+  const parsed = local.model.parsed
 
   const showVariant = () => {
     const variants = local.model.variant.list()
@@ -573,176 +725,19 @@ export function Prompt(props: PromptProps) {
                 parts.sync()
               }}
               keyBindings={textareaKeybindings()}
-              onKeyDown={async (e) => {
-                if (props.disabled) {
-                  e.preventDefault()
-                  return
-                }
-                // Handle clipboard paste (Ctrl+V) - check for images first on Windows
-                // This is needed because Windows terminal doesn't properly send image data
-                // through bracketed paste, so we need to intercept the keypress and
-                // directly read from clipboard before the terminal handles it
-                if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
-                    return
-                  }
-                  // If no image, let the default paste behavior continue
-                }
-                if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  input.clear()
-                  input.extmarks.clear()
-                  setStore("prompt", {
-                    input: "",
-                    parts: [],
-                  })
-                  setStore("extmarkToPartIndex", new Map())
-                  return
-                }
-                if (keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
-                    e.preventDefault()
-                    return
-                  }
-                }
-                if (e.name === "!" && input.visualCursor.offset === 0) {
-                  setStore("mode", "shell")
-                  e.preventDefault()
-                  return
-                }
-                if (store.mode === "shell") {
-                  if ((e.name === "backspace" && input.visualCursor.offset === 0) || e.name === "escape") {
-                    setStore("mode", "normal")
-                    e.preventDefault()
-                    return
-                  }
-                }
-                if (store.mode === "normal" && autocomplete.visible) {
-                  if (keybind.match("agent_cycle", e)) {
-                    local.agent.move(1)
-                    e.preventDefault()
-                    return
-                  }
-                  if (keybind.match("agent_cycle_reverse", e)) {
-                    local.agent.move(-1)
-                    e.preventDefault()
-                    return
-                  }
-                }
-                if (store.mode === "normal") autocomplete.onKeyDown(e)
-                if (!autocomplete.visible) {
-                  if (
-                    (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
-                  ) {
-                    const direction = keybind.match("history_previous", e) ? -1 : 1
-                    const item = history.move(direction, input.plainText)
-
-                    if (item) {
-                      input.setText(item.input)
-                      setStore("prompt", item)
-                      setStore("mode", item.mode ?? "normal")
-                      parts.restore(item.parts)
-                      e.preventDefault()
-                      if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = input.plainText.length
-                    }
-                    return
-                  }
-
-                  if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
-                  if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = input.plainText.length
-                }
-              }}
+              onKeyDown={handleKeyDown}
               onSubmit={submit}
-              onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
-                  event.preventDefault()
-                  return
-                }
-
-                // Normalize line endings at the boundary
-                // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
-                // Replace CRLF first, then any remaining CR
-                const normalizedText = event.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
-                if (!pastedContent) {
-                  command.trigger("prompt.paste")
-                  return
-                }
-
-                // trim ' from the beginning and end of the pasted content. just
-                // ' and nothing else
-                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
-                const isUrl = /^(https?):\/\//.test(filepath)
-                if (!isUrl) {
-                  try {
-                    const file = Bun.file(filepath)
-                    // Handle SVG as raw text content, not as base64 image
-                    if (file.type === "image/svg+xml") {
-                      event.preventDefault()
-                      const content = await file.text().catch(() => {})
-                      if (content) {
-                        pasteText(content, `[SVG: ${file.name ?? "image"}]`)
-                        return
-                      }
-                    }
-                    if (file.type.startsWith("image/")) {
-                      event.preventDefault()
-                      const content = await file
-                        .arrayBuffer()
-                        .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch(() => {})
-                      if (content) {
-                        await pasteImage({
-                          filename: file.name,
-                          mime: file.type,
-                          content,
-                        })
-                        return
-                      }
-                    }
-                  } catch {}
-                }
-
-                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
-                  event.preventDefault()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-                  return
-                }
-
-                // Force layout update and render for the pasted content
-                defer(() => {
-                  input.getLayoutNode().markDirty()
-                  renderer.requestRender()
-                })
-              }}
+              onPaste={handlePaste}
               ref={(r: TextareaRenderable) => {
                 input = r
                 if (promptPartTypeId === 0) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
                 props.ref?.(ref)
-                defer(() => {
-                  input.cursorColor = theme.text
-                })
               }}
               onMouseDown={(r: MouseEvent) => r.target?.focus()}
               focusedBackgroundColor={theme.backgroundElement}
-              cursorColor={theme.text}
+              cursorColor={props.disabled ? theme.backgroundElement : theme.text}
               syntaxStyle={syntax()}
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>

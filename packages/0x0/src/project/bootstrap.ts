@@ -13,15 +13,43 @@ import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
 import { Truncate } from "../tool/truncation"
+import { init as initModels } from "../provider/models"
+
+const log = Log.create({ service: "bootstrap" })
 
 function startDeferredInit() {
   return (async () => {
     const started = performance.now()
-    await Plugin.init()
-    await LSP.init()
-    FileWatcher.init()
-    File.init()
-    Snapshot.init()
+    try {
+      await Plugin.init()
+    } catch (e) {
+      log.error("plugin init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
+    try {
+      await LSP.init()
+    } catch (e) {
+      log.error("lsp init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
+    try {
+      await FileWatcher.init()
+    } catch (e) {
+      log.error("filewatcher init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
+    try {
+      File.init()
+    } catch (e) {
+      log.error("file init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
+    try {
+      Snapshot.init()
+    } catch (e) {
+      log.error("snapshot init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
+    try {
+      await initModels()
+    } catch (e) {
+      log.error("models init failed", { error: e instanceof Error ? e.message : String(e) })
+    }
     Log.Default.debug("startup", {
       stage: "instance.bootstrap.deferred.complete",
       duration_ms: Math.round(performance.now() - started),
@@ -38,9 +66,11 @@ export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
 
   Share.init()
-  ShareNext.init()
+  ShareNext.init().catch((e) =>
+    log.error("share-next init failed", { error: e instanceof Error ? e.message : String(e) }),
+  )
   Format.init()
-  Vcs.init()
+  Vcs.init().catch((e) => log.error("vcs init failed", { error: e instanceof Error ? e.message : String(e) }))
   Truncate.init()
   void startDeferredInit()
 

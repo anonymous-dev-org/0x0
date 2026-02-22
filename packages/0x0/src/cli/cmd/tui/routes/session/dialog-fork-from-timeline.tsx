@@ -1,4 +1,4 @@
-import { createMemo, onMount } from "solid-js"
+import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import type { TextPart } from "@0x0-ai/sdk/v2"
@@ -13,10 +13,6 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
   const dialog = useDialog()
   const sdk = useSDK()
   const route = useRoute()
-
-  onMount(() => {
-    dialog.setSize("large")
-  })
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const messages = sync.data.message[props.sessionID] ?? []
@@ -60,5 +56,5 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
     return result
   })
 
-  return <DialogSelect onMove={(option) => props.onMove(option.value)} title="Fork from message" options={options()} />
+  return <DialogSelect onMove={(option) => props.onMove(option.value)} options={options()} />
 }

@@ -1,23 +1,18 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { generateObject, streamObject, type ModelMessage } from "ai"
-import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncation"
-import { Auth } from "../auth"
-import { ProviderTransform } from "../provider/transform"
 
-import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { PermissionNext } from "@/permission/next"
+import { NamedError } from "@0x0-ai/util/error"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
 import path from "path"
-import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
 import { ToolRegistry } from "@/tool/registry"
 
@@ -300,60 +295,9 @@ export namespace Agent {
     return visible.name
   }
 
-  export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
-    const cfg = await Config.get()
-    const defaultModel = input.model ?? (await Provider.defaultModel())
-    const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
-    const language = await Provider.getLanguage(model)
-
-    const system = [PROMPT_GENERATE]
-    await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
-    const existing = await list()
-
-    const params = {
-      experimental_telemetry: {
-        isEnabled: cfg.experimental?.openTelemetry,
-        metadata: {
-          userId: cfg.username ?? "unknown",
-        },
-      },
-      temperature: 0.3,
-      messages: [
-        ...system.map(
-          (item): ModelMessage => ({
-            role: "system",
-            content: item,
-          }),
-        ),
-        {
-          role: "user",
-          content: `Create an agent configuration based on this request: \"${input.description}\".\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
-        },
-      ],
-      model: language,
-      schema: z.object({
-        identifier: z.string(),
-        whenToUse: z.string(),
-        systemPrompt: z.string(),
-      }),
-    } satisfies Parameters<typeof generateObject>[0]
-
-    if (defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth") {
-      const result = streamObject({
-        ...params,
-        providerOptions: ProviderTransform.providerOptions(model, {
-          instructions: await SystemPrompt.instructions(),
-          store: false,
-        }),
-        onError: () => {},
-      })
-      for await (const part of result.fullStream) {
-        if (part.type === "error") throw part.error
-      }
-      return result.object
-    }
-
-    const result = await generateObject(params)
-    return result.object
+  export async function generate(
+    _input: { description: string; model?: { providerID: string; modelID: string } },
+  ): Promise<{ identifier: string; whenToUse: string; systemPrompt: string }> {
+    throw new NamedError.Unknown({ message: "Agent generation is not supported in CLI-delegating mode." })
   }
 }

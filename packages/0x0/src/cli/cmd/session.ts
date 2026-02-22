@@ -4,11 +4,11 @@ import { Session } from "../../session"
 import { bootstrap } from "../bootstrap"
 import { UI } from "../ui"
 import { Locale } from "../../util/locale"
-import { Flag } from "../../flag/flag"
+import { Config } from "../../config/config"
 import { EOL } from "os"
 import path from "path"
 
-function pagerCmd(): string[] {
+async function pagerCmd(): Promise<string[]> {
   const lessOptions = ["-R", "-S"]
   if (process.platform !== "win32") {
     return ["less", ...lessOptions]
@@ -20,8 +20,9 @@ function pagerCmd(): string[] {
     if (Bun.file(lessOnPath).size) return [lessOnPath, ...lessOptions]
   }
 
-  if (Flag.ZEROXZERO_GIT_BASH_PATH) {
-    const less = path.join(Flag.ZEROXZERO_GIT_BASH_PATH, "..", "..", "usr", "bin", "less.exe")
+  const config = await Config.get()
+  if (config.git_bash_path) {
+    const less = path.join(config.git_bash_path, "..", "..", "usr", "bin", "less.exe")
     if (Bun.file(less).size) return [less, ...lessOptions]
   }
 
@@ -87,7 +88,7 @@ export const SessionListCommand = cmd({
 
       if (shouldPaginate) {
         const proc = Bun.spawn({
-          cmd: pagerCmd(),
+          cmd: await pagerCmd(),
           stdin: "pipe",
           stdout: "inherit",
           stderr: "inherit",

@@ -1,4 +1,4 @@
-import { createMemo, onMount } from "solid-js"
+import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import type { TextPart } from "@0x0-ai/sdk/v2"
@@ -15,10 +15,6 @@ export function DialogTimeline(props: {
   const sync = useSync()
   const dialog = useDialog()
 
-  onMount(() => {
-    dialog.setSize("large")
-  })
-
   const options = createMemo((): DialogSelectOption<string>[] => {
     const messages = sync.data.message[props.sessionID] ?? []
     const result = [] as DialogSelectOption<string>[]
@@ -32,10 +28,13 @@ export function DialogTimeline(props: {
         title: part.text.replace(/\n/g, " "),
         value: message.id,
         footer: Locale.time(message.time.created),
-        onSelect: (dialog) => {
-          dialog.replace(() => (
-            <DialogMessage messageID={message.id} sessionID={props.sessionID} setPrompt={props.setPrompt} />
-          ))
+        onSelect: () => {
+          dialog.show({
+            title: "Message Actions",
+            body: () => (
+              <DialogMessage messageID={message.id} sessionID={props.sessionID} setPrompt={props.setPrompt} />
+            ),
+          })
         },
       })
     }
@@ -43,5 +42,5 @@ export function DialogTimeline(props: {
     return result
   })
 
-  return <DialogSelect onMove={(option) => props.onMove(option.value)} title="Timeline" options={options()} />
+  return <DialogSelect onMove={(option) => props.onMove(option.value)} options={options()} />
 }

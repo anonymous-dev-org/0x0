@@ -195,7 +195,10 @@ export namespace Project {
     // migrate old projects before sandboxes
     if (!existing.sandboxes) existing.sandboxes = []
 
-    if (Flag.ZEROXZERO_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
+    const { Config } = await import("@/config/config")
+    const config = await Config.getGlobal()
+    if (config.experimental?.icon_discovery)
+      discover(existing).catch((e) => log.warn("icon discovery failed", { error: e }))
 
     const result: Info = {
       ...existing,

@@ -55,6 +55,14 @@ type SubmitContext = {
           variant: string | undefined
           parts: Array<{ id: string; type: "text"; text: string } | (PromptInfo["parts"][number] & { id: string })>
         }) => Promise<SubmitResult>
+        promptAsync: (input: {
+          sessionID: string
+          messageID: string
+          agent: string
+          model: SubmitModel
+          variant: string | undefined
+          parts: Array<{ id: string; type: "text"; text: string } | (PromptInfo["parts"][number] & { id: string })>
+        }) => Promise<SubmitResult>
       }
     }
   }
@@ -104,6 +112,18 @@ export async function submitPrompt(props: {
   onPromptModelWarning: () => void
   onSubmit?: () => void
   onSubmitError?: (message: string) => void
+  onOptimistic?: (
+    message: {
+      id: string
+      sessionID: string
+      role: "user"
+      agent: string
+      model: SubmitModel
+      variant: string | undefined
+      time: { created: number }
+    },
+    parts: Array<{ id: string; sessionID: string; messageID: string; type: string; text?: string }>,
+  ) => void
   exit: () => void
 }) {
   if (props.disabled) return
@@ -180,84 +200,6 @@ export async function submitPrompt(props: {
       })()
   if (!sessionID) return
 
-  const result = await (async () => {
-    try {
-      if (props.mode === "shell") {
-        return await props.sdk.client.session.shell({
-          sessionID,
-          agent: props.local.agent.current().name,
-          model: {
-            providerID: selectedModel.providerID,
-            modelID: selectedModel.modelID,
-          },
-          command: inputText,
-        })
-      }
-
-      if (
-        inputText.startsWith("/") &&
-        iife(() => {
-          const firstLine = inputText.split("\n")[0]
-          const command = firstLine.split(" ")[0].slice(1)
-          return props.sync.data.command.some((x) => x.name === command)
-        })
-      ) {
-        const firstLineEnd = inputText.indexOf("\n")
-        const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-        const [command, ...firstLineArgs] = firstLine.split(" ")
-        const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-        const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
-
-        return await props.sdk.client.session.command({
-          sessionID,
-          command: command.slice(1),
-          arguments: args,
-          agent: props.local.agent.current().name,
-          model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-          messageID,
-          variant,
-          parts: nonTextParts
-            .filter((x) => x.type === "file")
-            .map((x) => ({
-              id: Identifier.ascending("part"),
-              ...x,
-            })),
-        })
-      }
-
-      return await props.sdk.client.session.prompt({
-        sessionID,
-        ...selectedModel,
-        messageID,
-        agent: props.local.agent.current().name,
-        model: selectedModel,
-        variant,
-        parts: [
-          {
-            id: Identifier.ascending("part"),
-            type: "text",
-            text: inputText,
-          },
-          ...nonTextParts.map((x) => ({
-            id: Identifier.ascending("part"),
-            ...x,
-          })),
-        ],
-      })
-    } catch (error) {
-      return error
-    }
-  })()
-
-  if (isErrorResult(result) && result.error) {
-    rollbackSubmit(result.error)
-    return
-  }
-  if (result instanceof Error) {
-    rollbackSubmit(result)
-    return
-  }
-
   props.history.append({
     ...snapshotPrompt,
     mode: snapshotMode,
@@ -266,12 +208,128 @@ export async function submitPrompt(props: {
   if (props.mode === "shell") props.setMode("normal")
 
   if (!props.sessionID)
-    setTimeout(() => {
-      props.route.navigate({
-        type: "session",
+    props.route.navigate({
+      type: "session",
+      sessionID,
+    })
+
+  if (props.mode === "shell") {
+    props.sdk.client.session
+      .shell({
         sessionID,
+        agent: props.local.agent.current().name,
+        model: {
+          providerID: selectedModel.providerID,
+          modelID: selectedModel.modelID,
+        },
+        command: inputText,
       })
-    }, 50)
+      .catch(() => {})
+    return
+  }
+
+  const isCommand =
+    inputText.startsWith("/") &&
+    iife(() => {
+      const firstLine = inputText.split("\n")[0]
+      const command = firstLine.split(" ")[0].slice(1)
+      return props.sync.data.command.some((x) => x.name === command)
+    })
+
+  if (isCommand) {
+    const firstLineEnd = inputText.indexOf("\n")
+    const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
+    const [command, ...firstLineArgs] = firstLine.split(" ")
+    const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
+    const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
+
+    const fileParts = nonTextParts
+      .filter((x) => x.type === "file")
+      .map((x) => ({
+        id: Identifier.ascending("part"),
+        ...x,
+      }))
+
+    props.onOptimistic?.(
+      {
+        id: messageID,
+        sessionID,
+        role: "user",
+        agent: props.local.agent.current().name,
+        model: selectedModel,
+        variant,
+        time: { created: Date.now() },
+      },
+      [
+        {
+          id: Identifier.ascending("part"),
+          sessionID,
+          messageID,
+          type: "text",
+          text: inputText,
+        },
+        ...fileParts.map((x) => ({
+          ...x,
+          sessionID,
+          messageID,
+        })),
+      ],
+    )
+
+    props.sdk.client.session
+      .command({
+        sessionID,
+        command: command.slice(1),
+        arguments: args,
+        agent: props.local.agent.current().name,
+        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
+        messageID,
+        variant,
+        parts: fileParts,
+      })
+      .catch(() => {})
+    return
+  }
+
+  const parts = [
+    {
+      id: Identifier.ascending("part"),
+      type: "text" as const,
+      text: inputText,
+    },
+    ...nonTextParts.map((x) => ({
+      id: Identifier.ascending("part"),
+      ...x,
+    })),
+  ]
+
+  props.onOptimistic?.(
+    {
+      id: messageID,
+      sessionID,
+      role: "user",
+      agent: props.local.agent.current().name,
+      model: selectedModel,
+      variant,
+      time: { created: Date.now() },
+    },
+    parts.map((x) => ({
+      ...x,
+      sessionID,
+      messageID,
+    })),
+  )
+
+  props.sdk.client.session
+    .promptAsync({
+      sessionID,
+      messageID,
+      agent: props.local.agent.current().name,
+      model: selectedModel,
+      variant,
+      parts,
+    })
+    .catch(() => {})
 }
 
 function clonePromptInfo(prompt: PromptInfo): PromptInfo {

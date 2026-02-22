@@ -3,7 +3,6 @@ import path from "path"
 import { pathToFileURL } from "bun"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
-import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
 import { EOL } from "os"
 import { createZeroxzeroClient, type Message, type ZeroxzeroClient, type ToolPart } from "@0x0-ai/sdk/v2"
@@ -355,7 +354,7 @@ export const RunCommand = cmd({
     async function share(sdk: ZeroxzeroClient, sessionID: string) {
       const cfg = await sdk.config.get()
       if (!cfg.data) return
-      if (cfg.data.share !== "auto" && !Flag.ZEROXZERO_AUTO_SHARE && !args.share) return
+      if (cfg.data.share !== "auto" && !args.share) return
       const res = await sdk.session.share({ sessionID }).catch((error) => {
         if (error instanceof Error && error.message.includes("disabled")) {
           UI.println(UI.Style.TEXT_DANGER_BOLD + "!  " + error.message)

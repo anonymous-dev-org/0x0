@@ -1,6 +1,6 @@
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
-import { Flag } from "../flag/flag"
+import { Config } from "../config/config"
 
 export namespace FileTime {
   const log = Log.create({ service: "file.time" })
@@ -53,7 +53,8 @@ export namespace FileTime {
   }
 
   export async function assert(sessionID: string, filepath: string) {
-    if (Flag.ZEROXZERO_DISABLE_FILETIME_CHECK === true) {
+    const config = await Config.get()
+    if (config.disable_filetime_check) {
       return
     }
 

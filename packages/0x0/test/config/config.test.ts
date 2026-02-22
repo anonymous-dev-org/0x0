@@ -65,7 +65,7 @@ test("updateProject writes .0x0/config.yaml", async () => {
 })
 
 test("handles environment variable substitution in YAML", async () => {
-  process.env.TEST_VAR = "test_theme"
+  process.env.TEST_VAR = "anthropic/test-model"
   try {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -73,7 +73,7 @@ test("handles environment variable substitution in YAML", async () => {
           dir,
           `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
 $schema: https://zeroxzero.ai/config.json
-theme: "{env:TEST_VAR}"
+model: "{env:TEST_VAR}"
 `,
         )
       },
@@ -83,7 +83,7 @@ theme: "{env:TEST_VAR}"
       directory: tmp.path,
       fn: async () => {
         const config = await Config.get()
-        expect(config.theme).toBe("test_theme")
+        expect(config.model).toBe("anthropic/test-model")
       },
     })
   } finally {
@@ -94,12 +94,12 @@ theme: "{env:TEST_VAR}"
 test("handles file inclusion substitution in YAML", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "included.txt"), "test_theme")
+      await Bun.write(path.join(dir, "included.txt"), "anthropic/test-model")
       await writeProjectConfig(
         dir,
         `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
 $schema: https://zeroxzero.ai/config.json
-theme: "{file:../included.txt}"
+model: "{file:../included.txt}"
 `,
       )
     },
@@ -109,7 +109,7 @@ theme: "{file:../included.txt}"
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.theme).toBe("test_theme")
+      expect(config.model).toBe("anthropic/test-model")
     },
   })
 })

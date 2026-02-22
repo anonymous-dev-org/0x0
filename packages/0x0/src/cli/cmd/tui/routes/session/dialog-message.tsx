@@ -18,7 +18,6 @@ export function DialogMessage(props: {
 
   return (
     <DialogSelect
-      title="Message Actions"
       options={[
         {
           title: "Revert",

@@ -1,3 +1,4 @@
+import { onCleanup } from "solid-js"
 import { useCommandDialog } from "../dialog-command"
 
 type Mode = "normal" | "shell"
@@ -24,6 +25,10 @@ export function usePromptCommands(props: {
   stashPop: () => void
   stashList: () => void
 }) {
+  let interruptTimeout: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (interruptTimeout) clearTimeout(interruptTimeout)
+  })
   props.command.register(() => {
     return [
       {
@@ -75,7 +80,8 @@ export function usePromptCommands(props: {
           if (!props.sessionID) return
 
           props.setInterrupt(props.interrupt() + 1)
-          setTimeout(() => {
+          if (interruptTimeout) clearTimeout(interruptTimeout)
+          interruptTimeout = setTimeout(() => {
             props.setInterrupt(0)
           }, 5000)
 

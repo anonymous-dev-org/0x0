@@ -10,7 +10,6 @@ import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
 import { NamedError } from "@0x0-ai/util/error"
-import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
@@ -29,7 +28,7 @@ import PROMPT_DEFAULT from "../session/prompt/default_system_prompt.txt"
 import YAML from "yaml"
 
 export namespace Config {
-  const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
+  const ModelId = z.string()
 
   const log = Log.create({ service: "config" })
   const configSchemaURL = "https://zeroxzero.ai/config.json"
@@ -106,7 +105,7 @@ export namespace Config {
     }
 
     if (!lines.some((line) => /^\s*\$schema\s*:/.test(line))) {
-      const insertAt = lines[0].includes("yaml-language-server: $schema=") ? 1 : 0
+      const insertAt = lines[0]?.includes("yaml-language-server: $schema=") ? 1 : 0
       lines.splice(insertAt, 0, `$schema: ${configSchemaURL}`)
     }
 
@@ -226,11 +225,9 @@ export namespace Config {
     // 1) Remote .well-known/zeroxzero (org defaults)
     // 2) Global config (~/.config/0x0/config.yaml)
     // 3) Global provider configs (~/.config/0x0/providers/*.yaml)
-    // 4) Custom config (ZEROXZERO_CONFIG)
-    // 5) Project config (.0x0/config.yaml)
-    // 6) Project provider configs (.0x0/providers/*.yaml)
-    // 7) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
-    // 7) Inline config (ZEROXZERO_CONFIG_CONTENT)
+    // 4) Project config (.0x0/config.yaml)
+    // 5) Project provider configs (.0x0/providers/*.yaml)
+    // 6) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
     for (const [key, value] of Object.entries(auth)) {
@@ -262,21 +259,13 @@ export namespace Config {
       result = mergeConfigConcatArrays(result, providerConfig)
     }
 
-    // Custom config path overrides global config.
-    if (Flag.ZEROXZERO_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.ZEROXZERO_CONFIG))
-      log.debug("loaded custom config", { path: Flag.ZEROXZERO_CONFIG })
-    }
-
     // Project config overrides global and remote config.
-    if (!Flag.ZEROXZERO_DISABLE_PROJECT_CONFIG) {
-      const projectFiles = await discoverProjectConfigFiles(Instance.directory, Instance.worktree)
-      for (const resolved of projectFiles) {
-        result = mergeConfigConcatArrays(result, await loadFile(resolved))
-      }
-      for (const providerConfig of await loadProjectProviders(Instance.worktree)) {
-        result = mergeConfigConcatArrays(result, providerConfig)
-      }
+    const projectFiles = await discoverProjectConfigFiles(Instance.directory, Instance.worktree)
+    for (const resolved of projectFiles) {
+      result = mergeConfigConcatArrays(result, await loadFile(resolved))
+    }
+    for (const providerConfig of await loadProjectProviders(Instance.worktree)) {
+      result = mergeConfigConcatArrays(result, providerConfig)
     }
 
     result.agent = result.agent || {}
@@ -284,16 +273,14 @@ export namespace Config {
 
     const directories = [
       Global.Path.config,
-      // Only scan project .zeroxzero/ directories when project discovery is enabled
-      ...(!Flag.ZEROXZERO_DISABLE_PROJECT_CONFIG
-        ? await Array.fromAsync(
-            Filesystem.up({
-              targets: [".zeroxzero"],
-              start: Instance.directory,
-              stop: Instance.worktree,
-            }),
-          )
-        : []),
+      // Scan project .zeroxzero/ directories
+      ...(await Array.fromAsync(
+        Filesystem.up({
+          targets: [".zeroxzero"],
+          start: Instance.directory,
+          stop: Instance.worktree,
+        }),
+      )),
       // Always scan ~/.zeroxzero/ (user home directory)
       ...(await Array.fromAsync(
         Filesystem.up({
@@ -304,19 +291,13 @@ export namespace Config {
       )),
     ]
 
-    // .zeroxzero directory config overrides (project and global) config sources.
-    if (Flag.ZEROXZERO_CONFIG_DIR) {
-      directories.push(Flag.ZEROXZERO_CONFIG_DIR)
-      log.debug("loading config from ZEROXZERO_CONFIG_DIR", { path: Flag.ZEROXZERO_CONFIG_DIR })
-    }
-
     const deps = []
 
     for (const dir of unique(directories)) {
       const stat = await fs.stat(dir).catch(() => undefined)
       if (!stat?.isDirectory()) continue
 
-      if (dir.endsWith(".zeroxzero") || dir === Flag.ZEROXZERO_CONFIG_DIR) {
+      if (dir.endsWith(".zeroxzero")) {
         for (const file of configFiles) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
@@ -338,12 +319,6 @@ export namespace Config {
       result.plugin.push(...(await loadPlugin(dir)))
     }
 
-    // Inline config content overrides all non-managed config sources.
-    if (Flag.ZEROXZERO_CONFIG_CONTENT) {
-      result = mergeConfigConcatArrays(result, JSON.parse(Flag.ZEROXZERO_CONFIG_CONTENT))
-      log.debug("loaded custom config from ZEROXZERO_CONFIG_CONTENT")
-    }
-
     // Load managed config files last (highest priority) - enterprise admin-controlled
     // Kept separate from directories array to avoid write operations when installing plugins
     // which would fail on system directories requiring elevated permissions
@@ -352,10 +327,6 @@ export namespace Config {
       for (const file of configFiles) {
         result = mergeConfigConcatArrays(result, await loadFile(path.join(managedConfigDir, file)))
       }
-    }
-
-    if (Flag.ZEROXZERO_PERMISSION) {
-      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.ZEROXZERO_PERMISSION))
     }
 
     if (!result.username) result.username = os.userInfo().username
@@ -826,7 +797,6 @@ export namespace Config {
       leader: z.string().optional().default("ctrl+x").describe("Leader key for keybind combinations"),
       app_exit: z.string().optional().default("ctrl+c,ctrl+d,<leader>q").describe("Exit the application"),
       editor_open: z.string().optional().default("<leader>e").describe("Open external editor"),
-      theme_list: z.string().optional().default("<leader>t").describe("List available themes"),
       sidebar_toggle: z.string().optional().default("<leader>b").describe("Toggle sidebar"),
       scrollbar_toggle: z.string().optional().default("none").describe("Toggle session scrollbar"),
       username_toggle: z.string().optional().default("none").describe("Toggle username visibility"),
@@ -1024,6 +994,8 @@ export namespace Config {
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
       mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: zeroxzero.local)"),
       cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
+      password: z.string().optional().describe("Password for server authentication"),
+      username: z.string().optional().describe("Username for server authentication"),
     })
     .strict()
     .meta({
@@ -1091,7 +1063,6 @@ export namespace Config {
   export const Info = z
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
-      theme: z.string().optional().describe("Theme name to use for the interface"),
       keybinds: Keybinds.optional().describe("Custom keybind configurations"),
       logLevel: Log.Level.optional().describe("Log level"),
       tui: TUI.optional().describe("TUI specific settings"),
@@ -1126,11 +1097,6 @@ export namespace Config {
         .describe(
           "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",
         ),
-      disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
-      enabled_providers: z
-        .array(z.string())
-        .optional()
-        .describe("When set, ONLY these providers will be enabled. All other providers will be ignored"),
       model: ModelId.describe("Model to use in the format of provider/model, eg anthropic/claude-2").optional(),
       small_model: ModelId.describe(
         "Small model to use for tasks like title generation in the format of provider/model",
@@ -1217,6 +1183,10 @@ export namespace Config {
             error: "For custom LSP servers, 'extensions' array is required.",
           },
         ),
+      disable_lsp_download: z.boolean().optional().describe("Disable automatic LSP server downloads"),
+      disable_default_plugins: z.boolean().optional().describe("Disable loading default plugins"),
+      disable_filetime_check: z.boolean().optional().describe("Disable file modification time checks"),
+      git_bash_path: z.string().optional().describe("Path to git bash executable"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       knowledge_base: z
         .array(z.string())
@@ -1271,6 +1241,21 @@ export namespace Config {
             .positive()
             .optional()
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          disable_filewatcher: z.boolean().optional().describe("Disable the file watcher"),
+          icon_discovery: z.boolean().optional().describe("Enable icon discovery for projects"),
+          exa: z.boolean().optional().describe("Enable Exa search integration"),
+          bash_default_timeout_ms: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Default timeout in milliseconds for bash tool commands"),
+          output_token_max: z.number().int().positive().optional().describe("Maximum output tokens for LLM responses"),
+          oxfmt: z.boolean().optional().describe("Enable oxfmt formatter"),
+          lsp_ty: z.boolean().optional().describe("Enable ty LSP server"),
+          lsp_tool: z.boolean().optional().describe("Enable LSP diagnostics tool"),
+          markdown: z.boolean().optional().describe("Enable experimental markdown rendering"),
+          enable_experimental_models: z.boolean().optional().describe("Enable experimental model variants"),
         })
         .optional(),
     })
@@ -1284,7 +1269,7 @@ export namespace Config {
   export const global = lazy(async () => {
     await ensureDefaultGlobalConfigFile()
 
-    let result: Info = {}
+    let result: Info = defaultConfig()
     const files = await discoverGlobalConfigFiles()
     if (files.length > 1) {
       throw new ConflictError({
