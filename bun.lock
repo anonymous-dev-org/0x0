@@ -101,6 +101,18 @@
         "zod-to-json-schema": "3.24.5",
       },
     },
+    "packages/git": {
+      "name": "@0x0-ai/git",
+      "version": "0.1.0",
+      "bin": {
+        "0x0-git": "./bin/0x0-git",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/script": {
       "name": "@0x0-ai/script",
       "devDependencies": {
@@ -161,6 +173,8 @@
   },
   "packages": {
     "0x0": ["0x0@workspace:packages/0x0"],
+
+    "@0x0-ai/git": ["@0x0-ai/git@workspace:packages/git"],
 
     "@0x0-ai/script": ["@0x0-ai/script@workspace:packages/script"],
 

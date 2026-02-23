@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@0x0-ai/git",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "0x0-git": "./bin/0x0-git"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}
