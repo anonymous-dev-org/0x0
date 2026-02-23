@@ -227,7 +227,7 @@ export namespace SessionProcessor {
 
               case "tool-input-delta": {
                 const toolPart = toolParts[event.id]
-                if (toolPart && (toolPart.state.status === "running" || toolPart.state.status === "pending")) {
+                if (toolPart && toolPart.state.status === "running") {
                   const raw = (toolPart.state.metadata?.raw ?? "") + event.partial
                   toolPart.state = { ...toolPart.state, metadata: { ...toolPart.state.metadata, raw } }
                   try {

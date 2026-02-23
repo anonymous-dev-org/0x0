@@ -1,0 +1,107 @@
+#!/usr/bin/env bun
+
+import path from "path"
+import { $ } from "bun"
+import { fileURLToPath } from "url"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const dir = path.resolve(__dirname, "..")
+
+process.chdir(dir)
+
+import pkg from "../package.json"
+import { Script } from "@anonymous-dev/0x0-script"
+
+const singleFlag = process.argv.includes("--single")
+const baselineFlag = process.argv.includes("--baseline")
+
+const allTargets: {
+  os: string
+  arch: "arm64" | "x64"
+  abi?: "musl"
+  avx2?: false
+}[] = [
+  { os: "linux", arch: "arm64" },
+  { os: "linux", arch: "x64" },
+  { os: "linux", arch: "x64", avx2: false },
+  { os: "linux", arch: "arm64", abi: "musl" },
+  { os: "linux", arch: "x64", abi: "musl" },
+  { os: "linux", arch: "x64", abi: "musl", avx2: false },
+  { os: "darwin", arch: "arm64" },
+  { os: "darwin", arch: "x64" },
+  { os: "darwin", arch: "x64", avx2: false },
+  { os: "win32", arch: "x64" },
+  { os: "win32", arch: "x64", avx2: false },
+]
+
+const targets = singleFlag
+  ? allTargets.filter((item) => {
+      if (item.os !== process.platform || item.arch !== process.arch) return false
+      if (item.avx2 === false) return baselineFlag
+      if (item.abi !== undefined) return false
+      return true
+    })
+  : allTargets
+
+await $`rm -rf dist`
+
+const binaries: Record<string, string> = {}
+for (const item of targets) {
+  const name = [
+    "0x0-git",
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
+  console.log(`building ${name}`)
+  await $`mkdir -p dist/${name}/bin`
+
+  await Bun.build({
+    tsconfig: "./tsconfig.json",
+    sourcemap: "external",
+    compile: {
+      autoloadBunfig: false,
+      autoloadDotenv: false,
+      //@ts-ignore
+      autoloadTsconfig: true,
+      autoloadPackageJson: true,
+      target: name.replace("0x0-git", "bun") as any,
+      outfile: `dist/${name}/bin/0x0-git`,
+    },
+    entrypoints: ["./src/index.ts"],
+    define: {
+      ZEROXZERO_GIT_VERSION: `'${Script.version}'`,
+    },
+  })
+
+  await Bun.file(`dist/${name}/package.json`).write(
+    JSON.stringify(
+      {
+        name,
+        version: Script.version,
+        os: [item.os],
+        cpu: [item.arch],
+      },
+      null,
+      2,
+    ),
+  )
+  binaries[name] = Script.version
+}
+
+if (Script.release) {
+  for (const key of Object.keys(binaries)) {
+    if (key.includes("linux")) {
+      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
+    } else {
+      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
+    }
+  }
+  await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber`
+}
+
+export { binaries }
