@@ -1,4 +1,4 @@
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 
 export interface TodoItemProps {
   status: string
@@ -6,7 +6,6 @@ export interface TodoItemProps {
 }
 
 export function TodoItem(props: TodoItemProps) {
-  const { theme } = useTheme()
 
   return (
     <box flexDirection="row" gap={0}>

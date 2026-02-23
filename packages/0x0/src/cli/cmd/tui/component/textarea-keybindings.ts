@@ -1,6 +1,6 @@
 import { createMemo } from "solid-js"
 import type { KeyBinding } from "@opentui/core"
-import { useKeybind } from "../context/keybind"
+import { keybind } from "@tui/state/keybind"
 import { Keybind } from "@/util/keybind"
 
 const TEXTAREA_ACTIONS = [
@@ -59,8 +59,6 @@ function mapTextareaKeybindings(
 }
 
 export function useTextareaKeybindings() {
-  const keybind = useKeybind()
-
   return createMemo(() => {
     const keybinds = keybind.all
 

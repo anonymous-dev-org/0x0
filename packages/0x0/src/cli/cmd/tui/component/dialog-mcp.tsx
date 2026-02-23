@@ -1,15 +1,14 @@
 import { createMemo, createSignal, Switch, Match } from "solid-js"
-import { useLocal } from "@tui/context/local"
-import { useSync } from "@tui/context/sync"
+import { local } from "@tui/state/local"
+import { sync } from "@tui/state/sync"
 import { map, pipe, entries, sortBy } from "remeda"
 import { DialogSelect, type DialogSelectRef, type DialogSelectOption } from "@tui/ui/dialog-select"
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 import { Keybind } from "@/util/keybind"
 import { TextAttributes } from "@opentui/core"
-import { useSDK } from "@tui/context/sdk"
+import { sdk } from "@tui/state/sdk"
 
 function Status(props: { enabled: boolean; loading: boolean }) {
-  const { theme } = useTheme()
   return (
     <Switch fallback={<span style={{ fg: theme.textMuted }}>○ Disabled</span>}>
       <Match when={props.loading}>
@@ -23,9 +22,6 @@ function Status(props: { enabled: boolean; loading: boolean }) {
 }
 
 export function DialogMcp() {
-  const local = useLocal()
-  const sync = useSync()
-  const sdk = useSDK()
   const [, setRef] = createSignal<DialogSelectRef<unknown>>()
   const [loading, setLoading] = createSignal<string | null>(null)
 
@@ -60,9 +56,10 @@ export function DialogMcp() {
         try {
           await local.mcp.toggle(option.value)
           // Refresh MCP status from server
-          const status = await sdk.client.mcp.status()
-          if (status.data) {
-            sync.set("mcp", status.data)
+          const res = await sdk.client.mcp.$get()
+          const data = await (res as any).json()
+          if (data) {
+            sync.set("mcp", data)
           } else {
             console.error("Failed to refresh MCP status: no data returned")
           }

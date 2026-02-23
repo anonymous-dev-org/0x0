@@ -2,6 +2,8 @@ import z from "zod"
 import type { ZodType } from "zod"
 import { Log } from "../util/log"
 
+export type Event = z.infer<ReturnType<typeof BusEvent.payloads>>
+
 export namespace BusEvent {
   const log = Log.create({ service: "event" })
 

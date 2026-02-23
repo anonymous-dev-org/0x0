@@ -1,22 +1,17 @@
 import { TextAttributes } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
-import { useKeybind } from "@tui/context/keybind"
-import { useTheme } from "@tui/context/theme"
+import { keybind } from "@tui/state/keybind"
+import { theme } from "@tui/state/theme"
 import { useDialog } from "@tui/ui/dialog"
-import { useSDK } from "@tui/context/sdk"
-import { useSync } from "@tui/context/sync"
-import { useKV } from "@tui/context/kv"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
+import { kv } from "@tui/state/kv"
 import { useToast } from "@tui/ui/toast"
 import { createSignal, Show } from "solid-js"
 
 export function DialogOnboarding() {
   const dialog = useDialog()
-  const sdk = useSDK()
-  const sync = useSync()
-  const kv = useKV()
   const toast = useToast()
-  const { theme } = useTheme()
-  const keybind = useKeybind()
   const [choice, setChoice] = createSignal<"default" | "custom">("default")
   const [busy, setBusy] = createSignal(false)
   const [hover, setHover] = createSignal<"default" | "custom" | undefined>()
@@ -27,8 +22,9 @@ export function DialogOnboarding() {
   }
 
   const useCustom = async () => {
-    const current = await sdk.client.global.config.get({ throwOnError: true })
-    const config = JSON.parse(JSON.stringify(current.data ?? {}))
+    const res = await sdk.client.global.config.$get()
+    const current = await (res as any).json()
+    const config = JSON.parse(JSON.stringify(current ?? {}))
     config.agent = config.agent ?? {}
 
     for (const name of ["builder", "planner"]) {
@@ -54,7 +50,7 @@ export function DialogOnboarding() {
       config.default_agent = custom
     }
 
-    await sdk.client.global.config.update({ config }, { throwOnError: true })
+    await sdk.client.global.config.$patch({ json: config } as any)
     await sync.bootstrap()
     kv.set("onboarding_v1_done", true)
     toast.show({
@@ -164,7 +160,6 @@ function OnboardingOption(props: {
   onMouseOut: () => void
   onMouseUp: () => void
 }) {
-  const { theme } = useTheme()
   return (
     <box
       paddingLeft={1}

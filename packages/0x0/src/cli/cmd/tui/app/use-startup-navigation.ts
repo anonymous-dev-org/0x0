@@ -1,39 +1,34 @@
 import { Provider } from "@/provider/provider"
 import { batch, createEffect, onMount } from "solid-js"
-import type { Args } from "../context/args"
-import { useLocal } from "../context/local"
-import type { RouteContext } from "../context/route"
-import { useSDK } from "../context/sdk"
-import { useSync } from "../context/sync"
+import { args } from "@tui/state/args"
+import { local } from "@tui/state/local"
+import { route } from "@tui/state/route"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
 import { useToast } from "../ui/toast"
 
-export function useStartupNavigation(props: {
-  args: Args
-  local: ReturnType<typeof useLocal>
-  route: RouteContext
-  sdk: ReturnType<typeof useSDK>
-  sync: ReturnType<typeof useSync>
-  toast: ReturnType<typeof useToast>
-}) {
+export function useStartupNavigation() {
+  const toast = useToast()
+
   onMount(() => {
     batch(() => {
-      if (props.args.agent) props.local.agent.set(props.args.agent)
-      if (props.args.model) {
-        const parsed = Provider.parseModel(props.args.model)
+      if (args.agent) local.agent.set(args.agent)
+      if (args.model) {
+        const parsed = Provider.parseModel(args.model)
         if (!parsed.providerID || !parsed.modelID) {
-          props.toast.show({
+          toast.show({
             variant: "warning",
-            message: `Invalid model format: ${props.args.model}`,
+            message: `Invalid model format: ${args.model}`,
             duration: 3000,
           })
           return
         }
-        props.local.model.set({ providerID: parsed.providerID, modelID: parsed.modelID }, { recent: true })
+        local.model.set({ providerID: parsed.providerID, modelID: parsed.modelID }, { recent: true })
       }
-      if (props.args.sessionID && !props.args.fork) {
-        props.route.navigate({
+      if (args.sessionID && !args.fork) {
+        route.navigate({
           type: "session",
-          sessionID: props.args.sessionID,
+          sessionID: args.sessionID,
         })
       }
     })
@@ -41,36 +36,36 @@ export function useStartupNavigation(props: {
 
   let continued = false
   createEffect(() => {
-    if (continued || props.sync.status === "loading" || !props.args.continue) return
-    if (props.sync.data.session.length === 0) return
-    const match = props.sync.data.session
+    if (continued || sync.status === "loading" || !args.continue) return
+    if (sync.data.session.length === 0) return
+    const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id
     if (!match) return
     continued = true
-    if (props.args.fork) {
-      props.sdk.client.session.fork({ sessionID: match }).then((result) => {
-        if (result.data?.id) {
-          props.route.navigate({ type: "session", sessionID: result.data.id })
+    if (args.fork) {
+      sdk.client.session[":sessionID"].fork.$post({ param: { sessionID: match }, json: {} } as any).then((res: any) => res.json()).then((result: any) => {
+        if (result?.id) {
+          route.navigate({ type: "session", sessionID: result.id })
           return
         }
-        props.toast.show({ message: "Failed to fork session", variant: "error" })
+        toast.show({ message: "Failed to fork session", variant: "error" })
       })
       return
     }
-    props.route.navigate({ type: "session", sessionID: match })
+    route.navigate({ type: "session", sessionID: match })
   })
 
   let forked = false
   createEffect(() => {
-    if (forked || props.sync.status !== "complete" || !props.args.sessionID || !props.args.fork) return
+    if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
     forked = true
-    props.sdk.client.session.fork({ sessionID: props.args.sessionID }).then((result) => {
-      if (result.data?.id) {
-        props.route.navigate({ type: "session", sessionID: result.data.id })
+    sdk.client.session[":sessionID"].fork.$post({ param: { sessionID: args.sessionID }, json: {} } as any).then((res: any) => res.json()).then((result: any) => {
+      if (result?.id) {
+        route.navigate({ type: "session", sessionID: result.id })
         return
       }
-      props.toast.show({ message: "Failed to fork session", variant: "error" })
+      toast.show({ message: "Failed to fork session", variant: "error" })
     })
   })
 }

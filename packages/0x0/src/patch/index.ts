@@ -113,7 +113,7 @@ export namespace Patch {
 
     while (i < lines.length) {
       const current = lines[i]
-      if (!current || current.startsWith("***")) break
+      if (current === undefined || current.startsWith("***")) break
 
       if (current.startsWith("@@")) {
         // Parse context line
@@ -127,7 +127,7 @@ export namespace Patch {
         // Parse change lines
         while (i < lines.length) {
           const changeLine = lines[i]
-          if (!changeLine || changeLine.startsWith("@@") || changeLine.startsWith("***")) break
+          if (changeLine === undefined || changeLine.startsWith("@@") || changeLine.startsWith("***")) break
 
           if (changeLine === "*** End of File") {
             isEndOfFile = true
@@ -171,7 +171,7 @@ export namespace Patch {
 
     while (i < lines.length) {
       const line = lines[i]
-      if (!line || line.startsWith("***")) break
+      if (line === undefined || line.startsWith("***")) break
       if (line.startsWith("+")) {
         content += line.substring(1) + "\n"
       }

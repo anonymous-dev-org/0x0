@@ -1,15 +1,15 @@
 import { RequestError, type McpServer } from "@agentclientprotocol/sdk"
 import type { ACPSessionState } from "./types"
 import { Log } from "@/util/log"
-import type { ZeroxzeroClient } from "@0x0-ai/sdk/v2"
+import type { Client } from "@/server/client"
 
 const log = Log.create({ service: "acp-session-manager" })
 
 export class ACPSessionManager {
   private sessions = new Map<string, ACPSessionState>()
-  private sdk: ZeroxzeroClient
+  private sdk: Client
 
-  constructor(sdk: ZeroxzeroClient) {
+  constructor(sdk: Client) {
     this.sdk = sdk
   }
 
@@ -19,14 +19,11 @@ export class ACPSessionManager {
 
   async create(cwd: string, mcpServers: McpServer[], model?: ACPSessionState["model"]): Promise<ACPSessionState> {
     const session = await this.sdk.session
-      .create(
-        {
-          title: `ACP Session ${crypto.randomUUID()}`,
-          directory: cwd,
-        },
-        { throwOnError: true },
-      )
-      .then((x) => x.data!)
+      .$post({
+        json: { title: `ACP Session ${crypto.randomUUID()}` },
+        query: { directory: cwd },
+      } as any)
+      .then((res: any) => res.json())
 
     const sessionId = session.id
     const resolvedModel = model
@@ -51,15 +48,12 @@ export class ACPSessionManager {
     mcpServers: McpServer[],
     model?: ACPSessionState["model"],
   ): Promise<ACPSessionState> {
-    const session = await this.sdk.session
-      .get(
-        {
-          sessionID: sessionId,
-          directory: cwd,
-        },
-        { throwOnError: true },
-      )
-      .then((x) => x.data!)
+    const session = await this.sdk.session[":sessionID"]
+      .$get({
+        param: { sessionID: sessionId },
+        query: { directory: cwd },
+      } as any)
+      .then((res: any) => res.json())
 
     const resolvedModel = model
 

@@ -5,7 +5,6 @@
     "": {
       "name": "0x0",
       "dependencies": {
-        "@0x0-ai/plugin": "workspace:*",
         "@0x0-ai/script": "workspace:*",
         "@0x0-ai/sdk": "workspace:*",
         "typescript": "catalog:",
@@ -24,9 +23,7 @@
         "0x0": "./bin/0x0",
       },
       "dependencies": {
-        "@0x0-ai/plugin": "workspace:*",
         "@0x0-ai/script": "workspace:*",
-        "@0x0-ai/sdk": "workspace:*",
         "@0x0-ai/util": "workspace:*",
         "@actions/core": "1.11.1",
         "@actions/github": "6.0.1",
@@ -104,20 +101,6 @@
         "zod-to-json-schema": "3.24.5",
       },
     },
-    "packages/plugin": {
-      "name": "@0x0-ai/plugin",
-      "version": "1.1.53",
-      "dependencies": {
-        "@0x0-ai/sdk": "workspace:*",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@tsconfig/node22": "catalog:",
-        "@types/node": "catalog:",
-        "@typescript/native-preview": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "packages/script": {
       "name": "@0x0-ai/script",
       "devDependencies": {
@@ -178,8 +161,6 @@
   },
   "packages": {
     "0x0": ["0x0@workspace:packages/0x0"],
-
-    "@0x0-ai/plugin": ["@0x0-ai/plugin@workspace:packages/plugin"],
 
     "@0x0-ai/script": ["@0x0-ai/script@workspace:packages/script"],
 

@@ -1,12 +1,10 @@
-import { useTheme } from "@tui/context/theme"
+import { theme } from "@tui/state/theme"
 import { useDialog } from "./dialog"
 import { useKeyboard } from "@opentui/solid"
-import { useKeybind } from "@tui/context/keybind"
+import { keybind } from "@tui/state/keybind"
 
 export function DialogHelp() {
   const dialog = useDialog()
-  const { theme } = useTheme()
-  const keybind = useKeybind()
 
   useKeyboard((evt) => {
     if (evt.name === "return" || evt.name === "escape") {

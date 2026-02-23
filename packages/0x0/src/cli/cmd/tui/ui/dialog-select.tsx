@@ -1,5 +1,5 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
-import { useTheme, selectedForeground } from "@tui/context/theme"
+import { theme, selectedForeground } from "@tui/state/theme"
 import { entries, filter, flatMap, groupBy, pipe, take } from "remeda"
 import { batch, createEffect, createMemo, For, Show, type JSX, on } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -7,7 +7,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
-import { useKeybind } from "@tui/context/keybind"
+import { keybind } from "@tui/state/keybind"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 
@@ -47,7 +47,6 @@ export type DialogSelectRef<T> = {
 
 export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const dialog = useDialog()
-  const { theme } = useTheme()
   const [store, setStore] = createStore({
     selected: 0,
     filter: "",
@@ -170,7 +169,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     }
   }
 
-  const keybind = useKeybind()
   useKeyboard((evt) => {
     setStore("input", "keyboard")
 
@@ -342,7 +340,6 @@ function Option(props: {
   gutter?: JSX.Element
   onMouseOver?: () => void
 }) {
-  const { theme } = useTheme()
   const fg = selectedForeground(theme)
 
   return (

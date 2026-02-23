@@ -1,5 +1,5 @@
 import { TextareaRenderable } from "@opentui/core"
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onMount, type JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
@@ -13,7 +13,6 @@ export type DialogPromptProps = {
 }
 
 export function DialogPrompt(props: DialogPromptProps) {
-  const { theme } = useTheme()
   let textarea: TextareaRenderable
 
   useKeyboard((evt) => {

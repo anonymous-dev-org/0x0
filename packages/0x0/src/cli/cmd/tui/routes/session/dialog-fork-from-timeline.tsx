@@ -1,18 +1,15 @@
 import { createMemo } from "solid-js"
-import { useSync } from "@tui/context/sync"
+import { sync } from "@tui/state/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
-import type { TextPart } from "@0x0-ai/sdk/v2"
+import type { TextPart } from "@/server/types"
 import { Locale } from "@/util/locale"
-import { useSDK } from "@tui/context/sdk"
-import { useRoute } from "@tui/context/route"
+import { sdk } from "@tui/state/sdk"
+import { route } from "@tui/state/route"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "@tui/component/prompt/history"
 
 export function DialogForkFromTimeline(props: { sessionID: string; onMove: (messageID: string) => void }) {
-  const sync = useSync()
   const dialog = useDialog()
-  const sdk = useSDK()
-  const route = useRoute()
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const messages = sync.data.message[props.sessionID] ?? []
@@ -28,10 +25,10 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
         value: message.id,
         footer: Locale.time(message.time.created),
         onSelect: async (dialog) => {
-          const forked = await sdk.client.session.fork({
-            sessionID: props.sessionID,
-            messageID: message.id,
-          })
+          const forked = await sdk.client.session[":sessionID"].fork.$post({
+            param: { sessionID: props.sessionID },
+            json: { messageID: message.id },
+          } as any).then((res: any) => res.json())
           const parts = sync.data.part[message.id] ?? []
           const initialPrompt = parts.reduce(
             (agg, part) => {
@@ -44,7 +41,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
             { input: "", parts: [] as PromptInfo["parts"] },
           )
           route.navigate({
-            sessionID: forked.data!.id,
+            sessionID: forked.id,
             type: "session",
             initialPrompt,
           })

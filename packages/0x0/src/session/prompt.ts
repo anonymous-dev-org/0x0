@@ -14,7 +14,6 @@ import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { InstructionPrompt } from "./instruction"
-import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { clone } from "remeda"
@@ -406,15 +405,6 @@ export namespace SessionPrompt {
           agent: task.agent,
           command: task.command,
         }
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-          },
-          { args: taskArgs },
-        )
         let executionError: Error | undefined
         const taskAgent = await Agent.get(task.agent)
         const taskCtx: Tool.Context = {
@@ -448,15 +438,6 @@ export namespace SessionPrompt {
           log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
           return undefined
         })
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-          },
-          result,
-        )
         assistantMessage.finish = "tool-calls"
         assistantMessage.time.completed = Date.now()
         await Session.updateMessage(assistantMessage)
@@ -641,8 +622,6 @@ export namespace SessionPrompt {
         }
       }
 
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: sessionMessages })
-
       const result = await processor.process({
         user: lastUser,
         agent,
@@ -762,28 +741,7 @@ export namespace SessionPrompt {
         inputSchema: jsonSchema(schema as any),
         async execute(args, options) {
           const ctx = context(args, options)
-          await Plugin.trigger(
-            "tool.execute.before",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-            },
-            {
-              args,
-            },
-          )
-          const result = await item.execute(args, ctx)
-          await Plugin.trigger(
-            "tool.execute.after",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-            },
-            result,
-          )
-          return result
+          return item.execute(args, ctx)
         },
       })
     }
@@ -810,18 +768,6 @@ export namespace SessionPrompt {
       item.execute = async (args, opts) => {
         const ctx = context(args, opts)
 
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-          },
-          {
-            args,
-          },
-        )
-
         await ctx.ask({
           permission: key,
           metadata: {},
@@ -830,16 +776,6 @@ export namespace SessionPrompt {
         })
 
         const result = await execute(args, opts)
-
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-          },
-          result,
-        )
 
         const textParts: string[] = []
         const attachments: MessageV2.FilePart[] = []
@@ -1230,21 +1166,6 @@ export namespace SessionPrompt {
       }),
     ).then((x) => x.flat())
 
-    await Plugin.trigger(
-      "chat.message",
-      {
-        sessionID: input.sessionID,
-        agent: input.agent,
-        model: input.model,
-        messageID: input.messageID,
-        variant: input.variant,
-      },
-      {
-        message: info,
-        parts,
-      },
-    )
-
     await Session.updateMessage(info)
     for (const part of parts) {
       await Session.updatePart(part)
@@ -1421,14 +1342,12 @@ export namespace SessionPrompt {
     const resolved = matchingInvocation?.args ?? ["-c", input.command]
 
     const cwd = Instance.directory
-    const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const proc = spawn(shell, resolved, {
       cwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
-        ...shellEnv.env,
         TERM: "dumb",
       },
     })
@@ -1656,16 +1575,6 @@ export namespace SessionPrompt {
         ? Provider.parseModel(input.model)
         : await lastModel(input.sessionID)
       : taskModel
-
-    await Plugin.trigger(
-      "command.execute.before",
-      {
-        command: input.command,
-        sessionID: input.sessionID,
-        arguments: input.arguments,
-      },
-      { parts },
-    )
 
     const result = (await prompt({
       sessionID: input.sessionID,

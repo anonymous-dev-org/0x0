@@ -1,15 +1,15 @@
 import { useRenderer } from "@opentui/solid"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useConnected } from "@tui/component/dialog-model"
-import { useLocal } from "@tui/context/local"
-import { useSync } from "@tui/context/sync"
+import { local } from "@tui/state/local"
+import { sync } from "@tui/state/sync"
 import { useDialog } from "@tui/ui/dialog"
-import { useKV } from "../context/kv"
-import type { RouteContext } from "../context/route"
-import { usePromptRef } from "../context/prompt"
-import { useSDK } from "../context/sdk"
+import { kv } from "@tui/state/kv"
+import type { RouteContext } from "@tui/state/route"
+import { promptRef } from "@tui/state/prompt"
+import { sdk } from "@tui/state/sdk"
 import { useToast } from "../ui/toast"
-import { useExit } from "../context/exit"
+import { exit } from "@tui/state/exit"
 import { DialogAlert } from "../ui/dialog-alert"
 import type { Accessor, Component, Setter } from "solid-js"
 
@@ -19,17 +19,17 @@ export function registerAppCommands(props: {
   command: ReturnType<typeof useCommandDialog>
   connected: ReturnType<typeof useConnected>
   dialog: ReturnType<typeof useDialog>
-  exit: ReturnType<typeof useExit>
-  kv: ReturnType<typeof useKV>
-  local: ReturnType<typeof useLocal>
+  exit: typeof exit
+  kv: typeof kv
+  local: typeof local
   mode: Accessor<"dark" | "light">
-  promptRef: ReturnType<typeof usePromptRef>
+  promptRef: typeof promptRef
   renderer: ReturnType<typeof useRenderer>
   route: RouteContext
-  sdk: ReturnType<typeof useSDK>
+  sdk: typeof sdk
   setMode: (mode: "dark" | "light") => void
   setTerminalTitleEnabled: Setter<boolean>
-  sync: ReturnType<typeof useSync>
+  sync: typeof sync
   terminalTitleEnabled: Accessor<boolean>
   toast: ReturnType<typeof useToast>
 }) {
@@ -85,8 +85,8 @@ export function registerAppCommands(props: {
       onSelect: async () => {
         const current = props.promptRef.current
         const currentPrompt = current?.current?.input ? current.current : undefined
-        const result = await props.sdk.client.session.create({}).catch(() => undefined)
-        if (!result?.data?.id) {
+        const result = await props.sdk.client.session.$post({ json: {} } as any).then((res: any) => res.json()).catch(() => undefined)
+        if (!result?.id) {
           props.toast.show({
             variant: "error",
             message: "Failed to create session",
@@ -95,7 +95,7 @@ export function registerAppCommands(props: {
         }
         props.route.navigate({
           type: "session",
-          sessionID: result.data.id,
+          sessionID: result.id,
           initialPrompt: currentPrompt,
         })
         props.dialog.clear()
@@ -172,8 +172,8 @@ export function registerAppCommands(props: {
       },
       onSelect: async (dialog) => {
         const currentAgent = props.local.agent.current().name
-        const response = await props.sdk.client.app.prompt({ agent: currentAgent }).catch(() => undefined)
-        if (!response?.data?.prompt) {
+        const response = await props.sdk.client.prompt.$post({ json: { agent: currentAgent } } as any).then((res: any) => res.json()).catch(() => undefined)
+        if (!response?.prompt) {
           props.toast.show({
             variant: "error",
             message: "Failed to resolve prompt",
@@ -181,7 +181,7 @@ export function registerAppCommands(props: {
           dialog.clear()
           return
         }
-        await DialogAlert.show(dialog, `Prompt · ${currentAgent}`, response.data.prompt)
+        await DialogAlert.show(dialog, `Prompt · ${currentAgent}`, response.prompt)
       },
     },
     {

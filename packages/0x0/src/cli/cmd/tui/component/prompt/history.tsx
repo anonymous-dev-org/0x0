@@ -5,7 +5,7 @@ import { createStore, produce } from "solid-js/store"
 import { clone } from "remeda"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
-import type { AgentPart, FilePart, TextPart } from "@0x0-ai/sdk/v2"
+import type { AgentPart, FilePart, TextPart } from "@/server/types"
 
 export type PromptInfo = {
   input: string

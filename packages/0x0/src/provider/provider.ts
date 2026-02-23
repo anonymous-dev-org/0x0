@@ -2,13 +2,11 @@ import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { sortBy } from "remeda"
-import { Log } from "../util/log"
 import { NamedError } from "@0x0-ai/util/error"
 import { ProviderAuth } from "./auth"
 import { Instance } from "../project/instance"
 
 export namespace Provider {
-  const log = Log.create({ service: "provider" })
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Types
@@ -226,7 +224,6 @@ export namespace Provider {
     const result: Record<string, Info> = {}
     if (claudeAvailable) result["claude-code"] = ALL_PROVIDERS["claude-code"]!
     if (codexAvailable) result["codex"] = ALL_PROVIDERS["codex"]!
-    log.info("providers", { connected: Object.keys(result) })
     return result
   }
 
@@ -342,21 +339,6 @@ export namespace Provider {
     return {
       providerID: providerID ?? "",
       modelID: rest.join("/"),
-    }
-  }
-
-  /**
-   * Convert a hardcoded provider to an Info object.
-   * Kept for server route compatibility.
-   */
-  export function fromModelsDevProvider(p: { id: string; name: string; models: Record<string, any> }): Info {
-    return {
-      id: p.id,
-      source: "custom",
-      name: p.name,
-      env: [],
-      options: {},
-      models: {},
     }
   }
 

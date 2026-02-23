@@ -10,8 +10,8 @@ import {
   type ParentProps,
 } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
-import { useKeybind } from "@tui/context/keybind"
-import type { KeybindsConfig } from "@0x0-ai/sdk/v2"
+import { keybind } from "@tui/state/keybind"
+import type { KeybindsConfig } from "@/server/types"
 
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
@@ -33,7 +33,6 @@ function init() {
   const [registrations, setRegistrations] = createSignal<Accessor<CommandOption[]>[]>([])
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
-  const keybind = useKeybind()
 
   const entries = createMemo(() => {
     const all = registrations().flatMap((x) => x())
@@ -124,7 +123,6 @@ export function useCommandDialog() {
 export function CommandProvider(props: ParentProps) {
   const value = init()
   const dialog = useDialog()
-  const keybind = useKeybind()
 
   useKeyboard((evt) => {
     if (value.suspended()) return

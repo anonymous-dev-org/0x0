@@ -2747,6 +2747,7 @@ export type ConfigProvidersResponses = {
     default: {
       [key: string]: string
     }
+    connected: Array<string>
   }
 }
 
@@ -4059,7 +4060,7 @@ export type ProviderListResponses = {
    * List of providers
    */
   200: {
-    all: Array<{
+    providers: Array<{
       api?: string
       name: string
       env: Array<string>

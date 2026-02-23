@@ -6,8 +6,8 @@ import { UI } from "@/cli/ui"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
-import type { Event } from "@0x0-ai/sdk/v2"
-import type { EventSource } from "./context/sdk"
+import type { Event } from "@/bus/bus-event"
+import type { EventSource } from "./state/sdk"
 
 declare global {
   const ZEROXZERO_WORKER_PATH: string

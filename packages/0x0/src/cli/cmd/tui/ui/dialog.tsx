@@ -10,7 +10,7 @@ import {
   type JSX,
   type ParentProps,
 } from "solid-js"
-import { useTheme } from "@tui/context/theme"
+import { theme } from "@tui/state/theme"
 import { Renderable, RGBA, TextAttributes } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { Clipboard } from "@tui/util/clipboard"
@@ -23,7 +23,6 @@ function Dialog(
   }>,
 ) {
   const dimensions = useTerminalDimensions()
-  const { theme } = useTheme()
   const renderer = useRenderer()
 
   return (
@@ -143,7 +142,6 @@ export function DialogProvider(props: ParentProps) {
   const value = init()
   const renderer = useRenderer()
   const toast = useToast()
-  const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   const body = () => {
     const b = value.current?.body

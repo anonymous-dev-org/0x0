@@ -1,4 +1,4 @@
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
@@ -13,7 +13,6 @@ export type DialogConfirmProps = {
 
 export function DialogConfirm(props: DialogConfirmProps) {
   const dialog = useDialog()
-  const { theme } = useTheme()
   const [store, setStore] = createStore({
     active: "confirm" as "confirm" | "cancel",
   })

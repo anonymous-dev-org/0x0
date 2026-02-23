@@ -1,6 +1,6 @@
 import { createContext, useContext, type ParentProps, Show, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useTheme } from "@tui/context/theme"
+import { theme } from "@tui/state/theme"
 import { useTerminalDimensions } from "@opentui/solid"
 import { SplitBorder } from "../component/border"
 import { TextAttributes } from "@opentui/core"
@@ -11,7 +11,6 @@ export type ToastOptions = z.infer<typeof TuiEvent.ToastShow.properties>
 
 export function Toast() {
   const toast = useToast()
-  const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
 
   return (

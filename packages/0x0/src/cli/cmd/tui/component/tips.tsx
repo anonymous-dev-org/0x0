@@ -1,5 +1,5 @@
 import { For } from "solid-js"
-import { useTheme } from "@tui/context/theme"
+import { theme } from "@tui/state/theme"
 
 type TipPart = { text: string; highlight: boolean }
 
@@ -28,7 +28,6 @@ function parse(tip: string): TipPart[] {
 }
 
 export function Tips() {
-  const theme = useTheme().theme
   const parts = parse(TIPS[Math.floor(Math.random() * TIPS.length)] ?? "")
 
   return (

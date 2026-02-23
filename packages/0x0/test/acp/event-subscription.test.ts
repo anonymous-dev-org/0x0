@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { ACP } from "../../src/acp/agent"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
-import type { Event } from "@0x0-ai/sdk/v2"
+import type { Event } from "../../src/bus/bus-event"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -17,6 +17,10 @@ type GlobalEventEnvelope = {
 type EventController = {
   push: (event: GlobalEventEnvelope) => void
   close: () => void
+}
+
+function jsonResponse(data: any) {
+  return { json: async () => data }
 }
 
 function createEventStream() {
@@ -94,102 +98,134 @@ function createFakeAgent() {
     sessionCreate: 0,
   }
 
+  // Permission reply handler (can be overridden in tests)
+  let permissionReplyFn = async (_params: any) => jsonResponse(true)
+
   const sdk = {
-    global: {
-      event: async (opts?: { signal?: AbortSignal }) => {
-        calls.eventSubscribe++
-        return { stream: stream(opts?.signal) }
-      },
-    },
     session: {
-      create: async (_params?: any) => {
+      $post: async (_params?: any) => {
         calls.sessionCreate++
-        return {
-          data: {
-            id: `ses_${calls.sessionCreate}`,
-            time: { created: new Date().toISOString() },
-          },
-        }
+        return jsonResponse({
+          id: `ses_${calls.sessionCreate}`,
+          time: { created: new Date().toISOString() },
+        })
       },
-      get: async (_params?: any) => {
-        return {
-          data: {
+      ":sessionID": {
+        $get: async (_params?: any) => {
+          return jsonResponse({
             id: "ses_1",
             time: { created: new Date().toISOString() },
+          })
+        },
+        message: {
+          $get: async () => jsonResponse([]),
+          ":messageID": {
+            $get: async () =>
+              jsonResponse({
+                info: { role: "assistant" },
+              }),
           },
-        }
-      },
-      messages: async () => {
-        return { data: [] }
-      },
-      message: async () => {
-        return {
-          data: {
-            info: {
-              role: "assistant",
-            },
-          },
-        }
+        },
       },
     },
     permission: {
-      respond: async () => {
-        return { data: true }
+      ":requestID": {
+        reply: {
+          $post: async (params: any) => permissionReplyFn(params),
+        },
       },
     },
-    config: {
-      providers: async () => {
-        return {
-          data: {
-            providers: [
-              {
-                id: "zeroxzero",
-                name: "zeroxzero",
-                models: {
-                  "big-pickle": { id: "big-pickle", name: "big-pickle" },
-                },
-              },
-            ],
-          },
-        }
-      },
-    },
-    app: {
-      agents: async () => {
-        return {
-          data: [
+    provider: {
+      $get: async () =>
+        jsonResponse({
+          providers: [
             {
-              name: "build",
-              description: "build",
-              mode: "agent",
+              id: "zeroxzero",
+              name: "zeroxzero",
+              models: {
+                "big-pickle": { id: "big-pickle", name: "big-pickle" },
+              },
             },
           ],
-        }
-      },
+        }),
+    },
+    agent: {
+      $get: async () =>
+        jsonResponse([
+          {
+            name: "build",
+            description: "build",
+            mode: "agent",
+          },
+        ]),
     },
     command: {
-      list: async () => {
-        return { data: [] }
-      },
+      $get: async () => jsonResponse([]),
     },
     mcp: {
-      add: async () => {
-        return { data: true }
-      },
+      $post: async () => jsonResponse(true),
     },
   } as any
 
+  // Mock fetch to intercept /global/event SSE endpoint
+  const baseUrl = "http://fake-acp-test:9999"
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input?.url ?? String(input)
+    if (url.includes("/global/event")) {
+      calls.eventSubscribe++
+      const signal = init?.signal as AbortSignal | undefined
+      const encoder = new TextEncoder()
+      const body = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          try {
+            for await (const event of stream(signal)) {
+              if (signal?.aborted) break
+              const data = `data: ${JSON.stringify(event)}\n\n`
+              controller.enqueue(encoder.encode(data))
+            }
+          } catch {
+            // stream aborted
+          }
+          try {
+            controller.close()
+          } catch {
+            // already closed
+          }
+        },
+      })
+      return new Response(body, {
+        headers: { "Content-Type": "text/event-stream" },
+      })
+    }
+    return originalFetch(input, init)
+  }) as typeof fetch
+
   const agent = new ACP.Agent(connection, {
     sdk,
+    baseUrl,
     defaultModel: { providerID: "zeroxzero", modelID: "big-pickle" },
   } as any)
 
   const stop = () => {
     controller.close()
     ;(agent as any).eventAbort.abort()
+    globalThis.fetch = originalFetch
   }
 
-  return { agent, controller, calls, updates, chunks, stop, sdk, connection }
+  return {
+    agent,
+    controller,
+    calls,
+    updates,
+    chunks,
+    stop,
+    sdk,
+    connection,
+    setPermissionReply: (fn: typeof permissionReplyFn) => {
+      permissionReplyFn = fn
+    },
+  }
 }
 
 describe("acp.agent event subscription", () => {
@@ -312,11 +348,11 @@ describe("acp.agent event subscription", () => {
       directory: tmp.path,
       fn: async () => {
         const permissionReplies: string[] = []
-        const { agent, controller, stop, sdk } = createFakeAgent()
-        sdk.permission.reply = async (params: any) => {
-          permissionReplies.push(params.requestID)
-          return { data: true }
-        }
+        const { agent, controller, stop, setPermissionReply } = createFakeAgent()
+        setPermissionReply(async (params: any) => {
+          permissionReplies.push(params.param.requestID)
+          return jsonResponse(true)
+        })
         const cwd = "/tmp/zeroxzero-acp-test"
 
         const sessionA = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
@@ -439,7 +475,7 @@ describe("acp.agent event subscription", () => {
           resolvePermissionA = r
         })
 
-        const { agent, controller, chunks, stop, sdk, connection } = createFakeAgent()
+        const { agent, controller, chunks, stop, connection, setPermissionReply } = createFakeAgent()
 
         // Make permission request for session A block until we release it
         const originalRequestPermission = connection.requestPermission.bind(connection)
@@ -452,10 +488,10 @@ describe("acp.agent event subscription", () => {
           return originalRequestPermission(params)
         }
 
-        sdk.permission.reply = async (params: any) => {
-          permissionReplies.push(params.requestID)
-          return { data: true }
-        }
+        setPermissionReply(async (params: any) => {
+          permissionReplies.push(params.param.requestID)
+          return jsonResponse(true)
+        })
 
         const cwd = "/tmp/zeroxzero-acp-test"
 

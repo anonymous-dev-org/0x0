@@ -1,5 +1,5 @@
 import { For, Match, Show, Switch, type JSX } from "solid-js"
-import type { AssistantMessage, UserMessage } from "@0x0-ai/sdk/v2"
+import type { AssistantMessage, UserMessage } from "@/server/types"
 
 type SessionMessage = AssistantMessage | UserMessage
 

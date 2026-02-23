@@ -2,8 +2,8 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { createMemo, createSignal } from "solid-js"
 import { Locale } from "@/util/locale"
-import { useTheme } from "../context/theme"
-import { useKeybind } from "../context/keybind"
+import { theme } from "@tui/state/theme"
+import { keybind } from "@tui/state/keybind"
 import { usePromptStash, type StashEntry } from "./prompt/stash"
 
 function getRelativeTime(timestamp: number): string {
@@ -29,8 +29,6 @@ function getStashPreview(input: string, maxLength: number = 50): string {
 export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
   const dialog = useDialog()
   const stash = usePromptStash()
-  const { theme } = useTheme()
-  const keybind = useKeybind()
 
   const [toDelete, setToDelete] = createSignal<number>()
 

@@ -42,9 +42,7 @@
     "zod-to-json-schema": "3.24.5"
   },
   "dependencies": {
-    "@0x0-ai/plugin": "workspace:*",
     "@0x0-ai/script": "workspace:*",
-    "@0x0-ai/sdk": "workspace:*",
     "@0x0-ai/util": "workspace:*",
     "@actions/core": "1.11.1",
     "@actions/github": "6.0.1",

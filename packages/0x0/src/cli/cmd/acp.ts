@@ -4,7 +4,7 @@ import { cmd } from "./cmd"
 import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk"
 import { ACP } from "@/acp/agent"
 import { Server } from "@/server/server"
-import { createZeroxzeroClient } from "@0x0-ai/sdk/v2"
+import { hcWithType } from "@/server/client"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 
 const log = Log.create({ service: "acp-command" })
@@ -25,9 +25,8 @@ export const AcpCommand = cmd({
       const opts = await resolveNetworkOptions(args)
       const server = Server.listen(opts)
 
-      const sdk = createZeroxzeroClient({
-        baseUrl: `http://${server.hostname}:${server.port}`,
-      })
+      const baseUrl = `http://${server.hostname}:${server.port}`
+      const sdk = hcWithType(baseUrl)
 
       const input = new WritableStream<Uint8Array>({
         write(chunk) {
@@ -56,7 +55,7 @@ export const AcpCommand = cmd({
       const agent = await ACP.init({ sdk })
 
       new AgentSideConnection((conn) => {
-        return agent.create(conn, { sdk })
+        return agent.create(conn, { sdk, baseUrl })
       }, stream)
 
       log.info("setup connection")

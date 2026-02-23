@@ -1,10 +1,8 @@
 import { Log } from "../util/log"
 import path from "path"
-import { pathToFileURL } from "url"
 import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
-import { ModelsDev } from "../provider/models"
 import { mergeDeep, unique } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
@@ -13,13 +11,11 @@ import { NamedError } from "@0x0-ai/util/error"
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
-import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
-import { PackageRegistry } from "@/bun/registry"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
 import PROMPT_DEFAULT from "../session/prompt/default_system_prompt.txt"
@@ -78,9 +74,6 @@ export namespace Config {
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
-    if (target.plugin && source.plugin) {
-      merged.plugin = Array.from(new Set([...target.plugin, ...source.plugin]))
-    }
     if (target.instructions && source.instructions) {
       merged.instructions = Array.from(new Set([...target.instructions, ...source.instructions]))
     }
@@ -248,7 +241,6 @@ export namespace Config {
     }
 
     result.agent = result.agent || {}
-    result.plugin = result.plugin || []
 
     const directories = [
       Global.Path.config,
@@ -270,7 +262,7 @@ export namespace Config {
       )),
     ]
 
-    const deps = []
+    const deps: Promise<void>[] = []
 
     for (const dir of unique(directories)) {
       const stat = await fs.stat(dir).catch(() => undefined)
@@ -280,9 +272,7 @@ export namespace Config {
         for (const file of configFiles) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
-          // to satisfy the type checker
           result.agent ??= {}
-          result.plugin ??= []
         }
       }
 
@@ -295,7 +285,6 @@ export namespace Config {
 
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
-      result.plugin.push(...(await loadPlugin(dir)))
     }
 
     // Load managed config files last (highest priority) - enterprise admin-controlled
@@ -317,8 +306,6 @@ export namespace Config {
 
     if (!result.keybinds) result.keybinds = Info.shape.keybinds.parse({})
 
-    result.plugin = deduplicatePlugins(result.plugin ?? [])
-
     return {
       config: result,
       directories,
@@ -339,23 +326,15 @@ export namespace Config {
 
   export async function installDependencies(dir: string) {
     const pkg = path.join(dir, "package.json")
-    const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
-
-    const json = await Bun.file(pkg)
-      .json()
-      .catch(() => ({}))
-    json.dependencies = {
-      ...json.dependencies,
-      "@0x0-ai/plugin": targetVersion,
-    }
-    await Bun.write(pkg, JSON.stringify(json, null, 2))
+    const pkgExists = await Bun.file(pkg).exists()
+    if (!pkgExists) return
 
     const gitignore = path.join(dir, ".gitignore")
     const hasGitIgnore = await Bun.file(gitignore).exists()
-    if (!hasGitIgnore) await Bun.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
+    if (!hasGitIgnore) await Bun.write(gitignore, ["node_modules", "bun.lock", ".gitignore"].join("\n"))
 
-    // Install any additional dependencies defined in the package.json
-    // This allows local plugins and custom tools to use external packages
+    // Install any dependencies defined in the package.json
+    // This allows custom tools to use external packages
     await BunProc.run(
       [
         "install",
@@ -384,31 +363,15 @@ export namespace Config {
       return false
     }
 
-    const nodeModules = path.join(dir, "node_modules")
-    if (!existsSync(nodeModules)) return true
-
     const pkg = path.join(dir, "package.json")
     const pkgFile = Bun.file(pkg)
     const pkgExists = await pkgFile.exists()
-    if (!pkgExists) return true
+    if (!pkgExists) return false
 
-    const parsed = await pkgFile.json().catch(() => null)
-    const dependencies = parsed?.dependencies ?? {}
-    const depVersion = dependencies["@0x0-ai/plugin"]
-    if (!depVersion) return true
+    const nodeModules = path.join(dir, "node_modules")
+    if (!existsSync(nodeModules)) return true
 
-    const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
-    if (targetVersion === "latest") {
-      const isOutdated = await PackageRegistry.isOutdated("@0x0-ai/plugin", depVersion, dir)
-      if (!isOutdated) return false
-      log.info("Cached version is outdated, proceeding with install", {
-        pkg: "@0x0-ai/plugin",
-        cachedVersion: depVersion,
-      })
-      return true
-    }
-    if (depVersion === targetVersion) return false
-    return true
+    return false
   }
 
   function rel(item: string, patterns: string[]) {
@@ -501,73 +464,6 @@ export namespace Config {
       throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
     }
     return result
-  }
-
-  const PLUGIN_GLOB = new Bun.Glob("{plugin,plugins}/*.{ts,js}")
-  async function loadPlugin(dir: string) {
-    const plugins: string[] = []
-
-    for await (const item of PLUGIN_GLOB.scan({
-      absolute: true,
-      followSymlinks: true,
-      dot: true,
-      cwd: dir,
-    })) {
-      plugins.push(pathToFileURL(item).href)
-    }
-    return plugins
-  }
-
-  /**
-   * Extracts a canonical plugin name from a plugin specifier.
-   * - For file:// URLs: extracts filename without extension
-   * - For npm packages: extracts package name without version
-   *
-   * @example
-   * getPluginName("file:///path/to/plugin/foo.js") // "foo"
-   * getPluginName("oh-my-zeroxzero@2.4.3") // "oh-my-zeroxzero"
-   * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
-   */
-  export function getPluginName(plugin: string): string {
-    if (plugin.startsWith("file://")) {
-      return path.parse(new URL(plugin).pathname).name
-    }
-    const lastAt = plugin.lastIndexOf("@")
-    if (lastAt > 0) {
-      return plugin.substring(0, lastAt)
-    }
-    return plugin
-  }
-
-  /**
-   * Deduplicates plugins by name, with later entries (higher priority) winning.
-   * Priority order (highest to lowest):
-   * 1. Local plugin/ directory
-   * 2. Local .0x0/config.yaml
-   * 3. Global plugin/ directory
-   * 4. Global ~/.config/0x0/config.yaml
-   *
-   * Since plugins are added in low-to-high priority order,
-   * we reverse, deduplicate (keeping first occurrence), then restore order.
-   */
-  export function deduplicatePlugins(plugins: string[]): string[] {
-    // seenNames: canonical plugin names for duplicate detection
-    // e.g., "oh-my-zeroxzero", "@scope/pkg"
-    const seenNames = new Set<string>()
-
-    // uniqueSpecifiers: full plugin specifiers to return
-    // e.g., "oh-my-zeroxzero@2.4.3", "file:///path/to/plugin.js"
-    const uniqueSpecifiers: string[] = []
-
-    for (const specifier of plugins.toReversed()) {
-      const name = getPluginName(specifier)
-      if (!seenNames.has(name)) {
-        seenNames.add(name)
-        uniqueSpecifiers.push(specifier)
-      }
-    }
-
-    return uniqueSpecifiers.toReversed()
   }
 
   export const McpLocal = z
@@ -986,26 +882,36 @@ export namespace Config {
   })
   export type Layout = z.infer<typeof Layout>
 
-  export const Provider = ModelsDev.Provider.partial()
-    .extend({
+  export const Provider = z
+    .object({
+      api: z.string().optional(),
+      name: z.string().optional(),
+      env: z.array(z.string()).optional(),
+      id: z.string().optional(),
+      npm: z.string().optional(),
       whitelist: z.array(z.string()).optional(),
       blacklist: z.array(z.string()).optional(),
       models: z
         .record(
           z.string(),
-          ModelsDev.Model.partial().extend({
-            variants: z
-              .record(
-                z.string(),
-                z
-                  .object({
-                    disabled: z.boolean().optional().describe("Disable this variant for the model"),
-                  })
-                  .catchall(z.any()),
-              )
-              .optional()
-              .describe("Variant-specific configuration"),
-          }),
+          z
+            .object({
+              id: z.string().optional(),
+              name: z.string().optional(),
+              options: z.record(z.string(), z.any()).optional(),
+              variants: z
+                .record(
+                  z.string(),
+                  z
+                    .object({
+                      disabled: z.boolean().optional().describe("Disable this variant for the model"),
+                    })
+                    .catchall(z.any()),
+                )
+                .optional()
+                .describe("Variant-specific configuration"),
+            })
+            .catchall(z.any()),
         )
         .optional(),
       options: z
@@ -1058,7 +964,6 @@ export namespace Config {
           ignore: z.array(z.string()).optional(),
         })
         .optional(),
-      plugin: z.string().array().optional(),
       snapshot: z.boolean().optional(),
       share: z
         .enum(["manual", "auto", "disabled"])
@@ -1163,7 +1068,6 @@ export namespace Config {
           },
         ),
       disable_lsp_download: z.boolean().optional().describe("Disable automatic LSP server downloads"),
-      disable_default_plugins: z.boolean().optional().describe("Disable loading default plugins"),
       disable_filetime_check: z.boolean().optional().describe("Disable file modification time checks"),
       git_bash_path: z.string().optional().describe("Path to git bash executable"),
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
@@ -1342,18 +1246,7 @@ export namespace Config {
         const updated = addYamlSchemaMetadata(original)
         await Bun.write(configFilepath, updated).catch(() => {})
       }
-      const data = parsed.data
-      if (data.plugin) {
-        for (let i = 0; i < data.plugin.length; i++) {
-          const plugin = data.plugin[i]
-          if (plugin !== undefined) {
-            try {
-              data.plugin[i] = import.meta.resolve(plugin, configFilepath)
-            } catch (err) {}
-          }
-        }
-      }
-      return data
+      return parsed.data
     }
 
     throw new InvalidError({

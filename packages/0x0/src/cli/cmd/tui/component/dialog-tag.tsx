@@ -1,11 +1,10 @@
 import { createMemo, createResource } from "solid-js"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
-import { useSDK } from "@tui/context/sdk"
+import { sdk } from "@tui/state/sdk"
 import { createStore } from "solid-js/store"
 
 export function DialogTag(props: { onSelect?: (value: string) => void }) {
-  const sdk = useSDK()
   const dialog = useDialog()
 
   const [store] = createStore({
@@ -14,20 +13,20 @@ export function DialogTag(props: { onSelect?: (value: string) => void }) {
 
   const [files] = createResource(
     () => [store.filter],
-    async () => {
-      const result = await sdk.client.find.files({
-        query: store.filter,
-      })
-      if (result.error) return []
-      const sliced = (result.data ?? []).slice(0, 5)
-      return sliced
+    async (): Promise<string[]> => {
+      const res = await sdk.client.find.file.$get({
+        query: { query: store.filter },
+      } as any).catch(() => undefined)
+      if (!res) return []
+      const data = await (res as any).json()
+      return ((data ?? []) as string[]).slice(0, 5)
     },
   )
 
   const options = createMemo(() =>
-    (files() ?? []).map((file) => ({
-      value: file,
-      title: file,
+    (files() ?? []).map((file: any) => ({
+      value: file as string,
+      title: file as string,
     })),
   )
 

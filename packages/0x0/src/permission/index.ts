@@ -3,7 +3,6 @@ import { Bus } from "@/bus"
 import z from "zod"
 import { Log } from "../util/log"
 import { Identifier } from "../id/id"
-import { Plugin } from "../plugin"
 import { Instance } from "../project/instance"
 import { Wildcard } from "../util/wildcard"
 
@@ -128,17 +127,6 @@ export namespace Permission {
       time: {
         created: Date.now(),
       },
-    }
-
-    switch (
-      await Plugin.trigger("permission.ask", info, {
-        status: "ask",
-      }).then((x) => x.status)
-    ) {
-      case "deny":
-        throw new RejectedError(info.sessionID, info.id, info.callID, info.metadata)
-      case "allow":
-        return
     }
 
     if (!pending[input.sessionID]) pending[input.sessionID] = {}

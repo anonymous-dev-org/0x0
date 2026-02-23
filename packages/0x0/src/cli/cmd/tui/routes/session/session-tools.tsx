@@ -20,12 +20,12 @@ import type { TaskTool } from "@/tool/task"
 import type { QuestionTool } from "@/tool/question"
 import type { SkillTool } from "@/tool/skill"
 import type { LspTool } from "@/tool/lsp"
-import type { AssistantMessage, ToolPart } from "@0x0-ai/sdk/v2"
-import { useTheme } from "@tui/context/theme"
-import { useSync } from "@tui/context/sync"
-import { useRoute } from "@tui/context/route"
-import { useLocal } from "@tui/context/local"
-import { useKeybind } from "@tui/context/keybind"
+import type { AssistantMessage, ToolPart } from "@/server/types"
+import { theme, themeState } from "@tui/state/theme"
+import { sync } from "@tui/state/sync"
+import { route } from "@tui/state/route"
+import { local } from "@tui/state/local"
+import { keybind } from "@tui/state/keybind"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { TodoItem } from "../../component/todo-item"
@@ -38,7 +38,7 @@ export type SessionToolContext = {
   width: number
   sessionID: string
   diffWrapMode: () => "word" | "none"
-  sync: ReturnType<typeof useSync>
+  sync: typeof sync
 }
 
 type ToolProps<T extends Tool.Info> = {
@@ -134,9 +134,6 @@ function InlineTool(props: {
   ctx: SessionToolContext
 }) {
   const [margin, setMargin] = createSignal(0)
-  const { theme } = useTheme()
-  const sync = useSync()
-
   const permission = () => {
     const callID = sync.data.permission[props.ctx.sessionID]?.at(0)?.tool?.callID
     if (!callID) return false
@@ -202,7 +199,6 @@ function BlockTool(props: {
   part?: ToolPart
   spinner?: boolean
 }) {
-  const { theme } = useTheme()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
   const error = () => (props.part?.state.status === "error" ? props.part.state.error : undefined)
@@ -243,8 +239,6 @@ function BlockTool(props: {
 }
 
 function Bash(props: ToolProps<typeof BashTool>) {
-  const { theme } = useTheme()
-  const sync = useSync()
   const isRunning = () => props.part.state.status === "running"
   const output = () => stripAnsi(props.metadata.output?.trim() ?? "")
   const [expanded, setExpanded] = createSignal(false)
@@ -316,7 +310,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
 }
 
 function Write(props: ToolProps<typeof WriteTool>) {
-  const { theme, syntax } = useTheme()
+  const syntax = themeState.syntax
   const code = () => {
     if (!props.input.content) return ""
     return props.input.content
@@ -409,7 +403,6 @@ function Search(props: ToolProps<typeof SearchTool>) {
 }
 
 function Read(props: ToolProps<typeof ReadTool>) {
-  const { theme } = useTheme()
   const loaded = () => {
     if (props.part.state.status !== "completed") return []
     if (props.part.state.time.compacted) return []
@@ -516,9 +509,7 @@ function WebSearch(props: ToolProps<Tool.Info>) {
 }
 
 function Task(props: ToolProps<typeof TaskTool>) {
-  const { theme } = useTheme()
-  const { navigate } = useRoute()
-  const sync = useSync()
+  const { navigate } = route
   const mode = () => props.input.mode
   const handoff = () =>
     (
@@ -616,7 +607,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
 }
 
 function Edit(props: ToolProps<typeof EditTool>) {
-  const { theme, syntax } = useTheme()
+  const syntax = themeState.syntax
 
   const view = () => {
     const diffStyle = props.ctx.sync.data.config.tui?.diff_style
@@ -689,7 +680,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
 }
 
 function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
-  const { theme, syntax } = useTheme()
+  const syntax = themeState.syntax
 
   const files = () => props.metadata.files ?? []
 
@@ -783,7 +774,6 @@ function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
 }
 
 function Question(props: ToolProps<typeof QuestionTool>) {
-  const { theme } = useTheme()
   const count = () => props.input.questions?.length ?? 0
 
   function format(answer?: string[]) {

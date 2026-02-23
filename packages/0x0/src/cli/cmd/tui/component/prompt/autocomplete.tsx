@@ -3,9 +3,9 @@ import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
 import { createMemo, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useLocal } from "@tui/context/local"
-import { useSync } from "@tui/context/sync"
-import { useTheme, selectedForeground } from "@tui/context/theme"
+import { local } from "@tui/state/local"
+import { sync } from "@tui/state/sync"
+import { theme, selectedForeground } from "@tui/state/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
@@ -41,10 +41,7 @@ export function Autocomplete(props: {
   input: () => TextareaRenderable
   ref: (ref: AutocompleteRef) => void
 }) {
-  const local = useLocal()
-  const sync = useSync()
   const command = useCommandDialog()
-  const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
 
   const [store, setStore] = createStore({

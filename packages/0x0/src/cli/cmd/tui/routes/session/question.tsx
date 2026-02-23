@@ -2,23 +2,18 @@ import { createStore } from "solid-js/store"
 import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
-import { useKeybind } from "../../context/keybind"
-import { selectedForeground, tint, useTheme } from "../../context/theme"
-import type { QuestionAnswer, QuestionRequest } from "@0x0-ai/sdk/v2"
-import { useSDK } from "../../context/sdk"
+import { keybind } from "@tui/state/keybind"
+import { selectedForeground, tint, theme } from "@tui/state/theme"
+import type { QuestionAnswer, QuestionRequest } from "@/server/types"
+import { sdk } from "@tui/state/sdk"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
-import { useLocal } from "../../context/local"
-import { useSync } from "../../context/sync"
+import { local } from "@tui/state/local"
+import { sync } from "@tui/state/sync"
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
-  const sdk = useSDK()
-  const { theme } = useTheme()
-  const keybind = useKeybind()
   const bindings = useTextareaKeybindings()
-  const local = useLocal()
-  const sync = useSync()
 
   const questions = createMemo(() => props.request.questions)
   const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
@@ -80,16 +75,16 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
   function submit() {
     const answers = questions().map((_, i) => store.answers[i] ?? [])
-    sdk.client.question.reply({
-      requestID: props.request.id,
-      answers,
-    })
+    sdk.client.question[":requestID"].reply.$post({
+      param: { requestID: props.request.id },
+      json: { answers },
+    } as any)
   }
 
   function reject() {
-    sdk.client.question.reject({
-      requestID: props.request.id,
-    })
+    sdk.client.question[":requestID"].reject.$post({
+      param: { requestID: props.request.id },
+    } as any)
   }
 
   function pick(answer: string, custom: boolean = false) {
@@ -100,10 +95,10 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       }
     })
     if (single()) {
-      sdk.client.question.reply({
-        requestID: props.request.id,
-        answers: [[answer]],
-      })
+      sdk.client.question[":requestID"].reply.$post({
+        param: { requestID: props.request.id },
+        json: { answers: [[answer]] },
+      } as any)
       return
     }
     batch(() => {

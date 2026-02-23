@@ -6,7 +6,7 @@ import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { Storage } from "@/storage/storage"
 import { Log } from "@/util/log"
-import type * as SDK from "@0x0-ai/sdk/v2"
+import type * as ServerTypes from "@/server/types"
 
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
@@ -93,23 +93,23 @@ export namespace ShareNext {
   type Data =
     | {
         type: "session"
-        data: SDK.Session
+        data: ServerTypes.Session
       }
     | {
         type: "message"
-        data: SDK.Message
+        data: ServerTypes.Message
       }
     | {
         type: "part"
-        data: SDK.Part
+        data: ServerTypes.Part
       }
     | {
         type: "session_diff"
-        data: SDK.FileDiff[]
+        data: ServerTypes.FileDiff[]
       }
     | {
         type: "model"
-        data: SDK.Model[]
+        data: ServerTypes.Model[]
       }
 
   const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
@@ -174,7 +174,7 @@ export namespace ShareNext {
     const models = await Promise.all(
       messages
         .filter((m) => m.info.role === "user")
-        .map((m) => (m.info as SDK.UserMessage).model)
+        .map((m) => (m.info as ServerTypes.UserMessage).model)
         .map((m) => Provider.getModel(m.providerID, m.modelID).then((m) => m)),
     )
     await sync(sessionID, [

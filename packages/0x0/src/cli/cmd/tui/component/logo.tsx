@@ -1,6 +1,6 @@
 import { TextAttributes, RGBA } from "@opentui/core"
 import { For, Show, type JSX } from "solid-js"
-import { useTheme, tint } from "@tui/context/theme"
+import { theme, tint } from "@tui/state/theme"
 import { logo, marks } from "@/cli/logo"
 
 // Shadow markers (rendered chars in parens):
@@ -10,7 +10,6 @@ import { logo, marks } from "@/cli/logo"
 const SHADOW_MARKER = new RegExp(`[${marks}]`)
 
 export function Logo() {
-  const { theme } = useTheme()
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
     const shadow = tint(theme.background, fg, 0.32)

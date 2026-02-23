@@ -1,13 +1,13 @@
 import path from "path"
-import { batch, type Accessor, type Setter } from "solid-js"
+import { batch } from "solid-js"
 import { type ScrollBoxRenderable } from "@opentui/core"
-import { type SessionRoute } from "@tui/context/route"
-import { type useSync } from "@tui/context/sync"
-import { type useSDK } from "@tui/context/sdk"
-import { type useLocal } from "@tui/context/local"
-import { type useCommandDialog } from "@tui/component/dialog-command"
-import { type useToast } from "../../ui/toast"
-import { type useRenderer } from "@opentui/solid"
+import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
+import { sdk } from "@tui/state/sdk"
+import { local } from "@tui/state/local"
+import { useCommandDialog } from "@tui/component/dialog-command"
+import { useToast } from "../../ui/toast"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { type useDialog } from "../../ui/dialog"
 import { type PromptInfo } from "../../component/prompt/history"
 import { Clipboard } from "../../util/clipboard"
@@ -17,35 +17,29 @@ import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 import { Editor } from "../../util/editor"
+import { useSessionSettings } from "./session-settings"
 
 export function useSessionCommands(props: {
-  command: ReturnType<typeof useCommandDialog>
-  route: SessionRoute
-  sync: ReturnType<typeof useSync>
-  sdk: ReturnType<typeof useSDK>
-  local: ReturnType<typeof useLocal>
-  toast: ReturnType<typeof useToast>
-  renderer: ReturnType<typeof useRenderer>
   scroll: () => ScrollBoxRenderable
   setPrompt: (prompt: PromptInfo) => void
   toBottom: () => void
   scrollToMessage: (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => void
-  showThinking: Accessor<boolean>
-  showDetails: Accessor<boolean>
-  showAssistantMetadata: Accessor<boolean>
-  sidebarVisible: Accessor<boolean>
-  conceal: Accessor<boolean>
-  showTimestamps: Accessor<boolean>
-  setSidebar: (next: Setter<"auto" | "hide">) => void
-  setSidebarOpen: Setter<boolean>
-  setConceal: Setter<boolean>
-  setTimestamps: (next: Setter<"hide" | "show">) => void
-  setShowThinking: (next: Setter<boolean>) => void
-  setShowDetails: (next: Setter<boolean>) => void
-  setShowScrollbar: (next: Setter<boolean>) => void
 }) {
-  const session = () => props.sync.session.get(props.route.sessionID)
-  const messages = () => props.sync.data.message[props.route.sessionID] ?? []
+  const command = useCommandDialog()
+  const toast = useToast()
+  const renderer = useRenderer()
+  const settings = useSessionSettings()
+  const dimensions = useTerminalDimensions()
+
+  const session = () => sync.session.get(route.data.sessionID)
+  const messages = () => sync.data.message[route.data.sessionID] ?? []
+  const wide = () => dimensions().width > 120
+  const sidebarVisible = () => {
+    if (session()?.parentID) return false
+    if (settings.sidebarOpen()) return true
+    if (settings.sidebar() === "auto" && wide()) return true
+    return false
+  }
 
   const scrollTo = (messageID: string) => {
     const scroll = props.scroll()
@@ -53,30 +47,31 @@ export function useSessionCommands(props: {
     if (child) scroll.scrollBy(child.y - scroll.y - 1)
   }
 
-  props.command.register(() => [
+  command.register(() => [
     {
       title: "Share session",
       value: "session.share",
-      suggested: props.route.type === "session",
+      suggested: route.data.type === "session",
       keybind: "session_share",
       category: "Session",
-      enabled: props.sync.data.config.share !== "disabled" && !session()?.share?.url,
+      enabled: sync.data.config.share !== "disabled" && !session()?.share?.url,
       slash: {
         name: "share",
       },
       onSelect: async (dialog) => {
-        await props.sdk.client.session
-          .share({
-            sessionID: props.route.sessionID,
-          })
-          .then((res) =>
-            Clipboard.copyWithToast(res.data!.share!.url, props.toast, {
+        await sdk.client.session[":sessionID"].share
+          .$post({
+            param: { sessionID: route.data.sessionID },
+          } as any)
+          .then((res: any) => res.json())
+          .then((data: any) =>
+            Clipboard.copyWithToast(data.share!.url, toast, {
               successMessage: "Share URL copied to clipboard!",
               successVariant: "success",
               errorMessage: "Failed to copy URL to clipboard",
             }),
           )
-          .catch(() => props.toast.show({ message: "Failed to share session", variant: "error" }))
+          .catch(() => toast.show({ message: "Failed to share session", variant: "error" }))
         dialog.clear()
       },
     },
@@ -92,7 +87,7 @@ export function useSessionCommands(props: {
         dialog.show({
           title: "Rename Session",
           size: "medium",
-          body: () => <DialogSessionRename session={props.route.sessionID} />,
+          body: () => <DialogSessionRename session={route.data.sessionID} />,
         })
       },
     },
@@ -111,7 +106,7 @@ export function useSessionCommands(props: {
           body: () => (
             <DialogTimeline
               onMove={scrollTo}
-              sessionID={props.route.sessionID}
+              sessionID={route.data.sessionID}
               setPrompt={(promptInfo) => props.setPrompt(promptInfo)}
             />
           ),
@@ -130,7 +125,7 @@ export function useSessionCommands(props: {
         dialog.show({
           title: "Fork from message",
           size: "large",
-          body: () => <DialogForkFromTimeline onMove={scrollTo} sessionID={props.route.sessionID} />,
+          body: () => <DialogForkFromTimeline onMove={scrollTo} sessionID={route.data.sessionID} />,
         })
       },
     },
@@ -144,20 +139,22 @@ export function useSessionCommands(props: {
         aliases: ["summarize"],
       },
       onSelect: (dialog) => {
-        const selectedModel = props.local.model.current()
+        const selectedModel = local.model.current()
         if (!selectedModel) {
-          props.toast.show({
+          toast.show({
             variant: "warning",
             message: "Select a model to summarize this session",
             duration: 3000,
           })
           return
         }
-        props.sdk.client.session.summarize({
-          sessionID: props.route.sessionID,
-          modelID: selectedModel.modelID,
-          providerID: selectedModel.providerID,
-        })
+        sdk.client.session[":sessionID"].summarize.$post({
+          param: { sessionID: route.data.sessionID },
+          json: {
+            modelID: selectedModel.modelID,
+            providerID: selectedModel.providerID,
+          },
+        } as any)
         dialog.clear()
       },
     },
@@ -171,12 +168,12 @@ export function useSessionCommands(props: {
         name: "unshare",
       },
       onSelect: async (dialog) => {
-        await props.sdk.client.session
-          .unshare({
-            sessionID: props.route.sessionID,
-          })
-          .then(() => props.toast.show({ message: "Session unshared successfully", variant: "success" }))
-          .catch(() => props.toast.show({ message: "Failed to unshare session", variant: "error" }))
+        await sdk.client.session[":sessionID"].share
+          .$delete({
+            param: { sessionID: route.data.sessionID },
+          } as any)
+          .then(() => toast.show({ message: "Session unshared successfully", variant: "success" }))
+          .catch(() => toast.show({ message: "Failed to unshare session", variant: "error" }))
         dialog.clear()
       },
     },
@@ -189,22 +186,22 @@ export function useSessionCommands(props: {
         name: "undo",
       },
       onSelect: async (dialog) => {
-        const status = props.sync.data.session_status?.[props.route.sessionID]
+        const status = sync.data.session_status?.[route.data.sessionID]
         if (status?.type !== "idle") {
-          await props.sdk.client.session.abort({ sessionID: props.route.sessionID }).catch(() => {})
+          await sdk.client.session[":sessionID"].abort.$post({ param: { sessionID: route.data.sessionID } } as any).catch(() => {})
         }
         const revert = session()?.revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
-        props.sdk.client.session
-          .revert({
-            sessionID: props.route.sessionID,
-            messageID: message.id,
-          })
+        sdk.client.session[":sessionID"].revert
+          .$post({
+            param: { sessionID: route.data.sessionID },
+            json: { messageID: message.id },
+          } as any)
           .then(() => {
             props.toBottom()
           })
-        const parts = props.sync.data.part[message.id] ?? []
+        const parts = sync.data.part[message.id] ?? []
         props.setPrompt(
           parts.reduce(
             (agg, part) => {
@@ -235,44 +232,44 @@ export function useSessionCommands(props: {
         if (!messageID) return
         const message = messages().find((x) => x.role === "user" && x.id > messageID)
         if (!message) {
-          props.sdk.client.session.unrevert({
-            sessionID: props.route.sessionID,
-          })
+          sdk.client.session[":sessionID"].unrevert.$post({
+            param: { sessionID: route.data.sessionID },
+          } as any)
           props.setPrompt({ input: "", parts: [] })
           return
         }
-        props.sdk.client.session.revert({
-          sessionID: props.route.sessionID,
-          messageID: message.id,
-        })
+        sdk.client.session[":sessionID"].revert.$post({
+          param: { sessionID: route.data.sessionID },
+          json: { messageID: message.id },
+        } as any)
       },
     },
     {
-      title: props.sidebarVisible() ? "Hide sidebar" : "Show sidebar",
+      title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
       value: "session.sidebar.toggle",
       keybind: "sidebar_toggle",
       category: "Session",
       onSelect: (dialog) => {
         batch(() => {
-          const isVisible = props.sidebarVisible()
-          props.setSidebar(() => (isVisible ? "hide" : "auto"))
-          props.setSidebarOpen(!isVisible)
+          const isVisible = sidebarVisible()
+          settings.setSidebar(() => (isVisible ? "hide" : "auto"))
+          settings.setSidebarOpen(!isVisible)
         })
         dialog.clear()
       },
     },
     {
-      title: props.conceal() ? "Disable code concealment" : "Enable code concealment",
+      title: settings.conceal() ? "Disable code concealment" : "Enable code concealment",
       value: "session.toggle.conceal",
       keybind: "messages_toggle_conceal",
       category: "Session",
       onSelect: (dialog) => {
-        props.setConceal((prev) => !prev)
+        settings.setConceal((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: props.showTimestamps() ? "Hide timestamps" : "Show timestamps",
+      title: settings.showTimestamps() ? "Hide timestamps" : "Show timestamps",
       value: "session.toggle.timestamps",
       category: "Session",
       slash: {
@@ -280,12 +277,12 @@ export function useSessionCommands(props: {
         aliases: ["toggle-timestamps"],
       },
       onSelect: (dialog) => {
-        props.setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
+        settings.setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
         dialog.clear()
       },
     },
     {
-      title: props.showThinking() ? "Hide thinking" : "Show thinking",
+      title: settings.showThinking() ? "Hide thinking" : "Show thinking",
       value: "session.toggle.thinking",
       keybind: "display_thinking",
       category: "Session",
@@ -294,12 +291,12 @@ export function useSessionCommands(props: {
         aliases: ["toggle-thinking"],
       },
       onSelect: (dialog) => {
-        props.setShowThinking((prev) => !prev)
+        settings.setShowThinking((prev) => !prev)
         dialog.clear()
       },
     },
     {
-      title: props.showDetails() ? "Hide tool details" : "Show tool details",
+      title: settings.showDetails() ? "Hide tool details" : "Show tool details",
       value: "session.toggle.actions",
       keybind: "tool_details",
       category: "Session",
@@ -307,7 +304,7 @@ export function useSessionCommands(props: {
         name: "details",
       },
       onSelect: (dialog) => {
-        props.setShowDetails((prev) => !prev)
+        settings.setShowDetails((prev) => !prev)
         dialog.clear()
       },
     },
@@ -317,7 +314,7 @@ export function useSessionCommands(props: {
       keybind: "scrollbar_toggle",
       category: "Session",
       onSelect: (dialog) => {
-        props.setShowScrollbar((prev) => !prev)
+        settings.setShowScrollbar((prev) => !prev)
         dialog.clear()
       },
     },
@@ -421,14 +418,14 @@ export function useSessionCommands(props: {
       category: "Session",
       hidden: true,
       onSelect: () => {
-        const messages = props.sync.data.message[props.route.sessionID]
+        const messages = sync.data.message[route.data.sessionID]
         if (!messages || !messages.length) return
 
         for (let i = messages.length - 1; i >= 0; i--) {
           const message = messages[i]
           if (!message || message.role !== "user") continue
 
-          const parts = props.sync.data.part[message.id]
+          const parts = sync.data.part[message.id]
           if (!parts || !Array.isArray(parts)) continue
 
           const hasValidTextPart = parts.some(
@@ -469,15 +466,15 @@ export function useSessionCommands(props: {
           (msg) => msg.role === "assistant" && (!revertID || msg.id < revertID),
         )
         if (!lastAssistantMessage) {
-          props.toast.show({ message: "No assistant messages found", variant: "error" })
+          toast.show({ message: "No assistant messages found", variant: "error" })
           dialog.clear()
           return
         }
 
-        const parts = props.sync.data.part[lastAssistantMessage.id] ?? []
+        const parts = sync.data.part[lastAssistantMessage.id] ?? []
         const textParts = parts.filter((part) => part.type === "text")
         if (textParts.length === 0) {
-          props.toast.show({ message: "No text parts found in last assistant message", variant: "error" })
+          toast.show({ message: "No text parts found in last assistant message", variant: "error" })
           dialog.clear()
           return
         }
@@ -487,12 +484,12 @@ export function useSessionCommands(props: {
           .join("\n")
           .trim()
         if (!text) {
-          props.toast.show({ message: "No text content found in last assistant message", variant: "error" })
+          toast.show({ message: "No text content found in last assistant message", variant: "error" })
           dialog.clear()
           return
         }
 
-        Clipboard.copyWithToast(text, props.toast, {
+        Clipboard.copyWithToast(text, toast, {
           successMessage: "Message copied to clipboard!",
           successVariant: "success",
           errorMessage: "Failed to copy to clipboard",
@@ -514,20 +511,20 @@ export function useSessionCommands(props: {
           const sessionMessages = messages()
           const transcript = formatTranscript(
             sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: props.sync.data.part[msg.id] ?? [] })),
+            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
             {
-              thinking: props.showThinking(),
-              toolDetails: props.showDetails(),
-              assistantMetadata: props.showAssistantMetadata(),
+              thinking: settings.showThinking(),
+              toolDetails: settings.showDetails(),
+              assistantMetadata: settings.showAssistantMetadata(),
             },
           )
-          await Clipboard.copyWithToast(transcript, props.toast, {
+          await Clipboard.copyWithToast(transcript, toast, {
             successMessage: "Session transcript copied to clipboard!",
             successVariant: "success",
             errorMessage: "Failed to copy session transcript",
           })
         } catch {
-          props.toast.show({ message: "Failed to format session transcript", variant: "error" })
+          toast.show({ message: "Failed to format session transcript", variant: "error" })
         }
         dialog.clear()
       },
@@ -551,9 +548,9 @@ export function useSessionCommands(props: {
           const options = await DialogExportOptions.show(
             dialog,
             defaultFilename,
-            props.showThinking(),
-            props.showDetails(),
-            props.showAssistantMetadata(),
+            settings.showThinking(),
+            settings.showDetails(),
+            settings.showAssistantMetadata(),
             false,
           )
 
@@ -561,7 +558,7 @@ export function useSessionCommands(props: {
 
           const transcript = formatTranscript(
             sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: props.sync.data.part[msg.id] ?? [] })),
+            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
             {
               thinking: options.thinking,
               toolDetails: options.toolDetails,
@@ -570,7 +567,7 @@ export function useSessionCommands(props: {
           )
 
           if (options.openWithoutSaving) {
-            await Editor.open({ value: transcript, renderer: props.renderer })
+            await Editor.open({ value: transcript, renderer })
           } else {
             const exportDir = process.cwd()
             const filename = options.filename.trim()
@@ -578,15 +575,15 @@ export function useSessionCommands(props: {
 
             await Bun.write(filepath, transcript)
 
-            const result = await Editor.open({ value: transcript, renderer: props.renderer })
+            const result = await Editor.open({ value: transcript, renderer })
             if (result !== undefined) {
               await Bun.write(filepath, result)
             }
 
-            props.toast.show({ message: `Session exported to ${filename}`, variant: "success" })
+            toast.show({ message: `Session exported to ${filename}`, variant: "success" })
           }
         } catch {
-          props.toast.show({ message: "Failed to export session", variant: "error" })
+          toast.show({ message: "Failed to export session", variant: "error" })
         }
         dialog.clear()
       },

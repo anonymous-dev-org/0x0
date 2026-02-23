@@ -10,15 +10,15 @@ import {
   fg,
 } from "@opentui/core"
 import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
-import { useLocal } from "@tui/context/local"
-import { tint, useTheme } from "@tui/context/theme"
+import { local } from "@tui/state/local"
+import { tint, theme, themeState } from "@tui/state/theme"
 import { EmptyBorder } from "@tui/component/border"
-import { useSDK } from "@tui/context/sdk"
-import { useRoute } from "@tui/context/route"
-import { useSync } from "@tui/context/sync"
+import { sdk } from "@tui/state/sdk"
+import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
 import { Binary } from "@0x0-ai/util/binary"
 import { createStore, produce } from "solid-js/store"
-import { useKeybind } from "@tui/context/keybind"
+import { keybind } from "@tui/state/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { usePromptStash } from "./stash"
 import { DialogStash } from "../dialog-stash"
@@ -26,9 +26,9 @@ import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
 import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
-import { useExit } from "../../context/exit"
+import { exit } from "@tui/state/exit"
 import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@0x0-ai/sdk/v2"
+import type { FilePart } from "@/server/types"
 import { TuiEvent } from "../../event"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
@@ -68,11 +68,6 @@ export function Prompt(props: PromptProps) {
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
 
-  const keybind = useKeybind()
-  const local = useLocal()
-  const sdk = useSDK()
-  const route = useRoute()
-  const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
   const status = () => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" }
@@ -80,7 +75,7 @@ export function Prompt(props: PromptProps) {
   const stash = usePromptStash()
   const command = useCommandDialog()
   const renderer = useRenderer()
-  const { theme, syntax } = useTheme()
+  const syntax = themeState.syntax
 
   function promptModelWarning() {
     toast.show({
@@ -88,7 +83,7 @@ export function Prompt(props: PromptProps) {
       message: "Connect a provider to send prompts",
       duration: 3000,
     })
-    if (sync.data.provider.length === 0) {
+    if (sync.data.provider_connected.length === 0) {
       dialog.show({ title: "Connect a provider", body: () => <DialogProviderConnect /> })
     }
   }
@@ -375,7 +370,7 @@ export function Prompt(props: PromptProps) {
     setMode: (mode: "normal" | "shell") => setStore("mode", mode),
     setInterrupt,
     abortSession: (sessionID: string) => {
-      sdk.client.session.abort({ sessionID })
+      sdk.client.session[":sessionID"].abort.$post({ param: { sessionID } } as any)
     },
     clear,
     submit,
@@ -452,8 +447,6 @@ export function Prompt(props: PromptProps) {
       exit,
     })
   }
-  const exit = useExit()
-
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset

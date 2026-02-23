@@ -1,8 +1,8 @@
 import { createMemo } from "solid-js"
-import { useSync } from "@tui/context/sync"
+import { sync } from "@tui/state/sync"
 import { DialogSelect } from "@tui/ui/dialog-select"
-import { useSDK } from "@tui/context/sdk"
-import { useRoute } from "@tui/context/route"
+import { sdk } from "@tui/state/sdk"
+import { route } from "@tui/state/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
 
@@ -11,10 +11,7 @@ export function DialogMessage(props: {
   sessionID: string
   setPrompt?: (prompt: PromptInfo) => void
 }) {
-  const sync = useSync()
-  const sdk = useSDK()
   const message = createMemo(() => sync.data.message[props.sessionID]?.find((x) => x.id === props.messageID))
-  const route = useRoute()
 
   return (
     <DialogSelect
@@ -27,10 +24,10 @@ export function DialogMessage(props: {
             const msg = message()
             if (!msg) return
 
-            sdk.client.session.revert({
-              sessionID: props.sessionID,
-              messageID: msg.id,
-            })
+            sdk.client.session[":sessionID"].revert.$post({
+              param: { sessionID: props.sessionID },
+              json: { messageID: msg.id },
+            } as any)
 
             if (props.setPrompt) {
               const parts = sync.data.part[msg.id] ?? []
@@ -75,10 +72,10 @@ export function DialogMessage(props: {
           value: "session.fork",
           description: "create a new session",
           onSelect: async (dialog) => {
-            const result = await sdk.client.session.fork({
-              sessionID: props.sessionID,
-              messageID: props.messageID,
-            })
+            const result = await sdk.client.session[":sessionID"].fork.$post({
+              param: { sessionID: props.sessionID },
+              json: { messageID: props.messageID },
+            } as any).then((res: any) => res.json())
             const initialPrompt = (() => {
               const msg = message()
               if (!msg) return undefined
@@ -95,7 +92,7 @@ export function DialogMessage(props: {
               )
             })()
             route.navigate({
-              sessionID: result.data?.id ?? "",
+              sessionID: result?.id ?? "",
               type: "session",
               initialPrompt,
             })

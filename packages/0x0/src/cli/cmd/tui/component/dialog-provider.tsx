@@ -1,8 +1,9 @@
-import { createMemo } from "solid-js"
-import { useSync } from "@tui/context/sync"
-import { DialogSelect } from "@tui/ui/dialog-select"
+import { sync } from "@tui/state/sync"
+import { theme } from "@tui/state/theme"
 import { useDialog } from "@tui/ui/dialog"
-import { useTheme } from "../context/theme"
+import { DialogSelect } from "@tui/ui/dialog-select"
+import { createMemo } from "solid-js"
+import { Log } from "@/util/log"
 import { Link } from "../ui/link"
 import { DialogModel } from "./dialog-model"
 
@@ -18,11 +19,12 @@ const INSTALL_INFO: Record<string, { cmd: string; url: string }> = {
 }
 
 export function createDialogProviderOptions() {
-  const sync = useSync()
   const dialog = useDialog()
+  Log.Default.info("1", sync.data.provider)
+  Log.Default.info("2", sync.data.provider_connected)
   const options = createMemo(() => {
-    const connected = new Set(sync.data.provider_next.connected)
-    return sync.data.provider_next.all.map((provider) => {
+    const connected = new Set(sync.data.provider_connected)
+    return sync.data.provider.map(provider => {
       const isConnected = connected.has(provider.id)
       return {
         title: provider.name,
@@ -49,11 +51,11 @@ export function createDialogProviderOptions() {
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
+  console.log("3", options())
   return <DialogSelect options={options()} />
 }
 
 function InstallGuide(props: { providerID: string }) {
-  const { theme } = useTheme()
   const info = INSTALL_INFO[props.providerID]
 
   return (

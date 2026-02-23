@@ -1,7 +1,7 @@
 import { createMemo } from "solid-js"
-import { useSync } from "@tui/context/sync"
+import { sync } from "@tui/state/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
-import type { TextPart } from "@0x0-ai/sdk/v2"
+import type { TextPart } from "@/server/types"
 import { Locale } from "@/util/locale"
 import { DialogMessage } from "./dialog-message"
 import { useDialog } from "../../ui/dialog"
@@ -12,7 +12,6 @@ export function DialogTimeline(props: {
   onMove: (messageID: string) => void
   setPrompt?: (prompt: PromptInfo) => void
 }) {
-  const sync = useSync()
   const dialog = useDialog()
 
   const options = createMemo((): DialogSelectOption<string>[] => {

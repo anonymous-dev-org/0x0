@@ -5,7 +5,9 @@ import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
 import { EOL } from "os"
-import { createZeroxzeroClient, type Message, type ZeroxzeroClient, type ToolPart } from "@0x0-ai/sdk/v2"
+import { hcWithType, type Client } from "@/server/client"
+import type { Event } from "@/bus/bus-event"
+import type { Message, ToolPart } from "@/server/types"
 import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
@@ -200,6 +202,30 @@ function normalizePath(input?: string) {
   return input
 }
 
+async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<Event> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            yield JSON.parse(line.slice(6))
+          } catch {}
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 export const RunCommand = cmd({
   command: "run [message..]",
   describe: "run 0x0 with a message",
@@ -330,37 +356,39 @@ export const RunCommand = cmd({
       return message.slice(0, 50) + (message.length > 50 ? "..." : "")
     }
 
-    async function session(sdk: ZeroxzeroClient) {
-      const baseID = args.continue ? (await sdk.session.list()).data?.find((s) => !s.parentID)?.id : args.session
+    async function session(sdk: Client) {
+      const baseID = args.continue
+        ? (await sdk.session.$get({} as any).then((r: any) => r.json()))?.find((s: any) => !s.parentID)?.id
+        : args.session
 
       if (baseID && args.fork) {
-        const forked = await sdk.session.fork({ sessionID: baseID })
-        return forked.data?.id
+        const forked = await sdk.session[":sessionID"].fork.$post({ param: { sessionID: baseID }, json: {} } as any).then((r: any) => r.json())
+        return forked?.id
       }
 
       if (baseID) return baseID
 
       const name = title()
-      const result = await sdk.session.create({ title: name, permission: rules })
-      return result.data?.id
+      const result = await sdk.session.$post({ json: { title: name, permission: rules } } as any).then((r: any) => r.json())
+      return result?.id
     }
 
-    async function share(sdk: ZeroxzeroClient, sessionID: string) {
-      const cfg = await sdk.config.get()
-      if (!cfg.data) return
-      if (cfg.data.share !== "auto" && !args.share) return
-      const res = await sdk.session.share({ sessionID }).catch((error) => {
+    async function share(sdk: Client, sessionID: string) {
+      const cfg = await sdk.config.$get({} as any).then((r: any) => r.json())
+      if (!cfg) return
+      if (cfg.share !== "auto" && !args.share) return
+      const res = await sdk.session[":sessionID"].share.$post({ param: { sessionID } } as any).then((r: any) => r.json()).catch((error: any) => {
         if (error instanceof Error && error.message.includes("disabled")) {
           UI.println(UI.Style.TEXT_DANGER_BOLD + "!  " + error.message)
         }
-        return { error }
+        return undefined
       })
-      if (!res.error && "data" in res && res.data?.share?.url) {
-        UI.println(UI.Style.TEXT_INFO_BOLD + "~  " + res.data.share.url)
+      if (res?.share?.url) {
+        UI.println(UI.Style.TEXT_INFO_BOLD + "~  " + res.share.url)
       }
     }
 
-    async function execute(sdk: ZeroxzeroClient) {
+    async function execute(sdk: Client, baseUrl: string, fetchFn?: typeof globalThis.fetch) {
       function tool(part: ToolPart) {
         if (part.tool === "bash") return bash(props<typeof BashTool>(part))
         if (part.tool === "question") return question(props<typeof QuestionTool>(part))
@@ -382,13 +410,16 @@ export const RunCommand = cmd({
         return false
       }
 
-      const events = await sdk.event.subscribe()
+      const eventFetcher = fetchFn ?? fetch
+      const eventRes = await eventFetcher(new URL("/event", baseUrl).href, {
+        headers: { Accept: "text/event-stream" },
+      })
       let error: string | undefined
 
       async function loop() {
         const toggles = new Map<string, boolean>()
 
-        for await (const event of events.stream) {
+        for await (const event of parseSSE(eventRes.body!)) {
           if (
             event.type === "message.updated" &&
             event.properties.info.role === "assistant" &&
@@ -485,10 +516,7 @@ export const RunCommand = cmd({
               UI.Style.TEXT_NORMAL +
                 `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
             )
-            await sdk.permission.reply({
-              requestID: permission.id,
-              reply: "reject",
-            })
+            await sdk.permission[":requestID"].reply.$post({ param: { requestID: permission.id }, json: { reply: "reject" } } as any)
           }
         }
       }
@@ -521,29 +549,16 @@ export const RunCommand = cmd({
       })
 
       if (args.command) {
-        await sdk.session.command({
-          sessionID,
-          agent,
-          model: args.model,
-          command: args.command,
-          arguments: message,
-          variant: args.variant,
-        })
+        await sdk.session[":sessionID"].command.$post({ param: { sessionID }, json: { agent, model: args.model, command: args.command, arguments: message, variant: args.variant } } as any)
       } else {
         const model = args.model ? Provider.parseModel(args.model) : undefined
-        await sdk.session.prompt({
-          sessionID,
-          agent,
-          model,
-          variant: args.variant,
-          parts: [...files, { type: "text", text: message }],
-        })
+        await sdk.session[":sessionID"].message.$post({ param: { sessionID }, json: { agent, model, variant: args.variant, parts: [...files, { type: "text", text: message }] } } as any)
       }
     }
 
     if (args.attach) {
-      const sdk = createZeroxzeroClient({ baseUrl: args.attach })
-      return await execute(sdk)
+      const sdk = hcWithType(args.attach)
+      return await execute(sdk, args.attach)
     }
 
     await bootstrap(process.cwd(), async () => {
@@ -551,8 +566,9 @@ export const RunCommand = cmd({
         const request = new Request(input, init)
         return Server.App().fetch(request)
       }) as typeof globalThis.fetch
-      const sdk = createZeroxzeroClient({ baseUrl: "http://zeroxzero.internal", fetch: fetchFn })
-      await execute(sdk)
+      const baseUrl = "http://zeroxzero.internal"
+      const sdk = hcWithType(baseUrl, { fetch: fetchFn as any })
+      await execute(sdk, baseUrl, fetchFn)
     })
   },
 })

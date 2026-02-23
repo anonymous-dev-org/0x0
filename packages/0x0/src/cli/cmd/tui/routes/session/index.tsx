@@ -1,32 +1,28 @@
-import { createEffect, createMemo, createSignal, For, Match, on, Show, Switch } from "solid-js"
-import { useRoute } from "@tui/context/route"
-import { useSync } from "@tui/context/sync"
-import { SplitBorder } from "@tui/component/border"
-import { useTheme } from "@tui/context/theme"
+import { createEffect, createMemo, createSignal, Match, on, Show, Switch } from "solid-js"
+import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
+import { theme } from "@tui/state/theme"
 import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, RGBA } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type {
   AssistantMessage as AssistantMessageType,
   UserMessage as UserMessageType,
   ToolPart as ToolPartType,
-} from "@0x0-ai/sdk/v2"
-import { useLocal } from "@tui/context/local"
+} from "@/server/types"
+import { local } from "@tui/state/local"
 import { Locale } from "@/util/locale"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { useSDK } from "@tui/context/sdk"
-import { useCommandDialog } from "@tui/component/dialog-command"
-import { useKeybind } from "@tui/context/keybind"
+import { sdk } from "@tui/state/sdk"
+import { keybind } from "@tui/state/keybind"
 import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
 import { DialogMessage } from "./dialog-message"
-import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { Sidebar } from "./sidebar"
 import parsers from "../../../../../../parsers-config.ts"
 import { Toast, useToast } from "../../ui/toast"
-import { useKV } from "../../context/kv.tsx"
 import { Footer } from "./footer.tsx"
-import { usePromptRef } from "../../context/prompt"
-import { useExit } from "../../context/exit"
+import { promptRef } from "@tui/state/prompt"
+import { exit } from "@tui/state/exit"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
@@ -38,25 +34,30 @@ import { SessionContext, CustomSpeedScroll, extractReasoningTitle } from "./sess
 import { Thinking } from "./thinking"
 import { UserMessage } from "./user-message"
 import { AssistantMessage } from "./assistant-message"
+import { SessionSettingsProvider, useSessionSettings } from "./session-settings"
+import { RevertMarker } from "./revert-marker"
 
 addDefaultParsers(parsers.parsers)
 
 export function Session() {
-  const routeContext = useRoute()
-  const route = routeContext.data
-  const { navigate } = routeContext
-  const sync = useSync()
-  const kv = useKV()
-  const { theme } = useTheme()
-  const promptRef = usePromptRef()
-  const session = createMemo(() => sync.session.get(route.sessionID))
+  return (
+    <SessionSettingsProvider>
+      <SessionInner />
+    </SessionSettingsProvider>
+  )
+}
+
+function SessionInner() {
+  const { navigate } = route
+  const settings = useSessionSettings()
+  const session = createMemo(() => sync.session.get(route.data.sessionID))
   const children = createMemo(() => {
     const parentID = session()?.parentID ?? session()?.id
     return sync.data.session
       .filter((x) => x.parentID === parentID || x.id === parentID)
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
-  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const messages = createMemo(() => sync.data.message[route.data.sessionID] ?? [])
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
@@ -144,25 +145,14 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
-  const [sidebarOpen, setSidebarOpen] = createSignal(false)
-  const [conceal, setConceal] = createSignal(true)
-  const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
-  const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
-  const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
-  const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
-  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
-  const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
-  const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 
   const wide = () => dimensions().width > 120
   const sidebarVisible = () => {
     if (session()?.parentID) return false
-    if (sidebarOpen()) return true
-    if (sidebar() === "auto" && wide()) return true
+    if (settings.sidebarOpen()) return true
+    if (settings.sidebar() === "auto" && wide()) return true
     return false
   }
-  const showTimestamps = () => timestamps() === "show"
   const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0) - 2
 
   const scrollAcceleration = createMemo(() => {
@@ -180,7 +170,7 @@ export function Session() {
   let version = 0
   createEffect(
     on(
-      () => route.sessionID,
+      () => route.data.sessionID,
       (sessionID) => {
         version += 1
         const current = version
@@ -197,12 +187,12 @@ export function Session() {
               message: `Session not found: ${sessionID}`,
               variant: "error",
             })
-            return sdk.client.session.create({}).then((result) => {
+            return sdk.client.session.$post({ json: {} } as any).then((res: any) => res.json()).then((data: any) => {
               if (current !== version) return
-              if (!result.data?.id) return
+              if (!data?.id) return
               navigate({
                 type: "session",
-                sessionID: result.data.id,
+                sessionID: data.id,
               })
             })
           })
@@ -211,21 +201,16 @@ export function Session() {
   )
 
   const toast = useToast()
-  const sdk = useSDK()
 
   // Handle initial prompt from fork
   createEffect(() => {
-    if (route.initialPrompt && prompt) {
-      prompt.set(route.initialPrompt)
+    if (route.data.initialPrompt && prompt) {
+      prompt.set(route.data.initialPrompt)
     }
   })
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
-  const keybind = useKeybind()
-
-  // Allow exit when prompt input is hidden
-  const exit = useExit()
 
   createEffect(() => {
     const title = Locale.truncate(session()?.title ?? "", 50)
@@ -252,14 +237,12 @@ export function Session() {
     const messagesList = messages()
     const scrollTop = scroll.y
 
-    // Get visible messages sorted by position, filtering for valid non-synthetic, non-ignored content
     const visibleMessages = children
       .filter((c) => {
         if (!c.id) return false
         const message = messagesList.find((m) => m.id === c.id)
         if (!message) return false
 
-        // Check if message has valid non-synthetic, non-ignored text parts
         const parts = sync.data.part[message.id]
         if (!parts || !Array.isArray(parts)) return false
 
@@ -270,14 +253,11 @@ export function Session() {
     if (visibleMessages.length === 0) return null
 
     if (direction === "next") {
-      // Find first message below current position
       return visibleMessages.find((c) => c.y > scrollTop + 10)?.id ?? null
     }
-    // Find last message above current position
     return [...visibleMessages].reverse().find((c) => c.y < scrollTop - 10)?.id ?? null
   }
 
-  // Helper: Scroll to message in direction or fallback to page scroll
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
     const targetID = findNextVisibleMessage(direction)
 
@@ -299,10 +279,8 @@ export function Session() {
     }, 50)
   }
 
-  const local = useLocal()
-  const status = () => sync.data.session_status?.[route.sessionID] ?? { type: "idle" }
+  const status = () => sync.data.session_status?.[route.data.sessionID] ?? { type: "idle" }
   const busy = () => status().type === "busy" || status().type === "retry"
-  const agent = () => local.agent.color(local.agent.current().name)
   const thinkingColor = createMemo(() => {
     const pendingID = pending()
     const message = pendingID ? messages().find((entry) => entry.id === pendingID) : undefined
@@ -310,8 +288,6 @@ export function Session() {
     return local.agent.color(agent ?? local.agent.current().name)
   })
   const [interrupt, setInterrupt] = createSignal(0)
-
-  const command = useCommandDialog()
 
   const revertInfo = () => session()?.revert
 
@@ -357,93 +333,14 @@ export function Session() {
   const renderer = useRenderer()
 
   useSessionCommands({
-    command,
-    route,
-    sync,
-    sdk,
-    local,
-    toast,
-    renderer,
     scroll: () => scroll,
     setPrompt: (promptInfo) => prompt.set(promptInfo),
     toBottom,
     scrollToMessage,
-    showThinking,
-    showDetails,
-    showAssistantMetadata,
-    sidebarVisible,
-    conceal,
-    showTimestamps,
-    setSidebar,
-    setSidebarOpen,
-    setConceal,
-    setTimestamps,
-    setShowThinking,
-    setShowDetails,
-    setShowScrollbar,
   })
 
   // snap to bottom when session changes
-  createEffect(on(() => route.sessionID, toBottom))
-
-  function RevertMarker() {
-    const command = useCommandDialog()
-    const [hover, setHover] = createSignal(false)
-    const dialog = useDialog()
-
-    const handleUnrevert = async () => {
-      const confirmed = await DialogConfirm.show(
-        dialog,
-        "Confirm Redo",
-        "Are you sure you want to restore the reverted messages?",
-      )
-      if (confirmed) {
-        command.trigger("session.redo")
-      }
-    }
-
-    return (
-      <box
-        onMouseOver={() => setHover(true)}
-        onMouseOut={() => setHover(false)}
-        onMouseUp={handleUnrevert}
-        marginTop={1}
-        flexShrink={0}
-        border={["left"]}
-        customBorderChars={SplitBorder.customBorderChars}
-        borderColor={theme.backgroundPanel}
-      >
-        <box
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
-        >
-          <text fg={theme.textMuted}>{revert()!.reverted.length} message reverted</text>
-          <text fg={theme.textMuted}>
-            <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to restore
-          </text>
-          <Show when={revert()!.diffFiles?.length}>
-            <box marginTop={1}>
-              <For each={revert()!.diffFiles}>
-                {(file) => (
-                  <text fg={theme.text}>
-                    {file.filename}
-                    <Show when={file.additions > 0}>
-                      <span style={{ fg: theme.diffAdded }}> +{file.additions}</span>
-                    </Show>
-                    <Show when={file.deletions > 0}>
-                      <span style={{ fg: theme.diffRemoved }}> -{file.deletions}</span>
-                    </Show>
-                  </text>
-                )}
-              </For>
-            </box>
-          </Show>
-        </box>
-      </box>
-    )
-  }
+  createEffect(on(() => route.data.sessionID, toBottom))
 
   return (
     <SessionContext.Provider
@@ -452,14 +349,14 @@ export function Session() {
           return contentWidth()
         },
         get sessionID() {
-          return route.sessionID
+          return route.data.sessionID
         },
-        conceal,
-        showThinking,
-        showTimestamps,
-        showDetails,
-        showAssistantMetadata,
-        diffWrapMode,
+        conceal: settings.conceal,
+        showThinking: settings.showThinking,
+        showTimestamps: settings.showTimestamps,
+        showDetails: settings.showDetails,
+        showAssistantMetadata: settings.showAssistantMetadata,
+        diffWrapMode: settings.diffWrapMode,
         sync,
       }}
     >
@@ -469,11 +366,11 @@ export function Session() {
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
+                paddingRight: settings.showScrollbar() ? 1 : 0,
               }}
               verticalScrollbarOptions={{
                 paddingLeft: 1,
-                visible: showScrollbar(),
+                visible: settings.showScrollbar(),
                 trackOptions: {
                   backgroundColor: theme.backgroundElement,
                   foregroundColor: theme.border,
@@ -492,7 +389,12 @@ export function Session() {
                     <Logo />
                   </box>
                 }
-                renderRevertMarker={() => <RevertMarker />}
+                renderRevertMarker={() => (
+                  <RevertMarker
+                    reverted={revert()!.reverted}
+                    diffFiles={revert()!.diffFiles}
+                  />
+                )}
                 renderUser={(message, index) => (
                   <UserMessage
                     index={index}
@@ -503,7 +405,7 @@ export function Session() {
                         body: () => (
                           <DialogMessage
                             messageID={message.id}
-                            sessionID={route.sessionID}
+                            sessionID={route.data.sessionID}
                             setPrompt={(promptInfo) => prompt.set(promptInfo)}
                           />
                         ),
@@ -545,16 +447,15 @@ export function Session() {
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
-                  // Apply initial prompt when prompt component mounts (e.g., from fork)
-                  if (route.initialPrompt) {
-                    r.set(route.initialPrompt)
+                  if (route.data.initialPrompt) {
+                    r.set(route.data.initialPrompt)
                   }
                 }}
                 disabled={permissions().length > 0 || questions().length > 0}
                 onSubmit={() => {
                   toBottom()
                 }}
-                sessionID={route.sessionID}
+                sessionID={route.data.sessionID}
               />
               <Show when={!sidebarVisible() || !wide()}>
                 <Footer />
@@ -566,7 +467,7 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
+              <Sidebar sessionID={route.data.sessionID} />
             </Match>
             <Match when={!wide()}>
               <box
@@ -578,7 +479,7 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} />
+                <Sidebar sessionID={route.data.sessionID} />
               </box>
             </Match>
           </Switch>

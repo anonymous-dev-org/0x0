@@ -10,7 +10,6 @@ import { Log } from "../util/log"
 import { SessionProcessor } from "./processor"
 import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
-import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 
 export namespace SessionCompaction {
@@ -111,12 +110,7 @@ export namespace SessionCompaction {
       config.compaction?.provider && config.compaction.model
         ? await Provider.getModel(config.compaction.provider, config.compaction.model)
         : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
-    // Allow plugins to inject additional compaction context
-    const compacting = await Plugin.trigger(
-      "experimental.session.compacting",
-      { sessionID: input.sessionID },
-      { context: [], prompt: undefined },
-    )
+    const compacting = { context: [] as string[], prompt: undefined }
     const prompt = config.compaction?.prompt?.trim()
     if (!prompt) {
       log.info("skipping compaction, missing compaction.prompt")

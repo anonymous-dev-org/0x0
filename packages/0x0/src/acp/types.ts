@@ -1,5 +1,5 @@
 import type { McpServer } from "@agentclientprotocol/sdk"
-import type { ZeroxzeroClient } from "@0x0-ai/sdk/v2"
+import type { Client } from "@/server/client"
 
 export interface ACPSessionState {
   id: string
@@ -25,7 +25,8 @@ export interface ACPSessionState {
 }
 
 export interface ACPConfig {
-  sdk: ZeroxzeroClient
+  sdk: Client
+  baseUrl?: string
   defaultModel?: {
     providerID: string
     modelID: string

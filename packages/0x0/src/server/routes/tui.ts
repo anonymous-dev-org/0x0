@@ -27,6 +27,11 @@ const TuiExecuteCommandAlias = z.enum([
   "messages_first",
   "messages_last",
   "agent_cycle",
+  "help_show",
+  "session_list",
+  "model_list",
+  "prompt_submit",
+  "prompt_clear",
 ])
 
 const tuiExecuteCommandMap: Record<z.infer<typeof TuiExecuteCommandAlias>, string> = {
@@ -43,6 +48,11 @@ const tuiExecuteCommandMap: Record<z.infer<typeof TuiExecuteCommandAlias>, strin
   messages_first: "session.first",
   messages_last: "session.last",
   agent_cycle: "agent.cycle",
+  help_show: "help.show",
+  session_list: "session.list",
+  model_list: "model.list",
+  prompt_submit: "prompt.submit",
+  prompt_clear: "prompt.clear",
 }
 
 type TuiRequest = z.infer<typeof TuiRequest>
@@ -107,6 +117,26 @@ const TuiControlRoutes = new Hono()
     },
   )
 
+function commandEndpoint(summary: string, operationId: string, command: string) {
+  return [
+    describeRoute({
+      summary,
+      description: summary,
+      operationId,
+      responses: {
+        200: {
+          description: `${summary} successfully`,
+          content: { "application/json": { schema: resolver(z.boolean()) } },
+        },
+      },
+    }),
+    async (c: any) => {
+      await Bus.publish(TuiEvent.CommandExecute, { command })
+      return c.json(true)
+    },
+  ] as const
+}
+
 export const TuiRoutes = lazy(() =>
   new Hono()
     .post(
@@ -133,126 +163,11 @@ export const TuiRoutes = lazy(() =>
         return c.json(true)
       },
     )
-    .post(
-      "/open-help",
-      describeRoute({
-        summary: "Open help dialog",
-        description: "Open the help dialog in the TUI to display user assistance information.",
-        operationId: "tui.openHelp",
-        responses: {
-          200: {
-            description: "Help dialog opened successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "help.show",
-        })
-        return c.json(true)
-      },
-    )
-    .post(
-      "/open-sessions",
-      describeRoute({
-        summary: "Open sessions dialog",
-        description: "Open the session dialog",
-        operationId: "tui.openSessions",
-        responses: {
-          200: {
-            description: "Session dialog opened successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
-        })
-        return c.json(true)
-      },
-    )
-    .post(
-      "/open-models",
-      describeRoute({
-        summary: "Open models dialog",
-        description: "Open the model dialog",
-        operationId: "tui.openModels",
-        responses: {
-          200: {
-            description: "Model dialog opened successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "model.list",
-        })
-        return c.json(true)
-      },
-    )
-    .post(
-      "/submit-prompt",
-      describeRoute({
-        summary: "Submit TUI prompt",
-        description: "Submit the prompt",
-        operationId: "tui.submitPrompt",
-        responses: {
-          200: {
-            description: "Prompt submitted successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.submit",
-        })
-        return c.json(true)
-      },
-    )
-    .post(
-      "/clear-prompt",
-      describeRoute({
-        summary: "Clear TUI prompt",
-        description: "Clear the prompt",
-        operationId: "tui.clearPrompt",
-        responses: {
-          200: {
-            description: "Prompt cleared successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.clear",
-        })
-        return c.json(true)
-      },
-    )
+    .post("/open-help", ...commandEndpoint("Open help dialog", "tui.openHelp", "help.show"))
+    .post("/open-sessions", ...commandEndpoint("Open sessions dialog", "tui.openSessions", "session.list"))
+    .post("/open-models", ...commandEndpoint("Open models dialog", "tui.openModels", "model.list"))
+    .post("/submit-prompt", ...commandEndpoint("Submit TUI prompt", "tui.submitPrompt", "prompt.submit"))
+    .post("/clear-prompt", ...commandEndpoint("Clear TUI prompt", "tui.clearPrompt", "prompt.clear"))
     .post(
       "/execute-command",
       describeRoute({

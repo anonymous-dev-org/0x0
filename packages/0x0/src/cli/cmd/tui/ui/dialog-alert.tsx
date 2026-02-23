@@ -1,4 +1,4 @@
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { useKeyboard } from "@opentui/solid"
 
@@ -9,7 +9,6 @@ export type DialogAlertProps = {
 
 export function DialogAlert(props: DialogAlertProps) {
   const dialog = useDialog()
-  const { theme } = useTheme()
 
   useKeyboard((evt) => {
     if (evt.name === "return") {

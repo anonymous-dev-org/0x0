@@ -1,20 +1,18 @@
-import { useSync } from "@tui/context/sync"
+import { sync } from "@tui/state/sync"
 import { createMemo, For, Show, Switch, Match } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useTheme } from "../../context/theme"
+import { theme } from "@tui/state/theme"
 import { Locale } from "@/util/locale"
 import path from "path"
-import type { AssistantMessage } from "@0x0-ai/sdk/v2"
+import type { AssistantMessage } from "@/server/types"
 import { Global } from "@/global"
 import { Installation } from "@/installation"
-import { useKeybind } from "../../context/keybind"
+import { keybind } from "@tui/state/keybind"
 import { useDirectory } from "../../context/directory"
-import { useKV } from "../../context/kv"
+import { kv } from "@tui/state/kv"
 import { TodoItem } from "../../component/todo-item"
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
-  const sync = useSync()
-  const { theme } = useTheme()
   const session = () => sync.session.get(props.sessionID)!
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
@@ -59,7 +57,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   })
 
   const directory = useDirectory()
-  const kv = useKV()
 
   const hasProviders = () =>
     sync.data.provider.some((x) => x.id !== "zeroxzero" || Object.values(x.models).some((y) => y.cost?.input !== 0))

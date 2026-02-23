@@ -2,21 +2,18 @@ import { onCleanup } from "solid-js"
 import { Installation } from "@/installation"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "../event"
-import type { RouteContext } from "../context/route"
+import { route } from "@tui/state/route"
 import { useCommandDialog } from "../component/dialog-command"
-import { useSDK } from "../context/sdk"
-import { useSync } from "../context/sync"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
 import { useToast } from "../ui/toast"
 
-export function useAppEventHandlers(props: {
-  command: ReturnType<typeof useCommandDialog>
-  route: RouteContext
-  sdk: ReturnType<typeof useSDK>
-  sync: ReturnType<typeof useSync>
-  toast: ReturnType<typeof useToast>
-}) {
+export function useAppEventHandlers() {
+  const command = useCommandDialog()
+  const toast = useToast()
+
   const notificationsEnabled = () => {
-    const tui = props.sync.data.config.tui
+    const tui = sync.data.config.tui
     return tui?.terminal_notifications ?? true
   }
 
@@ -41,10 +38,10 @@ export function useAppEventHandlers(props: {
   }
 
   const unsubs = [
-    props.sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
-      props.command.trigger(evt.properties.command)
+    sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
+      command.trigger(evt.properties.command)
     }),
-    props.sdk.event.on("session.status", (evt) => {
+    sdk.event.on("session.status", (evt) => {
       const sessionID = evt.properties.sessionID
       const type = evt.properties.status.type
       if (type === "busy" || type === "retry") {
@@ -55,51 +52,52 @@ export function useAppEventHandlers(props: {
       const running = busy.has(sessionID)
       busy.delete(sessionID)
       if (!running) return
-      const session = props.sync.session.get(sessionID)
+      const session = sync.session.get(sessionID)
       if (session?.parentID) return
       bell()
     }),
-    props.sdk.event.on("permission.asked", (evt) => {
+    sdk.event.on("permission.asked", (evt) => {
       if (!mark(`permission:${evt.properties.id}`)) return
       bell()
     }),
-    props.sdk.event.on("question.asked", (evt) => {
+    sdk.event.on("question.asked", (evt) => {
       if (!mark(`question:${evt.properties.id}`)) return
       bell()
     }),
-    props.sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
-      props.toast.show({
+    sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
+      toast.show({
         title: evt.properties.title,
         message: evt.properties.message,
         variant: evt.properties.variant,
         duration: evt.properties.duration,
       })
     }),
-    props.sdk.event.on(TuiEvent.SessionSelect.type, (evt) => {
-      props.route.navigate({
+    sdk.event.on(TuiEvent.SessionSelect.type, (evt) => {
+      route.navigate({
         type: "session",
         sessionID: evt.properties.sessionID,
       })
     }),
-    props.sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
-      if (props.route.data.type !== "session" || props.route.data.sessionID !== evt.properties.info.id) return
-      props.sdk.client.session
-        .create({})
-        .then((result) => {
-          if (!result.data?.id) return
-          props.route.navigate({
+    sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
+      if (route.data.type !== "session" || route.data.sessionID !== evt.properties.info.id) return
+      sdk.client.session
+        .$post({ json: {} } as any)
+        .then((res: any) => res.json())
+        .then((result: any) => {
+          if (!result?.id) return
+          route.navigate({
             type: "session",
-            sessionID: result.data.id,
+            sessionID: result.id,
           })
         })
         .finally(() => {
-          props.toast.show({
+          toast.show({
             variant: "info",
             message: "The current session was deleted",
           })
         })
     }),
-    props.sdk.event.on(SessionApi.Event.Error.type, (evt) => {
+    sdk.event.on(SessionApi.Event.Error.type, (evt) => {
       const error = evt.properties.error
       if (error && typeof error === "object" && error.name === "MessageAbortedError") return
       const message = (() => {
@@ -114,14 +112,14 @@ export function useAppEventHandlers(props: {
         return String(error)
       })()
 
-      props.toast.show({
+      toast.show({
         variant: "error",
         message,
         duration: 5000,
       })
     }),
-    props.sdk.event.on(Installation.Event.UpdateAvailable.type, (evt) => {
-      props.toast.show({
+    sdk.event.on(Installation.Event.UpdateAvailable.type, (evt) => {
+      toast.show({
         variant: "info",
         title: "Update Available",
         message: `Terminal Agent v${evt.properties.version} is available. Run '0x0 upgrade' to update manually.`,

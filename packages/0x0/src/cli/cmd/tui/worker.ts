@@ -8,7 +8,7 @@ import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { Bus } from "@/bus"
-import type { Event } from "@0x0-ai/sdk/v2"
+import type { Event } from "@/bus/bus-event"
 import type { BunWebSocketData } from "hono/bun"
 
 await Log.init({
@@ -172,9 +172,15 @@ export const rpc = {
 Rpc.listen(rpc)
 
 async function getAuthorizationHeader(): Promise<string | undefined> {
-  const config = await Config.get()
-  const password = config.server?.password
-  if (!password) return undefined
-  const username = config.server?.username ?? "zeroxzero"
-  return `Basic ${btoa(`${username}:${password}`)}`
+  try {
+    const config = await Config.get()
+    const password = config.server?.password
+    if (!password) return undefined
+    const username = config.server?.username ?? "zeroxzero"
+    return `Basic ${btoa(`${username}:${password}`)}`
+  } catch {
+    // Config.get() needs Instance context which may not be available yet
+    // during early startup. Skip auth header in that case.
+    return undefined
+  }
 }

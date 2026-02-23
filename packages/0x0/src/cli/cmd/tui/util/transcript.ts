@@ -1,4 +1,4 @@
-import type { AssistantMessage, Part, UserMessage } from "@0x0-ai/sdk/v2"
+import type { AssistantMessage, Part, UserMessage } from "@/server/types"
 import { Locale } from "@/util/locale"
 
 export type TranscriptOptions = {

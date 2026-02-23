@@ -2,12 +2,12 @@ import { createStore } from "solid-js/store"
 import { For, Match, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
-import { useKeybind } from "../../context/keybind"
-import { useTheme, selectedForeground } from "../../context/theme"
-import type { PermissionRequest } from "@0x0-ai/sdk/v2"
-import { useSDK } from "../../context/sdk"
+import { keybind } from "@tui/state/keybind"
+import { theme, themeState, selectedForeground } from "@tui/state/theme"
+import type { PermissionRequest } from "@/server/types"
+import { sdk } from "@tui/state/sdk"
 import { SplitBorder } from "../../component/border"
-import { useSync } from "../../context/sync"
+import { sync } from "@tui/state/sync"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import path from "path"
 import { Keybind } from "@/util/keybind"
@@ -18,10 +18,6 @@ import { filetype, normalizePath } from "./session-tool-format"
 type PermissionStage = "permission" | "always" | "reject"
 
 function EditBody(props: { request: PermissionRequest }) {
-  const themeState = useTheme()
-  const theme = themeState.theme
-  const syntax = themeState.syntax
-  const sync = useSync()
   const dimensions = useTerminalDimensions()
 
   const filepath = () => (props.request.metadata?.filepath as string) ?? ""
@@ -47,7 +43,7 @@ function EditBody(props: { request: PermissionRequest }) {
             diff={diff()}
             view={view()}
             filetype={ft()}
-            syntaxStyle={syntax()}
+            syntaxStyle={themeState.syntax()}
             showLineNumbers={true}
             width="100%"
             wrapMode="word"
@@ -69,7 +65,6 @@ function EditBody(props: { request: PermissionRequest }) {
 }
 
 function TextBody(props: { title: string; description?: string; icon?: string }) {
-  const { theme } = useTheme()
   return (
     <>
       <box flexDirection="row" gap={1} paddingLeft={1}>
@@ -209,8 +204,6 @@ function PermissionBody(props: { request: PermissionRequest; input: Record<strin
 }
 
 export function PermissionPrompt(props: { request: PermissionRequest }) {
-  const sdk = useSDK()
-  const sync = useSync()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
   })
@@ -229,7 +222,6 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     return {}
   }
 
-  const { theme } = useTheme()
 
   return (
     <Switch>
@@ -267,21 +259,20 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
-            sdk.client.permission.reply({
-              reply: "always",
-              requestID: props.request.id,
-            })
+            sdk.client.permission[":requestID"].reply.$post({
+              param: { requestID: props.request.id },
+              json: { reply: "always" },
+            } as any)
           }}
         />
       </Match>
       <Match when={store.stage === "reject"}>
         <RejectPrompt
           onConfirm={(message) => {
-            sdk.client.permission.reply({
-              reply: "reject",
-              requestID: props.request.id,
-              message: message || undefined,
-            })
+            sdk.client.permission[":requestID"].reply.$post({
+              param: { requestID: props.request.id },
+              json: { reply: "reject", message: message || undefined },
+            } as any)
           }}
           onCancel={() => {
             setStore("stage", "permission")
@@ -309,16 +300,16 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 setStore("stage", "reject")
                 return
               }
-              sdk.client.permission.reply({
-                reply: "reject",
-                requestID: props.request.id,
-              })
+              sdk.client.permission[":requestID"].reply.$post({
+                param: { requestID: props.request.id },
+                json: { reply: "reject" },
+              } as any)
               return
             }
-            sdk.client.permission.reply({
-              reply: "once",
-              requestID: props.request.id,
-            })
+            sdk.client.permission[":requestID"].reply.$post({
+              param: { requestID: props.request.id },
+              json: { reply: "once" },
+            } as any)
           }}
         />
       </Match>
@@ -328,8 +319,6 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
 function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: () => void }) {
   let input: TextareaRenderable
-  const { theme } = useTheme()
-  const keybind = useKeybind()
   const textareaKeybindings = useTextareaKeybindings()
   const dimensions = useTerminalDimensions()
   const narrow = () => dimensions().width < 80
@@ -406,8 +395,6 @@ function Prompt<const T extends Record<string, string>>(props: {
   fullscreen?: boolean
   onSelect: (option: keyof T) => void
 }) {
-  const { theme } = useTheme()
-  const keybind = useKeybind()
   const dimensions = useTerminalDimensions()
   const keys = Object.keys(props.options) as (keyof T)[]
   const [store, setStore] = createStore({

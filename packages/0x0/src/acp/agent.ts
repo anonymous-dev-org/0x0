@@ -1,5 +1,4 @@
 import {
-  RequestError,
   type Agent as ACPAgent,
   type AgentSideConnection,
   type AuthenticateRequest,
@@ -16,6 +15,7 @@ import {
   type PermissionOption,
   type PlanEntry,
   type PromptRequest,
+  RequestError,
   type ResumeSessionRequest,
   type ResumeSessionResponse,
   type Role,
@@ -27,20 +27,20 @@ import {
   type ToolKind,
   type Usage,
 } from "@agentclientprotocol/sdk"
-
-import { Log } from "../util/log"
+import { LoadAPIKeyError } from "ai"
 import { pathToFileURL } from "bun"
+import { applyPatch } from "diff"
+import { z } from "zod"
+import { Config } from "@/config/config"
+import { Installation } from "@/installation"
+import type { Client } from "@/server/client"
+import type { AssistantMessage, Event, SessionMessageResponse } from "@/server/types"
+import { Todo } from "@/session/todo"
+import { Agent as AgentModule } from "../agent/agent"
+import { Provider } from "../provider/provider"
+import { Log } from "../util/log"
 import { ACPSessionManager } from "./session"
 import type { ACPConfig } from "./types"
-import { Provider } from "../provider/provider"
-import { Agent as AgentModule } from "../agent/agent"
-import { Installation } from "@/installation"
-import { Config } from "@/config/config"
-import { Todo } from "@/session/todo"
-import { z } from "zod"
-import { LoadAPIKeyError } from "ai"
-import type { AssistantMessage, Event, ZeroxzeroClient, SessionMessageResponse } from "@0x0-ai/sdk/v2"
-import { applyPatch } from "diff"
 
 type ModeOption = { id: string; name: string; description?: string }
 type ModelOption = { modelId: string; name: string }
@@ -51,34 +51,35 @@ export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
 
   async function getContextLimit(
-    sdk: ZeroxzeroClient,
+    sdk: Client,
     providerID: string,
     modelID: string,
-    directory: string,
+    directory: string
   ): Promise<number | null> {
-    const providers = await sdk.config
-      .providers({ directory })
-      .then((x) => x.data?.providers ?? [])
-      .catch((error) => {
+    const providers = await sdk.provider
+      .$get({ query: { directory } } as any)
+      .then((r: any) => r.json())
+      .then((data: any) => (data?.providers ?? []) as Provider.Info[])
+      .catch(error => {
         log.error("failed to get providers for context limit", { error })
-        return []
+        return [] as Provider.Info[]
       })
 
-    const provider = providers.find((p) => p.id === providerID)
+    const provider = providers.find((p: any) => p.id === providerID)
     const model = provider?.models[modelID]
     return model?.limit.context ?? null
   }
 
   async function sendUsageUpdate(
     connection: AgentSideConnection,
-    sdk: ZeroxzeroClient,
+    sdk: Client,
     sessionID: string,
-    directory: string,
+    directory: string
   ): Promise<void> {
-    const messages = await sdk.session
-      .messages({ sessionID, directory }, { throwOnError: true })
-      .then((x) => x.data)
-      .catch((error) => {
+    const messages = await sdk.session[":sessionID"].message
+      .$get({ param: { sessionID }, query: { directory } } as any)
+      .then((r: any) => r.json())
+      .catch(error => {
         log.error("failed to fetch messages for usage update", { error })
         return undefined
       })
@@ -86,7 +87,7 @@ export namespace ACP {
     if (!messages) return
 
     const assistantMessages = messages.filter(
-      (m): m is { info: AssistantMessage; parts: SessionMessageResponse["parts"] } => m.info.role === "assistant",
+      (m: any): m is { info: AssistantMessage; parts: SessionMessageResponse["parts"] } => m.info.role === "assistant"
     )
 
     const lastAssistant = assistantMessages[assistantMessages.length - 1]
@@ -101,7 +102,7 @@ export namespace ACP {
     }
 
     const used = msg.tokens.input + (msg.tokens.cache?.read ?? 0)
-    const totalCost = assistantMessages.reduce((sum, m) => sum + m.info.cost, 0)
+    const totalCost = assistantMessages.reduce((sum: number, m: any) => sum + m.info.cost, 0)
 
     await connection
       .sessionUpdate({
@@ -113,12 +114,12 @@ export namespace ACP {
           cost: { amount: totalCost, currency: "USD" },
         },
       })
-      .catch((error) => {
+      .catch(error => {
         log.error("failed to send usage update", { error })
       })
   }
 
-  export async function init({ sdk: _sdk }: { sdk: ZeroxzeroClient }) {
+  export async function init({ sdk: _sdk }: { sdk: Client }) {
     return {
       create: (connection: AgentSideConnection, fullConfig: ACPConfig) => {
         return new Agent(connection, fullConfig)
@@ -126,10 +127,34 @@ export namespace ACP {
     }
   }
 
+  async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<any> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              yield JSON.parse(line.slice(6))
+            } catch {}
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
   export class Agent implements ACPAgent {
     private connection: AgentSideConnection
     private config: ACPConfig
-    private sdk: ZeroxzeroClient
+    private sdk: Client
     private sessionManager: ACPSessionManager
     private eventAbort = new AbortController()
     private eventStarted = false
@@ -151,7 +176,7 @@ export namespace ACP {
     private startEventSubscription() {
       if (this.eventStarted) return
       this.eventStarted = true
-      this.runEventSubscription().catch((error) => {
+      this.runEventSubscription().catch(error => {
         if (this.eventAbort.signal.aborted) return
         log.error("event subscription failed", { error })
       })
@@ -160,15 +185,18 @@ export namespace ACP {
     private async runEventSubscription() {
       while (true) {
         if (this.eventAbort.signal.aborted) return
-        const events = await this.sdk.global.event({
+        const url = this.config.baseUrl ? new URL("/global/event", this.config.baseUrl).href : "/global/event"
+        const res = await fetch(url, {
           signal: this.eventAbort.signal,
+          headers: { Accept: "text/event-stream" },
         })
-        for await (const event of events.stream) {
+        if (!res.body) return
+        for await (const envelope of parseSSE(res.body)) {
           if (this.eventAbort.signal.aborted) return
-          const payload = (event as any)?.payload
-          if (!payload) continue
-          await this.handleEvent(payload as Event).catch((error) => {
-            log.error("failed to handle event", { error, type: payload.type })
+          const event = envelope?.payload as Event | undefined
+          if (!event) continue
+          await this.handleEvent(event).catch(error => {
+            log.error("failed to handle event", { error, type: event?.type })
           })
         }
       }
@@ -199,27 +227,27 @@ export namespace ACP {
                   },
                   options: this.permissionOptions,
                 })
-                .catch(async (error) => {
+                .catch(async error => {
                   log.error("failed to request permission from ACP", {
                     error,
                     permissionID: permission.id,
                     sessionID: permission.sessionID,
                   })
-                  await this.sdk.permission.reply({
-                    requestID: permission.id,
-                    reply: "reject",
-                    directory,
-                  })
+                  await this.sdk.permission[":requestID"].reply.$post({
+                    param: { requestID: permission.id },
+                    json: { reply: "reject" },
+                    query: { directory },
+                  } as any)
                   return undefined
                 })
 
               if (!res) return
               if (res.outcome.outcome !== "selected") {
-                await this.sdk.permission.reply({
-                  requestID: permission.id,
-                  reply: "reject",
-                  directory,
-                })
+                await this.sdk.permission[":requestID"].reply.$post({
+                  param: { requestID: permission.id },
+                  json: { reply: "reject" },
+                  query: { directory },
+                } as any)
                 return
               }
 
@@ -240,13 +268,13 @@ export namespace ACP {
                 }
               }
 
-              await this.sdk.permission.reply({
-                requestID: permission.id,
-                reply: res.outcome.optionId as "once" | "always" | "reject",
-                directory,
-              })
+              await this.sdk.permission[":requestID"].reply.$post({
+                param: { requestID: permission.id },
+                json: { reply: res.outcome.optionId as "once" | "always" | "reject" },
+                query: { directory },
+              } as any)
             })
-            .catch((error) => {
+            .catch(error => {
               log.error("failed to handle permission", { error, permissionID: permission.id })
             })
             .finally(() => {
@@ -267,17 +295,13 @@ export namespace ACP {
           const sessionId = session.id
           const directory = session.cwd
 
-          const message = await this.sdk.session
-            .message(
-              {
-                sessionID: part.sessionID,
-                messageID: part.messageID,
-                directory,
-              },
-              { throwOnError: true },
-            )
-            .then((x) => x.data)
-            .catch((error) => {
+          const message = await this.sdk.session[":sessionID"].message[":messageID"]
+            .$get({
+              param: { sessionID: part.sessionID, messageID: part.messageID },
+              query: { directory },
+            } as any)
+            .then((r: any) => r.json())
+            .catch(error => {
               log.error("unexpected error when fetching message", { error })
               return undefined
             })
@@ -300,7 +324,7 @@ export namespace ACP {
                       rawInput: {},
                     },
                   })
-                  .catch((error) => {
+                  .catch(error => {
                     log.error("failed to send tool pending to ACP", { error })
                   })
                 return
@@ -319,7 +343,7 @@ export namespace ACP {
                       rawInput: part.state.input,
                     },
                   })
-                  .catch((error) => {
+                  .catch(error => {
                     log.error("failed to send tool in_progress to ACP", { error })
                   })
                 return
@@ -348,7 +372,7 @@ export namespace ACP {
                         sessionId,
                         update: {
                           sessionUpdate: "plan",
-                          entries: parsedTodos.data.map((todo) => {
+                          entries: parsedTodos.data.map(todo => {
                             const status: PlanEntry["status"] =
                               todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
                             return {
@@ -359,7 +383,7 @@ export namespace ACP {
                           }),
                         },
                       })
-                      .catch((error) => {
+                      .catch(error => {
                         log.error("failed to send session update for todo", { error })
                       })
                   } else {
@@ -384,7 +408,7 @@ export namespace ACP {
                       },
                     },
                   })
-                  .catch((error) => {
+                  .catch(error => {
                     log.error("failed to send tool completed to ACP", { error })
                   })
                 return
@@ -414,7 +438,7 @@ export namespace ACP {
                       },
                     },
                   })
-                  .catch((error) => {
+                  .catch(error => {
                     log.error("failed to send tool error to ACP", { error })
                   })
                 return
@@ -435,7 +459,7 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((error) => {
+                .catch(error => {
                   log.error("failed to send text to ACP", { error })
                 })
             }
@@ -456,7 +480,7 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((error) => {
+                .catch(error => {
                   log.error("failed to send reasoning to ACP", { error })
                 })
             }
@@ -566,23 +590,20 @@ export namespace ACP {
         })
 
         // Replay session history
-        const messages = await this.sdk.session
-          .messages(
-            {
-              sessionID: sessionId,
-              directory,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data)
-          .catch((err) => {
+        const messages = await this.sdk.session[":sessionID"].message
+          .$get({
+            param: { sessionID: sessionId },
+            query: { directory },
+          } as any)
+          .then((r: any) => r.json())
+          .catch(err => {
             log.error("unexpected error when fetching message", { error: err })
             return undefined
           })
 
-        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
+        const lastUser = messages?.findLast((m: any) => m.info.role === "user")?.info
         if (lastUser?.role === "user") {
-          if (result.modes?.availableModes.some((m) => m.id === lastUser.agent)) {
+          if (result.modes?.availableModes.some(m => m.id === lastUser.agent)) {
             result.modes.currentModeId = lastUser.agent
             this.sessionManager.setMode(sessionId, lastUser.agent)
           }
@@ -593,9 +614,10 @@ export namespace ACP {
           this.sessionManager.setModel(sessionId, model)
           this.sessionManager.setVariant(sessionId, lastUser.variant)
 
-          const providers = await this.sdk.config
-            .providers({ directory }, { throwOnError: true })
-            .then((x) => x.data!.providers)
+          const providers = await this.sdk.provider
+            .$get({ query: { directory } } as any)
+            .then((r: any) => r.json())
+            .then((data: any) => data.providers as Provider.Info[])
           const entries = sortProvidersByName(providers)
           const availableVariants = modelVariantsFromProviders(entries, model)
           result.models.currentModelId = formatModelIdWithVariant(model, lastUser.variant, availableVariants, true)
@@ -623,20 +645,14 @@ export namespace ACP {
         const limit = 100
 
         const sessions = await this.sdk.session
-          .list(
-            {
-              directory: params.cwd ?? undefined,
-              roots: true,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data ?? [])
+          .$get({ query: { directory: params.cwd ?? undefined, roots: "true" } } as any)
+          .then((r: any) => r.json())
 
-        const sorted = sessions.toSorted((a, b) => b.time.updated - a.time.updated)
-        const filtered = cursor ? sorted.filter((s) => s.time.updated < cursor) : sorted
+        const sorted = sessions.toSorted((a: any, b: any) => b.time.updated - a.time.updated)
+        const filtered = cursor ? sorted.filter((s: any) => s.time.updated < cursor) : sorted
         const page = filtered.slice(0, limit)
 
-        const entries: SessionInfo[] = page.map((session) => ({
+        const entries: SessionInfo[] = page.map((session: any) => ({
           sessionId: session.id,
           cwd: session.directory,
           title: session.title,
@@ -666,15 +682,13 @@ export namespace ACP {
       try {
         const model = await defaultModel(this.config, directory)
 
-        const forked = await this.sdk.session
-          .fork(
-            {
-              sessionID: params.sessionId,
-              directory,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data)
+        const forked = await this.sdk.session[":sessionID"].fork
+          .$post({
+            param: { sessionID: params.sessionId },
+            json: {},
+            query: { directory },
+          } as any)
+          .then((r: any) => r.json())
 
         if (!forked) {
           throw new Error("Fork session returned no data")
@@ -691,16 +705,13 @@ export namespace ACP {
           sessionId,
         })
 
-        const messages = await this.sdk.session
-          .messages(
-            {
-              sessionID: sessionId,
-              directory,
-            },
-            { throwOnError: true },
-          )
-          .then((x) => x.data)
-          .catch((err) => {
+        const messages = await this.sdk.session[":sessionID"].message
+          .$get({
+            param: { sessionID: sessionId },
+            query: { directory },
+          } as any)
+          .then((r: any) => r.json())
+          .catch(err => {
             log.error("unexpected error when fetching message", { error: err })
             return undefined
           })
@@ -771,7 +782,7 @@ export namespace ACP {
                     rawInput: {},
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send tool pending to ACP", { error: err })
                 })
               break
@@ -789,7 +800,7 @@ export namespace ACP {
                     rawInput: part.state.input,
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send tool in_progress to ACP", { error: err })
                 })
               break
@@ -817,7 +828,7 @@ export namespace ACP {
                       sessionId,
                       update: {
                         sessionUpdate: "plan",
-                        entries: parsedTodos.data.map((todo) => {
+                        entries: parsedTodos.data.map(todo => {
                           const status: PlanEntry["status"] =
                             todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
                           return {
@@ -828,7 +839,7 @@ export namespace ACP {
                         }),
                       },
                     })
-                    .catch((err) => {
+                    .catch(err => {
                       log.error("failed to send session update for todo", { error: err })
                     })
                 } else {
@@ -853,7 +864,7 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send tool completed to ACP", { error: err })
                 })
               break
@@ -882,7 +893,7 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send tool error to ACP", { error: err })
                 })
               break
@@ -902,7 +913,7 @@ export namespace ACP {
                   },
                 },
               })
-              .catch((err) => {
+              .catch(err => {
                 log.error("failed to send text to ACP", { error: err })
               })
           }
@@ -929,7 +940,7 @@ export namespace ACP {
                   content: { type: "resource_link", uri: url, name: filename, mimeType: mime },
                 },
               })
-              .catch((err) => {
+              .catch(err => {
                 log.error("failed to send resource_link to ACP", { error: err })
               })
           } else if (url.startsWith("data:")) {
@@ -955,7 +966,7 @@ export namespace ACP {
                     },
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send image to ACP", { error: err })
                 })
             } else {
@@ -978,7 +989,7 @@ export namespace ACP {
                     content: { type: "resource", resource },
                   },
                 })
-                .catch((err) => {
+                .catch(err => {
                   log.error("failed to send resource to ACP", { error: err })
                 })
             }
@@ -997,7 +1008,7 @@ export namespace ACP {
                   },
                 },
               })
-              .catch((err) => {
+              .catch(err => {
                 log.error("failed to send reasoning to ACP", { error: err })
               })
           }
@@ -1006,18 +1017,11 @@ export namespace ACP {
     }
 
     private async loadAvailableModes(directory: string): Promise<ModeOption[]> {
-      const agents = await this.config.sdk.app
-        .agents(
-          {
-            directory,
-          },
-          { throwOnError: true },
-        )
-        .then((resp) => resp.data!)
+      const agents = await this.config.sdk.agent.$get({ query: { directory } } as any).then((r: any) => r.json())
 
       return agents
-        .filter((agent) => !agent.hidden)
-        .map((agent) => ({
+        .filter((agent: any) => !agent.hidden)
+        .map((agent: any) => ({
           id: agent.name,
           name: agent.name,
           description: agent.description,
@@ -1026,7 +1030,7 @@ export namespace ACP {
 
     private async resolveModeState(
       directory: string,
-      sessionId: string,
+      sessionId: string
     ): Promise<{ availableModes: ModeOption[]; currentModeId?: string }> {
       const availableModes = await this.loadAvailableModes(directory)
       const currentModeId =
@@ -1036,8 +1040,7 @@ export namespace ACP {
           const first = availableModes[0]
           if (!first) return undefined
           const defaultAgentName = await AgentModule.defaultAgent()
-          const resolvedModeId =
-            availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? first.id
+          const resolvedModeId = availableModes.find(mode => mode.name === defaultAgentName)?.id ?? first.id
           this.sessionManager.setMode(sessionId, resolvedModeId)
           return resolvedModeId
         })())
@@ -1070,9 +1073,12 @@ export namespace ACP {
         this.sessionManager.setVariant(sessionId, modeVariant)
       }
 
-      const providers = await this.sdk.config.providers({ directory }).then((x) => x.data!.providers)
+      const providers = await this.sdk.provider
+        .$get({ query: { directory } } as any)
+        .then((r: any) => r.json())
+        .then((data: any) => data.providers as Provider.Info[])
       const entries = sortProvidersByName(providers)
-      const hasModel = entries.some((entry) => entry.id === model.providerID && !!entry.models[model.modelID])
+      const hasModel = entries.some(entry => entry.id === model.providerID && !!entry.models[model.modelID])
       if (!hasModel) {
         model = fallbackModel
         this.sessionManager.setModel(sessionId, model)
@@ -1091,20 +1097,13 @@ export namespace ACP {
           }
         : undefined
 
-      const commands = await this.config.sdk.command
-        .list(
-          {
-            directory,
-          },
-          { throwOnError: true },
-        )
-        .then((resp) => resp.data!)
+      const commands = await this.config.sdk.command.$get({ query: { directory } } as any).then((r: any) => r.json())
 
-      const availableCommands = commands.map((command) => ({
+      const availableCommands = commands.map((command: any) => ({
         name: command.name,
         description: command.description ?? "",
       }))
-      const names = new Set(availableCommands.map((c) => c.name))
+      const names = new Set(availableCommands.map((c: any) => c.name))
       if (!names.has("compact"))
         availableCommands.push({
           name: "compact",
@@ -1136,19 +1135,10 @@ export namespace ACP {
 
       await Promise.all(
         Object.entries(mcpServers).map(async ([key, mcp]) => {
-          await this.sdk.mcp
-            .add(
-              {
-                directory,
-                name: key,
-                config: mcp,
-              },
-              { throwOnError: true },
-            )
-            .catch((error) => {
-              log.error("failed to add mcp server", { name: key, error })
-            })
-        }),
+          await this.sdk.mcp.$post({ json: { name: key, config: mcp }, query: { directory } } as any).catch(error => {
+            log.error("failed to add mcp server", { name: key, error })
+          })
+        })
       )
 
       setTimeout(() => {
@@ -1178,9 +1168,10 @@ export namespace ACP {
 
     async unstable_setSessionModel(params: SetSessionModelRequest) {
       const session = this.sessionManager.get(params.sessionId)
-      const providers = await this.sdk.config
-        .providers({ directory: session.cwd }, { throwOnError: true })
-        .then((x) => x.data!.providers)
+      const providers = await this.sdk.provider
+        .$get({ query: { directory: session.cwd } } as any)
+        .then((r: any) => r.json())
+        .then((data: any) => data.providers as Provider.Info[])
 
       const selection = parseModelSelection(params.modelId, providers)
       this.sessionManager.setModel(session.id, selection.model)
@@ -1201,7 +1192,7 @@ export namespace ACP {
     async setSessionMode(params: SetSessionModeRequest): Promise<SetSessionModeResponse | void> {
       const session = this.sessionManager.get(params.sessionId)
       const availableModes = await this.loadAvailableModes(session.cwd)
-      if (!availableModes.some((mode) => mode.id === params.modeId)) {
+      if (!availableModes.some(mode => mode.id === params.modeId)) {
         throw new Error(`Agent not found: ${params.modeId}`)
       }
       this.sessionManager.setMode(params.sessionId, params.modeId)
@@ -1212,9 +1203,10 @@ export namespace ACP {
       const model = current.model ?? modeAgent?.model ?? fallbackModel
       this.sessionManager.setModel(params.sessionId, model)
 
-      const availableProviders = await this.sdk.config
-        .providers({ directory: session.cwd }, { throwOnError: true })
-        .then((x) => x.data!.providers)
+      const availableProviders = await this.sdk.provider
+        .$get({ query: { directory: session.cwd } } as any)
+        .then((r: any) => r.json())
+        .then((data: any) => data.providers as Provider.Info[])
       const availableVariants = modelVariantsFromProviders(sortProvidersByName(availableProviders), model)
       const configuredVariant =
         modeAgent?.variant &&
@@ -1225,7 +1217,7 @@ export namespace ACP {
       const variant = current.variant ?? configuredVariant
       this.sessionManager.setVariant(
         params.sessionId,
-        variant && availableVariants.includes(variant) ? variant : undefined,
+        variant && availableVariants.includes(variant) ? variant : undefined
       )
     }
 
@@ -1332,7 +1324,7 @@ export namespace ACP {
       const cmd = (() => {
         const text = parts
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
+          .map(p => p.text)
           .join("")
           .trim()
 
@@ -1357,18 +1349,22 @@ export namespace ACP {
       })
 
       if (!cmd) {
-        const response = await this.sdk.session.prompt({
-          sessionID,
-          model: {
-            providerID: model.providerID,
-            modelID: model.modelID,
-          },
-          variant,
-          parts,
-          agent,
-          directory,
-        })
-        const msg = response.data?.info
+        const response = await this.sdk.session[":sessionID"].message
+          .$post({
+            param: { sessionID },
+            json: {
+              model: {
+                providerID: model.providerID,
+                modelID: model.modelID,
+              },
+              variant,
+              parts,
+              agent,
+            },
+            query: { directory },
+          } as any)
+          .then((r: any) => r.json())
+        const msg = response?.info
 
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
 
@@ -1380,19 +1376,24 @@ export namespace ACP {
       }
 
       const command = await this.config.sdk.command
-        .list({ directory }, { throwOnError: true })
-        .then((x) => x.data!.find((c) => c.name === cmd.name))
+        .$get({ query: { directory } } as any)
+        .then((r: any) => r.json())
+        .then((data: any) => (data as any[]).find((c: any) => c.name === cmd.name))
       if (command) {
-        const response = await this.sdk.session.command({
-          sessionID,
-          command: command.name,
-          arguments: cmd.args,
-          model: model.providerID + "/" + model.modelID,
-          variant,
-          agent,
-          directory,
-        })
-        const msg = response.data?.info
+        const response = await this.sdk.session[":sessionID"].command
+          .$post({
+            param: { sessionID },
+            json: {
+              command: command.name,
+              arguments: cmd.args,
+              model: model.providerID + "/" + model.modelID,
+              variant,
+              agent,
+            },
+            query: { directory },
+          } as any)
+          .then((r: any) => r.json())
+        const msg = response?.info
 
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
 
@@ -1405,15 +1406,11 @@ export namespace ACP {
 
       switch (cmd.name) {
         case "compact":
-          await this.config.sdk.session.summarize(
-            {
-              sessionID,
-              directory,
-              providerID: model.providerID,
-              modelID: model.modelID,
-            },
-            { throwOnError: true },
-          )
+          await this.config.sdk.session[":sessionID"].summarize.$post({
+            param: { sessionID },
+            json: { providerID: model.providerID, modelID: model.modelID },
+            query: { directory },
+          } as any)
           break
       }
 
@@ -1427,13 +1424,10 @@ export namespace ACP {
 
     async cancel(params: CancelNotification) {
       const session = this.sessionManager.get(params.sessionId)
-      await this.config.sdk.session.abort(
-        {
-          sessionID: params.sessionId,
-          directory: session.cwd,
-        },
-        { throwOnError: true },
-      )
+      await this.config.sdk.session[":sessionID"].abort.$post({
+        param: { sessionID: params.sessionId },
+        query: { directory: session.cwd },
+      } as any)
     }
   }
 
@@ -1490,12 +1484,12 @@ export namespace ACP {
         return typeof data["path"] === "string" ? [{ path: data["path"] }] : []
 
       case "apply_patch":
-        return applyPatchPaths(data).map((path) => ({ path }))
+        return applyPatchPaths(data).map(path => ({ path }))
 
       case "edit": {
         const direct = typeof data["filePath"] === "string" ? [data["filePath"]] : []
         const patch = applyPatchPaths(data)
-        return Array.from(new Set([...direct, ...patch])).map((path) => ({ path }))
+        return Array.from(new Set([...direct, ...patch])).map(path => ({ path }))
       }
 
       // Legacy tool names may still appear in older ACP session history.
@@ -1518,7 +1512,7 @@ export namespace ACP {
   function editDiffContent(
     toolName: string,
     input: Record<string, any>,
-    metadata: Record<string, any> | undefined,
+    metadata: Record<string, any> | undefined
   ): ToolCallContent[] {
     if (toolName.toLocaleLowerCase() === "apply_patch") {
       const files = Array.isArray(metadata?.["files"]) ? (metadata["files"] as Record<string, any>[]) : []
@@ -1606,9 +1600,9 @@ export namespace ACP {
     const directory = cwd ?? process.cwd()
 
     const specified = await sdk.config
-      .get({ directory }, { throwOnError: true })
-      .then((resp) => {
-        const cfg = resp.data
+      .$get({ query: { directory } } as any)
+      .then((r: any) => r.json())
+      .then((cfg: any) => {
         if (!cfg || !cfg.model) return undefined
         const parsed = Provider.parseModel(cfg.model as string)
         return {
@@ -1616,27 +1610,28 @@ export namespace ACP {
           modelID: parsed.modelID,
         }
       })
-      .catch((error) => {
+      .catch(error => {
         log.error("failed to load user config for default model", { error })
         return undefined
       })
 
-    const providers = await sdk.config
-      .providers({ directory }, { throwOnError: true })
-      .then((x) => x.data?.providers ?? [])
-      .catch((error) => {
+    const providers = await sdk.provider
+      .$get({ query: { directory } } as any)
+      .then((r: any) => r.json())
+      .then((data: any) => (data?.providers ?? []) as Provider.Info[])
+      .catch(error => {
         log.error("failed to list providers for default model", { error })
-        return []
+        return [] as Provider.Info[]
       })
 
     if (specified && providers.length) {
-      const provider = providers.find((p) => p.id === specified.providerID)
+      const provider = providers.find(p => p.id === specified.providerID)
       if (provider && provider.models[specified.modelID]) return specified
     }
 
     if (specified && !providers.length) return specified
 
-    const models = providers.flatMap((p) => Object.values(p.models))
+    const models = providers.flatMap((p: Provider.Info) => Object.values(p.models))
     const [best] = Provider.sort(models)
     if (best) {
       return {
@@ -1651,7 +1646,7 @@ export namespace ACP {
   }
 
   function parseUri(
-    uri: string,
+    uri: string
   ): { type: "file"; url: string; filename: string; mime: string } | { type: "text"; text: string } {
     try {
       if (uri.startsWith("file://")) {
@@ -1710,9 +1705,9 @@ export namespace ACP {
 
   function modelVariantsFromProviders(
     providers: Array<{ id: string; models: Record<string, { variants?: Record<string, any> }> }>,
-    model: { providerID: string; modelID: string },
+    model: { providerID: string; modelID: string }
   ): string[] {
-    const provider = providers.find((entry) => entry.id === model.providerID)
+    const provider = providers.find(entry => entry.id === model.providerID)
     if (!provider) return []
     const modelInfo = provider.models[model.modelID]
     if (!modelInfo?.variants) return []
@@ -1721,19 +1716,19 @@ export namespace ACP {
 
   function buildAvailableModels(
     providers: Array<{ id: string; name: string; models: Record<string, any> }>,
-    options: { includeVariants?: boolean } = {},
+    options: { includeVariants?: boolean } = {}
   ): ModelOption[] {
     const includeVariants = options.includeVariants ?? false
-    return providers.flatMap((provider) => {
+    return providers.flatMap(provider => {
       const models = Provider.sort(Object.values(provider.models) as any)
-      return models.flatMap((model) => {
+      return models.flatMap(model => {
         const base: ModelOption = {
           modelId: `${provider.id}/${model.id}`,
           name: `${provider.name}/${model.name}`,
         }
         if (!includeVariants || !model.variants) return [base]
-        const variants = Object.keys(model.variants).filter((variant) => variant !== DEFAULT_VARIANT_VALUE)
-        const variantOptions = variants.map((variant) => ({
+        const variants = Object.keys(model.variants).filter(variant => variant !== DEFAULT_VARIANT_VALUE)
+        const variantOptions = variants.map(variant => ({
           modelId: `${provider.id}/${model.id}/${variant}`,
           name: `${provider.name}/${model.name} (${variant})`,
         }))
@@ -1746,7 +1741,7 @@ export namespace ACP {
     model: { providerID: string; modelID: string },
     variant: string | undefined,
     availableVariants: string[],
-    includeVariant: boolean,
+    includeVariant: boolean
   ) {
     const base = `${model.providerID}/${model.modelID}`
     if (!includeVariant || !variant || !availableVariants.includes(variant)) return base
@@ -1769,11 +1764,11 @@ export namespace ACP {
 
   function parseModelSelection(
     modelId: string,
-    providers: Array<{ id: string; models: Record<string, { variants?: Record<string, any> }> }>,
+    providers: Array<{ id: string; models: Record<string, { variants?: Record<string, any> }> }>
   ): { model: { providerID: string; modelID: string }; variant?: string } {
     const raw = Provider.parseModel(modelId)
     const model = { providerID: raw.providerID ?? "", modelID: raw.modelID }
-    const provider = providers.find((p) => p.id === model.providerID)
+    const provider = providers.find(p => p.id === model.providerID)
     if (!provider) {
       return { model, variant: undefined }
     }

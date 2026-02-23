@@ -1,5 +1,5 @@
 import { TextareaRenderable } from "@opentui/core"
-import { useTheme } from "../context/theme"
+import { theme } from "@tui/state/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { onMount, Show } from "solid-js"
@@ -22,7 +22,6 @@ export type DialogExportOptionsProps = {
 }
 
 export function DialogExportOptions(props: DialogExportOptionsProps) {
-  const { theme } = useTheme()
   let textarea: TextareaRenderable
   const [store, setStore] = createStore({
     thinking: props.defaultThinking,

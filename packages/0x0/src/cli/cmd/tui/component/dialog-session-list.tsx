@@ -1,25 +1,19 @@
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
-import { useRoute } from "@tui/context/route"
-import { useSync } from "@tui/context/sync"
+import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
 import { createMemo, createSignal, createResource, Show } from "solid-js"
 import { Locale } from "@/util/locale"
-import { useKeybind } from "../context/keybind"
-import { useTheme } from "../context/theme"
-import { useSDK } from "../context/sdk"
+import { keybind } from "@tui/state/keybind"
+import { theme } from "@tui/state/theme"
+import { sdk } from "@tui/state/sdk"
 import { DialogSessionRename } from "./dialog-session-rename"
-import { useKV } from "../context/kv"
+import { kv } from "@tui/state/kv"
 import { Spinner } from "./spinner"
 import { debounce } from "@solid-primitives/scheduled"
 
 export function DialogSessionList() {
   const dialog = useDialog()
-  const route = useRoute()
-  const sync = useSync()
-  const keybind = useKeybind()
-  const { theme } = useTheme()
-  const sdk = useSDK()
-  const kv = useKV()
 
   const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearchValue] = createSignal("")
@@ -27,8 +21,8 @@ export function DialogSessionList() {
 
   const [searchResults] = createResource(search, async (query) => {
     if (!query) return undefined
-    const result = await sdk.client.session.list({ search: query, limit: 30 })
-    return result.data ?? []
+    const res = await sdk.client.session.$get({ query: { search: query, limit: "30" } } as any)
+    return await (res as any).json() ?? []
   })
 
   const currentSessionID = () => route.data.sessionID || undefined
@@ -38,9 +32,9 @@ export function DialogSessionList() {
   const options = createMemo(() => {
     const today = new Date().toDateString()
     return sessions()
-      .filter((x) => x.parentID === undefined)
-      .toSorted((a, b) => b.time.updated - a.time.updated)
-      .map((x) => {
+      .filter((x: any) => x.parentID === undefined)
+      .toSorted((a: any, b: any) => b.time.updated - a.time.updated)
+      .map((x: any) => {
         const date = new Date(x.time.updated)
         let category = date.toDateString()
         if (category === today) {
@@ -82,9 +76,9 @@ export function DialogSessionList() {
           title: "delete",
           onTrigger: async (option) => {
             if (toDelete() === option.value) {
-              sdk.client.session.delete({
-                sessionID: option.value,
-              })
+              sdk.client.session[":sessionID"].$delete({
+                param: { sessionID: option.value },
+              } as any)
               setToDelete(undefined)
               return
             }

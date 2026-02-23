@@ -1,37 +1,34 @@
-import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
-import { Terminal } from "@tui/util/terminal"
-import { RouteProvider, useRoute } from "@tui/context/route"
-import { createEffect, ErrorBoundary, createSignal, Show, onMount } from "solid-js"
-import { Installation } from "@/installation"
-import { DialogMount, DialogProvider, useDialog } from "@tui/ui/dialog"
-import { NoCLIOverlay } from "@tui/component/no-cli-overlay"
-import { SDKProvider, useSDK } from "@tui/context/sdk"
-import { SyncProvider, useSync } from "@tui/context/sync"
-import { LocalProvider, useLocal } from "@tui/context/local"
-import { useConnected } from "@tui/component/dialog-model"
+import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
-import { KeybindProvider } from "@tui/context/keybind"
-import { ThemeProvider, useTheme } from "@tui/context/theme"
+import { useConnected } from "@tui/component/dialog-model"
+import { DialogProvider as DialogProviderConnect } from "@tui/component/dialog-provider"
 import { Session } from "@tui/routes/session"
+import { type Args, setArgs } from "@tui/state/args"
+import { createExit, exit } from "@tui/state/exit"
+import { createKeybind } from "@tui/state/keybind"
+import { createKV, kv } from "@tui/state/kv"
+import { createLocal, local } from "@tui/state/local"
+import { createPromptRef, promptRef } from "@tui/state/prompt"
+import { createRoute, route } from "@tui/state/route"
+import { createSDK, type EventSource, sdk } from "@tui/state/sdk"
+import { createSync, sync } from "@tui/state/sync"
+import { createTheme, theme, themeState } from "@tui/state/theme"
+import { DialogMount, DialogProvider, useDialog } from "@tui/ui/dialog"
+import { Clipboard } from "@tui/util/clipboard"
+import { Terminal } from "@tui/util/terminal"
+import { createEffect, createSignal, ErrorBoundary, onMount, Show } from "solid-js"
+import { Installation } from "@/installation"
+import { Session as SessionApi } from "@/session"
+import { useAppEventHandlers } from "./app/use-app-event-handlers"
+import { useStartupNavigation } from "./app/use-startup-navigation"
+import { DialogOnboarding } from "./component/dialog-onboarding"
+import { Logo } from "./component/logo"
 import { Prompt } from "./component/prompt"
-import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
+import { PromptHistoryProvider } from "./component/prompt/history"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { ToastProvider, useToast } from "./ui/toast"
-import { ExitProvider, useExit } from "./context/exit"
-import { Session as SessionApi } from "@/session"
-import { KVProvider, useKV } from "./context/kv"
-import { ArgsProvider, useArgs, type Args } from "./context/args"
-import { PromptRefProvider, usePromptRef } from "./context/prompt"
-import { useStartupNavigation } from "./app/use-startup-navigation"
-import { useAppEventHandlers } from "./app/use-app-event-handlers"
-import { Logo } from "./component/logo"
-import { DialogOnboarding } from "./component/dialog-onboarding"
-import { Log } from "@/util/log"
-
-import type { EventSource } from "./context/sdk"
 
 export function tui(input: {
   url: string
@@ -43,57 +40,40 @@ export function tui(input: {
   onExit?: () => Promise<void>
 }) {
   // promise to prevent immediate exit
-  return new Promise<void>((resolve) => {
+  return new Promise<void>(resolve => {
     const onExit = async () => {
       await input.onExit?.()
       resolve()
     }
 
+    // Pre-init: set args before render
+    setArgs(input.args)
+
     render(
       () => {
         return (
           <ErrorBoundary
-            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode="dark" />}
-          >
-            <ArgsProvider {...input.args}>
-              <ExitProvider onExit={onExit}>
-                <KVProvider>
-                  <ToastProvider>
-                    <RouteProvider>
-                      <SDKProvider
-                        url={input.url}
-                        directory={input.directory}
-                        fetch={input.fetch}
-                        headers={input.headers}
-                        events={input.events}
-                      >
-                        <SyncProvider>
-                          <ThemeProvider mode="dark">
-                            <LocalProvider>
-                              <KeybindProvider>
-                                <PromptStashProvider>
-                                  <DialogProvider>
-                                    <CommandProvider>
-                                      <FrecencyProvider>
-                                        <PromptHistoryProvider>
-                                          <PromptRefProvider>
-                                            <App />
-                                          </PromptRefProvider>
-                                        </PromptHistoryProvider>
-                                      </FrecencyProvider>
-                                    </CommandProvider>
-                                  </DialogProvider>
-                                </PromptStashProvider>
-                              </KeybindProvider>
-                            </LocalProvider>
-                          </ThemeProvider>
-                        </SyncProvider>
-                      </SDKProvider>
-                    </RouteProvider>
-                  </ToastProvider>
-                </KVProvider>
-              </ExitProvider>
-            </ArgsProvider>
+            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode="dark" />}>
+            <ToastProvider>
+              <PromptStashProvider>
+                <DialogProvider>
+                  <CommandProvider>
+                    <FrecencyProvider>
+                      <PromptHistoryProvider>
+                        <App
+                          url={input.url}
+                          directory={input.directory}
+                          fetch={input.fetch}
+                          headers={input.headers}
+                          events={input.events}
+                          onExit={onExit}
+                        />
+                      </PromptHistoryProvider>
+                    </FrecencyProvider>
+                  </CommandProvider>
+                </DialogProvider>
+              </PromptStashProvider>
+            </ToastProvider>
           </ErrorBoundary>
         )
       },
@@ -105,32 +85,50 @@ export function tui(input: {
         autoFocus: false,
         consoleOptions: {
           keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
-          onCopySelection: (text) => {
-            Clipboard.copy(text).catch((error) => {
+          onCopySelection: text => {
+            Clipboard.copy(text).catch(error => {
               console.error(`Failed to copy console selection to clipboard: ${error}`)
             })
           },
         },
-      },
+      }
     )
   })
 }
 
-function App() {
-  const route = useRoute()
+function App(props: {
+  url: string
+  directory?: string
+  fetch?: typeof fetch
+  headers?: RequestInit["headers"]
+  events?: EventSource
+  onExit: () => Promise<void>
+}) {
+  // Init state modules in dependency order
+  createExit({ onExit: props.onExit })
+  createKV()
+  createRoute()
+  createSDK({
+    url: props.url,
+    directory: props.directory,
+    fetch: props.fetch,
+    headers: props.headers,
+    events: props.events,
+  })
+  createSync()
+  createTheme({ mode: "dark" })
+  createLocal()
+  createKeybind()
+  createPromptRef()
+
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   renderer.disableStdoutInterception()
   const dialog = useDialog()
-  const local = useLocal()
-  const kv = useKV()
   const command = useCommandDialog()
-  const sdk = useSDK()
   const toast = useToast()
-  const { theme, mode, setMode } = useTheme()
-  const sync = useSync()
-  const exit = useExit()
-  const promptRef = usePromptRef()
+  const mode = themeState.mode
+  const setMode = themeState.setMode
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
@@ -160,8 +158,7 @@ function App() {
     renderer.setTerminalTitle(`0x0 | ${title}`)
   })
 
-  const args = useArgs()
-  useStartupNavigation({ args, local, route, sdk, sync, toast })
+  useStartupNavigation()
 
   createEffect(() => {
     if (terminalModeResolved) return
@@ -169,7 +166,7 @@ function App() {
     terminalModeResolved = true
     if (kv.store["theme_mode"] !== undefined) return
 
-    Terminal.getTerminalBackgroundColor({ timeoutMs: 100 }).then((detected) => {
+    Terminal.getTerminalBackgroundColor({ timeoutMs: 100 }).then(detected => {
       setMode(detected)
     })
   })
@@ -197,7 +194,7 @@ function App() {
       })
     })
   })
-  useAppEventHandlers({ command, route, sdk, sync, toast })
+  useAppEventHandlers()
 
   return (
     <box
@@ -210,8 +207,7 @@ function App() {
           await Clipboard.copyWithToast(text, toast)
           renderer.clearSelection()
         }
-      }}
-    >
+      }}>
       <Show
         when={route.data.sessionID}
         fallback={
@@ -221,25 +217,24 @@ function App() {
             </box>
             <Prompt
               visible
-              ref={(r) => {
+              ref={r => {
                 promptRef.set(r)
               }}
               onSubmit={() => {}}
             />
           </box>
-        }
-      >
+        }>
         <Session />
       </Show>
 
       {/* Onboarding: only show when at least one CLI is installed */}
-      <Show when={sync.ready && kv.ready && !onboardingDone() && sync.data.provider_next.connected.length > 0}>
+      <Show when={sync.ready && kv.ready && !onboardingDone() && sync.data.provider_connected.length > 0}>
         <DialogMount title="Welcome to 0x0" body={() => <DialogOnboarding />} />
       </Show>
 
-      {/* Blocking overlay when no CLI tool (claude or codex) is detected */}
-      <Show when={sync.ready && sync.data.provider_next.connected.length === 0}>
-        <NoCLIOverlay onRetry={() => sync.bootstrap()} />
+      {/* Auto-show provider dialog when no CLI tool is detected */}
+      <Show when={sync.ready && sync.data.provider_connected.length === 0}>
+        <DialogMount title="Connect a provider" body={() => <DialogProviderConnect />} />
       </Show>
     </box>
   )
@@ -260,7 +255,7 @@ function ErrorComponent(props: {
     props.onExit()
   }
 
-  useKeyboard((evt) => {
+  useKeyboard(evt => {
     if (evt.ctrl && evt.name === "c") {
       handleExit()
     }
@@ -285,7 +280,7 @@ function ErrorComponent(props: {
   if (props.error.stack) {
     issueURL.searchParams.set(
       "description",
-      "```\n" + props.error.stack.substring(0, 6000 - issueURL.toString().length) + "...\n```",
+      "```\n" + props.error.stack.substring(0, 6000 - issueURL.toString().length) + "...\n```"
     )
   }
 

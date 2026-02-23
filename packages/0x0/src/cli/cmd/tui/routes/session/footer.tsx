@@ -1,15 +1,12 @@
 import { Match, onCleanup, onMount, Show, Switch } from "solid-js"
-import { useTheme } from "../../context/theme"
-import { useSync } from "../../context/sync"
+import { theme } from "@tui/state/theme"
+import { sync } from "@tui/state/sync"
 import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
-import { useRoute } from "../../context/route"
+import { route } from "@tui/state/route"
 
 export function Footer() {
-  const { theme } = useTheme()
-  const sync = useSync()
-  const route = useRoute()
   const mcp = () => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
   const mcpError = () => Object.values(sync.data.mcp).some((x) => x.status === "failed")
   const lsp = () => Object.keys(sync.data.lsp)

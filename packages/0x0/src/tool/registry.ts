@@ -8,9 +8,7 @@ import { Tool } from "./tool"
 import { Instance } from "../project/instance"
 import { Config } from "../config/config"
 import path from "path"
-import { type ToolContext as PluginToolContext, type ToolDefinition } from "@0x0-ai/plugin"
 import z from "zod"
-import { Plugin } from "../plugin"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
@@ -18,6 +16,12 @@ import { Truncate } from "./truncation"
 import { ApplyPatchTool } from "./apply_patch"
 import { SearchTool } from "./search"
 import { SearchRemoteTool } from "./search_remote"
+
+interface ToolDefinition {
+  description: string
+  args: z.ZodRawShape
+  execute: (args: any, ctx: any) => Promise<string>
+}
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -38,13 +42,6 @@ export namespace ToolRegistry {
       }
     }
 
-    const plugins = await Plugin.list()
-    for (const plugin of plugins) {
-      for (const [id, def] of Object.entries(plugin.tool ?? {})) {
-        custom.push(fromPlugin(id, def))
-      }
-    }
-
     return { custom }
   })
 
@@ -59,7 +56,7 @@ export namespace ToolRegistry {
             ...ctx,
             directory: Instance.directory,
             worktree: Instance.worktree,
-          } as unknown as PluginToolContext
+          } as any
           const result = await def.execute(args as any, pluginCtx)
           const out = await Truncate.output(result, {}, initCtx?.agent)
           return {

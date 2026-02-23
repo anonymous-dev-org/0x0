@@ -28,41 +28,8 @@ type SubmitContext = {
   sdk: {
     client: {
       session: {
-        create: (input: {}) => Promise<{ data?: { id?: string }; error?: unknown }>
-        shell: (input: {
-          sessionID: string
-          agent: string
-          model: SubmitModel
-          command: string
-        }) => Promise<SubmitResult>
-        command: (input: {
-          sessionID: string
-          command: string
-          arguments: string
-          agent: string
-          model: string
-          messageID: string
-          variant: string | undefined
-          parts: Array<PromptInfo["parts"][number] & { id: string; type: "file" }>
-        }) => Promise<SubmitResult>
-        prompt: (input: {
-          sessionID: string
-          providerID: string
-          modelID: string
-          messageID: string
-          agent: string
-          model: SubmitModel
-          variant: string | undefined
-          parts: Array<{ id: string; type: "text"; text: string } | (PromptInfo["parts"][number] & { id: string })>
-        }) => Promise<SubmitResult>
-        promptAsync: (input: {
-          sessionID: string
-          messageID: string
-          agent: string
-          model: SubmitModel
-          variant: string | undefined
-          parts: Array<{ id: string; type: "text"; text: string } | (PromptInfo["parts"][number] & { id: string })>
-        }) => Promise<SubmitResult>
+        $post: (input: { json: {} }) => Promise<Response>
+        [key: string]: any
       }
     }
   }
@@ -187,12 +154,13 @@ export async function submitPrompt(props: {
     ? props.sessionID
     : await (async () => {
         try {
-          const created = await props.sdk.client.session.create({})
-          if (!created.data?.id) {
+          const res = await props.sdk.client.session.$post({ json: {} } as any)
+          const created = await (res as any).json()
+          if (!created?.id) {
             rollbackSubmit("Failed to create session")
             return
           }
-          return created.data.id
+          return created.id
         } catch (error) {
           rollbackSubmit(error)
           return
@@ -214,16 +182,18 @@ export async function submitPrompt(props: {
     })
 
   if (props.mode === "shell") {
-    props.sdk.client.session
-      .shell({
-        sessionID,
-        agent: props.local.agent.current().name,
-        model: {
-          providerID: selectedModel.providerID,
-          modelID: selectedModel.modelID,
+    props.sdk.client.session[":sessionID"].shell
+      .$post({
+        param: { sessionID },
+        json: {
+          agent: props.local.agent.current().name,
+          model: {
+            providerID: selectedModel.providerID,
+            modelID: selectedModel.modelID,
+          },
+          command: inputText,
         },
-        command: inputText,
-      })
+      } as any)
       .catch(() => {})
     return
   }
@@ -276,17 +246,19 @@ export async function submitPrompt(props: {
       ],
     )
 
-    props.sdk.client.session
-      .command({
-        sessionID,
-        command: (command ?? "").slice(1),
-        arguments: args,
-        agent: props.local.agent.current().name,
-        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-        messageID,
-        variant,
-        parts: fileParts,
-      })
+    props.sdk.client.session[":sessionID"].command
+      .$post({
+        param: { sessionID },
+        json: {
+          command: (command ?? "").slice(1),
+          arguments: args,
+          agent: props.local.agent.current().name,
+          model: `${selectedModel.providerID}/${selectedModel.modelID}`,
+          messageID,
+          variant,
+          parts: fileParts,
+        },
+      } as any)
       .catch(() => {})
     return
   }
@@ -320,15 +292,17 @@ export async function submitPrompt(props: {
     })),
   )
 
-  props.sdk.client.session
-    .promptAsync({
-      sessionID,
-      messageID,
-      agent: props.local.agent.current().name,
-      model: selectedModel,
-      variant,
-      parts,
-    })
+  props.sdk.client.session[":sessionID"].prompt_async
+    .$post({
+      param: { sessionID },
+      json: {
+        messageID,
+        agent: props.local.agent.current().name,
+        model: selectedModel,
+        variant,
+        parts,
+      },
+    } as any)
     .catch(() => {})
 }
 
