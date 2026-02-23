@@ -270,7 +270,7 @@ function ErrorComponent(props: {
     bg: isLight ? "#ffffff" : "#0a0a0a",
     text: isLight ? "#1a1a1a" : "#eeeeee",
     muted: isLight ? "#8a8a8a" : "#808080",
-    primary: isLight ? "#3b7dd8" : "#fab283",
+    primary: isLight ? "#6b6b6b" : "#a0a0a0",
   }
 
   if (props.error.message) {

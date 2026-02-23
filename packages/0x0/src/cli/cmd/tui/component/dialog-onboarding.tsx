@@ -39,7 +39,7 @@ export function DialogOnboarding() {
     config.agent[custom] = {
       ...(config.agent[custom] ?? {}),
       name: config.agent[custom]?.name ?? "My Agent",
-      color: config.agent[custom]?.color ?? "#22C55E",
+      color: config.agent[custom]?.color ?? "#A0A0A0",
       tools_allowed: config.agent[custom]?.tools_allowed ?? ["bash", "read", "search", "apply_patch", "task"],
       thinking_effort: config.agent[custom]?.thinking_effort ?? "medium",
       hidden: false,

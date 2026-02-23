@@ -132,7 +132,7 @@ export namespace Config {
       agent: {
         builder: {
           name: "Builder",
-          color: "#2563EB",
+          color: "#6EE7B7",
           thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
           tools_allowed: ["bash", "read", "search", "search_remote", "apply_patch", "task", "todowrite", "question"],
@@ -141,7 +141,7 @@ export namespace Config {
         },
         planner: {
           name: "Planner",
-          color: "#7C3AED",
+          color: "#A5B4FC",
           thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
           tools_allowed: ["question", "read", "search", "search_remote", "task"],

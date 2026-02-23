@@ -31,8 +31,8 @@
 ### Installation
 
 ```bash
-npm i -g @anonymous-dev/0x0@latest        # or bun/pnpm/yarn
-brew install anonymous-dev-org/tap/0x0 # macOS and Linux
+npm i -g @anonymous-dev/0x0@latest # or bun/pnpm/yarn
+brew install 0x0                   # macOS and Linux
 ```
 
 ### Agents
