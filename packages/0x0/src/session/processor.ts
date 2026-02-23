@@ -205,6 +205,7 @@ export namespace SessionProcessor {
 
               case "tool-start": {
                 finalizeText()
+                const toolInput = event.command ? { command: event.command } : {}
                 const toolPart = (await Session.updatePart({
                   id: Identifier.ascending("part"),
                   messageID: input.assistantMessage.id,
@@ -213,9 +214,11 @@ export namespace SessionProcessor {
                   tool: event.tool,
                   callID: event.id,
                   state: {
-                    status: "pending",
-                    input: event.command ? { command: event.command } : {},
-                    raw: "",
+                    status: "running",
+                    input: toolInput,
+                    title: event.command ?? "",
+                    time: { start: Date.now() },
+                    metadata: { raw: "" },
                   },
                 })) as MessageV2.ToolPart
                 toolParts[event.id] = toolPart
@@ -224,10 +227,19 @@ export namespace SessionProcessor {
 
               case "tool-input-delta": {
                 const toolPart = toolParts[event.id]
-                if (toolPart && toolPart.state.status === "pending") {
-                  // accumulate raw input JSON for display
-                  const raw = (toolPart.state.raw ?? "") + event.partial
-                  toolPart.state = { ...toolPart.state, raw }
+                if (toolPart && (toolPart.state.status === "running" || toolPart.state.status === "pending")) {
+                  const raw = (toolPart.state.metadata?.raw ?? "") + event.partial
+                  toolPart.state = { ...toolPart.state, metadata: { ...toolPart.state.metadata, raw } }
+                  try {
+                    const parsed = JSON.parse(raw)
+                    if (typeof parsed === "object" && parsed !== null) {
+                      const extracted = providerToolPattern(toolPart.tool, parsed)
+                      if (extracted !== "*" && toolPart.state.status === "running" && toolPart.state.title !== extracted) {
+                        toolPart.state = { ...toolPart.state, title: extracted }
+                        Session.updatePart(toolPart).catch(() => {})
+                      }
+                    }
+                  } catch {}
                 }
                 break
               }

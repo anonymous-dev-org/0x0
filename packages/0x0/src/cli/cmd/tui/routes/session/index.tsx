@@ -108,7 +108,10 @@ function SessionInner() {
       const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title.trim() : ""
       if (title) return `Using ${name} · ${Locale.truncate(title, 56)}`
     }
-
+    if ("input" in part.state && part.state.input) {
+      const cmd = part.state.input.command
+      if (typeof cmd === "string" && cmd.trim()) return `Using ${name} · ${Locale.truncate(cmd.trim(), 56)}`
+    }
     return `Using ${name}`
   }
 
@@ -121,8 +124,7 @@ function SessionInner() {
       const part = parts[i]
       if (!part || part.type !== "tool") continue
       const tool = part as ToolPartType
-      if (tool.state.status !== "running") continue
-      return toolStatus(tool)
+      if (tool.state.status === "running" || tool.state.status === "pending") return toolStatus(tool)
     }
 
     for (let i = parts.length - 1; i >= 0; i--) {
@@ -138,7 +140,7 @@ function SessionInner() {
       const part = parts[i]
       if (!part || part.type !== "tool") continue
       const tool = part as ToolPartType
-      if (tool.state.status === "pending") continue
+      if (tool.state.status === "pending" || tool.state.status === "running") continue
       return toolStatus(tool)
     }
     return "Thinking"
@@ -155,8 +157,8 @@ function SessionInner() {
   }
   const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0)
 
-  // 6 (dots) + 1 (gap) + 22 ("esc again to interrupt") = 29
-  const thinkingTitle = createMemo(() => Locale.truncate(thinkingStatus() ?? "", Math.max(10, contentWidth() - 29)))
+  // 4 (dots) + 1 (gap) + 22 ("esc again to interrupt") = 27
+  const thinkingTitle = createMemo(() => Locale.truncate(thinkingStatus() ?? "", Math.max(10, contentWidth() - 27)))
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
