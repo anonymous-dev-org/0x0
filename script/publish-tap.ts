@@ -29,6 +29,10 @@ if (flag("help")) {
       "  --tap <org/repo>        Tap repo (default: <repo-owner>/homebrew-tap)",
       "  --repo <org/repo>       Release repo (default: current repository)",
       "  --formula-name <name>   Formula name (default: zeroxzero)",
+      "  --prefix <name>         Asset name prefix (default: 0x0)",
+      "  --bin-name <name>       Binary name inside archive (default: zeroxzero for 0x0, prefix otherwise)",
+      "  --bin-alias <name>      Installed binary name (default: 0x0 for 0x0 prefix, bin-name otherwise)",
+      "  --tag <tag>             Release tag override (default: v<version>)",
       "  --formula <path>        Formula path in tap (default: Formula/<formula-name>.rb)",
       "  --no-push               Do not push commit",
       "",
@@ -54,7 +58,11 @@ const versionArg = read("version")
 const bump = read("bump")
 const formulaName = read("formula-name") ?? "zeroxzero"
 const formula = read("formula") ?? `Formula/${formulaName}.rb`
+const tagOverride = read("tag")
 const noPush = flag("no-push")
+const prefix = read("prefix") ?? "0x0"
+const binName = read("bin-name") ?? (prefix === "0x0" ? "zeroxzero" : prefix)
+const binAlias = read("bin-alias") ?? (prefix === "0x0" ? "0x0" : binName)
 
 if (versionArg && bump) {
   throw new Error("Use either --version or --bump, not both.")
@@ -115,16 +123,18 @@ if (!versionRaw) {
 }
 const version = versionRaw
 
-const files = ["0x0-darwin-arm64.zip", "0x0-darwin-x64.zip", "0x0-linux-arm64.tar.gz", "0x0-linux-x64.tar.gz"]
+const releaseTag = tagOverride ?? `v${version}`
 
-const releaseCheck = await $`gh release view v${version} --repo ${repo} --json tagName`.nothrow().quiet()
+const files = [`${prefix}-darwin-arm64.zip`, `${prefix}-darwin-x64.zip`, `${prefix}-linux-arm64.tar.gz`, `${prefix}-linux-x64.tar.gz`]
+
+const releaseCheck = await $`gh release view ${releaseTag} --repo ${repo} --json tagName`.nothrow().quiet()
 if (releaseCheck.exitCode !== 0) {
   if (bump) {
     throw new Error(
-      `Computed v${version} from --bump ${bump}, but release v${version} does not exist in ${repo}. Create and upload release assets first.`,
+      `Computed ${releaseTag} from --bump ${bump}, but release ${releaseTag} does not exist in ${repo}. Create and upload release assets first.`,
     )
   }
-  throw new Error(`Release v${version} was not found in ${repo}.`)
+  throw new Error(`Release ${releaseTag} was not found in ${repo}.`)
 }
 
 const hash = async (file: string) => {
@@ -145,18 +155,21 @@ await $`mkdir -p ${assetsDir}`
 
 for (const file of files) {
   console.log("download", file)
-  const result = await $`gh release download v${version} --repo ${repo} --pattern ${file} --dir ${assetsDir} --clobber`
+  const result = await $`gh release download ${releaseTag} --repo ${repo} --pattern ${file} --dir ${assetsDir} --clobber`
     .nothrow()
     .quiet()
   if (result.exitCode !== 0) {
-    throw new Error(`Release v${version} is missing required asset: ${file}`)
+    throw new Error(`Release ${releaseTag} is missing required asset: ${file}`)
   }
 }
 
-const macArm64Sha = await hash(path.join(assetsDir, "0x0-darwin-arm64.zip"))
-const macX64Sha = await hash(path.join(assetsDir, "0x0-darwin-x64.zip"))
-const linuxArm64Sha = await hash(path.join(assetsDir, "0x0-linux-arm64.tar.gz"))
-const linuxX64Sha = await hash(path.join(assetsDir, "0x0-linux-x64.tar.gz"))
+const macArm64Sha = await hash(path.join(assetsDir, `${prefix}-darwin-arm64.zip`))
+const macX64Sha = await hash(path.join(assetsDir, `${prefix}-darwin-x64.zip`))
+const linuxArm64Sha = await hash(path.join(assetsDir, `${prefix}-linux-arm64.tar.gz`))
+const linuxX64Sha = await hash(path.join(assetsDir, `${prefix}-linux-x64.tar.gz`))
+
+const installCmd = binName === binAlias ? `bin.install "${binName}"` : `bin.install "${binName}" => "${binAlias}"`
+const depsLine = prefix === "0x0" ? '  depends_on "ripgrep"\n' : ""
 
 const formulaText = [
   "# typed: false",
@@ -167,40 +180,39 @@ const formulaText = [
   `  homepage "https://github.com/${repo}"`,
   `  version "${version.split("-")[0]}"`,
   "",
-  '  depends_on "ripgrep"',
-  "",
+  ...(depsLine ? [depsLine.trimEnd(), ""] : []),
   "  on_macos do",
   "    if Hardware::CPU.intel?",
-  `      url "https://github.com/${repo}/releases/download/v${version}/0x0-darwin-x64.zip"`,
+  `      url "https://github.com/${repo}/releases/download/${releaseTag}/${prefix}-darwin-x64.zip"`,
   `      sha256 "${macX64Sha}"`,
   "",
   "      def install",
-  '        bin.install "zeroxzero" => "0x0"',
+  `        ${installCmd}`,
   "      end",
   "    end",
   "    if Hardware::CPU.arm?",
-  `      url "https://github.com/${repo}/releases/download/v${version}/0x0-darwin-arm64.zip"`,
+  `      url "https://github.com/${repo}/releases/download/${releaseTag}/${prefix}-darwin-arm64.zip"`,
   `      sha256 "${macArm64Sha}"`,
   "",
   "      def install",
-  '        bin.install "zeroxzero" => "0x0"',
+  `        ${installCmd}`,
   "      end",
   "    end",
   "  end",
   "",
   "  on_linux do",
   "    if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?",
-  `      url "https://github.com/${repo}/releases/download/v${version}/0x0-linux-x64.tar.gz"`,
+  `      url "https://github.com/${repo}/releases/download/${releaseTag}/${prefix}-linux-x64.tar.gz"`,
   `      sha256 "${linuxX64Sha}"`,
   "      def install",
-  '        bin.install "zeroxzero" => "0x0"',
+  `        ${installCmd}`,
   "      end",
   "    end",
   "    if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?",
-  `      url "https://github.com/${repo}/releases/download/v${version}/0x0-linux-arm64.tar.gz"`,
+  `      url "https://github.com/${repo}/releases/download/${releaseTag}/${prefix}-linux-arm64.tar.gz"`,
   `      sha256 "${linuxArm64Sha}"`,
   "      def install",
-  '        bin.install "zeroxzero" => "0x0"',
+  `        ${installCmd}`,
   "      end",
   "    end",
   "  end",
@@ -215,13 +227,15 @@ await $`git clone ${tapUrl} ${tapDir}`
 const formulaPath = path.join(tapDir, formula)
 await Bun.write(formulaPath, formulaText)
 
-const aliasPath = path.join(tapDir, "Aliases", "0x0")
+const aliasPath = path.join(tapDir, "Aliases", binAlias)
 await $`mkdir -p ${path.dirname(aliasPath)}`
-if (formulaName !== "0x0") {
+if (formulaName !== binAlias) {
   await $`ln -sf ../${formula} ${aliasPath}`
 }
 
-await $`git -C ${tapDir} add ${formula} ${aliasPath}`
+const gitAddPaths = [formula]
+if (formulaName !== binAlias) gitAddPaths.push(aliasPath)
+await $`git -C ${tapDir} add ${gitAddPaths}`
 const status = await $`git -C ${tapDir} status --porcelain`.text()
 if (!status.trim()) {
   console.log(`No changes for ${formula} at v${version}`)

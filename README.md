@@ -48,11 +48,11 @@ The CLI includes two built-in agents you can switch between with the `Tab` key.
 It also includes a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Learn more about [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Documentation
 
-For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0-cli).
+For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0).
 
 ### Contributing
 

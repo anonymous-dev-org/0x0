@@ -1,21 +1,30 @@
-# Terminal Agent VS Code Extension
+# 0x0 for VS Code
 
-A Visual Studio Code extension that integrates the CLI directly into your development workflow.
+A VS Code extension that integrates 0x0 directly into your editor.
 
 ## Prerequisites
 
-This extension requires the CLI to be installed on your system.
+The [0x0 CLI](https://github.com/anomalyco/0x0) must be installed on your system.
 
-## Features
+## Commands
 
-- **Quick Launch**: Use `Cmd+Esc` (Mac) or `Ctrl+Esc` (Windows/Linux) to open the CLI in a split terminal view, or focus an existing terminal session if one is already running.
-- **New Session**: Use `Cmd+Shift+Esc` (Mac) or `Ctrl+Shift+Esc` (Windows/Linux) to start a new terminal session, even if one is already open.
-- **Context Awareness**: Automatically share your current selection or tab with the CLI.
-- **File Reference Shortcuts**: Use `Cmd+Option+K` (Mac) or `Alt+Ctrl+K` (Linux/Windows) to insert file references. For example, `@File#L37-42`.
+| Command | Keybinding (Mac) | Keybinding (Windows/Linux) | Description |
+|---------|-------------------|----------------------------|-------------|
+| Open 0x0 | `Cmd+Esc` | `Ctrl+Esc` | Open 0x0 in a split terminal, or focus an existing session |
+| Open 0x0 in new tab | `Cmd+Shift+Esc` | `Ctrl+Shift+Esc` | Start a new 0x0 terminal session |
+| Add Filepath to Terminal | `Cmd+Option+K` | `Ctrl+Alt+K` | Insert a file reference (e.g. `@File#L37-42`) into the active 0x0 terminal |
+
+## Supported Editors
+
+- Visual Studio Code
+- VS Code Insiders
+- Cursor
+- Windsurf
+- VSCodium
 
 ## Support
 
-This is an early release. If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/0x0/issues.
+If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/0x0/issues.
 
 ## Development
 

@@ -108,6 +108,7 @@
         "0x0-git": "./bin/0x0-git",
       },
       "devDependencies": {
+        "@0x0-ai/script": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "typescript": "catalog:",

@@ -48,11 +48,11 @@ Le CLI inclut deux agents intégrés que vous pouvez basculer avec la touche `Ta
 Un sous-agent **general** est aussi inclus pour les recherches complexes et les tâches en plusieurs étapes.
 Il est utilisé en interne et peut être invoqué via `@general` dans les messages.
 
-En savoir plus sur les [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+En savoir plus sur les [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Documentation
 
-Pour plus d'informations sur la configuration, [**consultez notre documentation**](https://docs.anonymous.dev/packages/0x0-cli).
+Pour plus d'informations sur la configuration, [**consultez notre documentation**](https://docs.anonymous.dev/packages/0x0).
 
 ### Contribuer
 

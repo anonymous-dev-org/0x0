@@ -47,11 +47,11 @@ Terminal Agent には組み込みの Agent が2つあり、`Tab` キーで切り
 また、複雑な検索やマルチステップのタスク向けに **general** サブ Agent も含まれています。
 内部的に使用されており、メッセージで `@general` と入力して呼び出せます。
 
-[agents](https://docs.anonymous.dev/packages/0x0-cli/agents) の詳細はこちら。
+[agents](https://docs.anonymous.dev/packages/0x0/agents) の詳細はこちら。
 
 ### ドキュメント
 
-Terminal Agent の設定については [**ドキュメント**](https://docs.anonymous.dev/packages/0x0-cli) を参照してください。
+Terminal Agent の設定については [**ドキュメント**](https://docs.anonymous.dev/packages/0x0) を参照してください。
 
 ### コントリビュート
 

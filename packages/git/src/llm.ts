@@ -1,96 +1,85 @@
-import type { Provider } from "./config"
+import type { Config } from "./config"
 
 /**
- * One-shot text generation via CLI subprocess.
+ * One-shot text generation via the 0x0 server's /completion/text endpoint.
  * Returns the generated text or throws on failure.
  */
-export async function generate(
-  provider: Provider,
-  model: string,
-  prompt: string,
-): Promise<string> {
-  if (provider === "claude") {
-    return generateClaude(model, prompt)
-  }
-  return generateCodex(model, prompt)
-}
+export async function generate(config: Config, prompt: string): Promise<string> {
+  const url = `${config.url.replace(/\/$/, "")}/completion/text`
 
-async function generateClaude(
-  model: string,
-  prompt: string,
-): Promise<string> {
-  const binary = Bun.which("claude")
-  if (!binary) throw new Error("claude binary not found in PATH")
-
-  const proc = Bun.spawn(
-    [binary, "--output-format", "text", "--model", model, "-p", prompt],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-      env: { ...process.env },
-    },
-  )
-
-  const text = await new Response(proc.stdout).text()
-  const exitCode = await proc.exited
-
-  if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text()
-    throw new Error(`claude exited with code ${exitCode}: ${stderr}`)
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
   }
 
-  return text.trim()
-}
-
-async function generateCodex(
-  model: string,
-  prompt: string,
-): Promise<string> {
-  const binary = Bun.which("codex")
-  if (!binary) throw new Error("codex binary not found in PATH")
-
-  const proc = Bun.spawn(
-    [binary, "exec", "--experimental-json", "--model", model],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "pipe",
-      env: { ...process.env },
-    },
-  )
-
-  proc.stdin.write(prompt)
-  proc.stdin.end()
-
-  const raw = await new Response(proc.stdout).text()
-  const exitCode = await proc.exited
-
-  if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text()
-    throw new Error(`codex exited with code ${exitCode}: ${stderr}`)
+  if (config.auth) {
+    const credentials = btoa(`${config.auth.username}:${config.auth.password}`)
+    headers["Authorization"] = `Basic ${credentials}`
   }
 
-  // Parse JSON lines, extract agent_message text
+  const body: Record<string, unknown> = { prompt }
+  if (config.model) body.model = config.model
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  })
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "Unknown error")
+    throw new Error(`Server error (${response.status}): ${errorBody}`)
+  }
+
+  if (!response.body) {
+    throw new Error("No response body from server")
+  }
+
+  // Read SSE stream and collect delta text
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
   const parts: string[] = []
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue
-    try {
-      const event = JSON.parse(line.trim())
-      if (
-        event.type === "item.completed" &&
-        event.item?.type === "agent_message" &&
-        event.item.text
-      ) {
-        parts.push(event.item.text)
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+
+    while (true) {
+      const newlinePos = buffer.indexOf("\n")
+      if (newlinePos === -1) break
+
+      const line = buffer.slice(0, newlinePos)
+      buffer = buffer.slice(newlinePos + 1)
+
+      if (!line.startsWith("data:")) continue
+
+      const jsonStr = line.slice(5).trim()
+      if (!jsonStr) continue
+
+      try {
+        const parsed = JSON.parse(jsonStr)
+        if (parsed.type === "delta" && parsed.text) {
+          parts.push(parsed.text)
+        } else if (parsed.type === "error") {
+          throw new Error(parsed.error || "Server stream error")
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message !== "Server stream error") {
+          // skip malformed JSON
+          continue
+        }
+        throw err
       }
-    } catch {
-      // skip non-JSON lines
     }
   }
 
-  if (parts.length === 0) {
-    throw new Error("No response text from codex")
+  const text = parts.join("").trim()
+  if (!text) {
+    throw new Error("No response text from server")
   }
 
-  return parts.join("").trim()
+  return text
 }

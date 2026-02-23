@@ -10,6 +10,15 @@ usage() {
   cat <<'USAGE'
 Usage: ./script/release-local.sh [--dry-run]
 
+Unified release for all packages. Each package has its own version.
+Prompts for version per package, then publishes everything.
+
+Packages:
+  0x0              → npm + brew (zeroxzero)
+  0x0-git          → npm + brew (zeroxzero-git)
+  nvim             → git repo push
+  nvim-completion  → git repo push
+
 Options:
   --dry-run   Print planned publish commands without executing mutating steps
   -h, --help  Show this help
@@ -124,8 +133,9 @@ pick_latest_tag() {
 package_if_needed() {
   local name="$1"
   local mode="$2"
-  local src="./packages/0x0/dist/${name}/bin"
-  local out="./packages/0x0/dist/${name}"
+  local pkg_dir="${3:-./packages/0x0}"
+  local src="${pkg_dir}/dist/${name}/bin"
+  local out="${pkg_dir}/dist/${name}"
 
   [[ -d "$src" ]] || return 0
 
@@ -215,6 +225,84 @@ prepare_npm_dist() {
   '
 }
 
+prepare_git_npm_dist() {
+  local version="$1"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: prepare scoped git dist package metadata"
+    return
+  fi
+
+  run rm -rf ./packages/git/dist/0x0-git
+  run mkdir -p ./packages/git/dist/0x0-git
+  run cp -r ./packages/git/bin ./packages/git/dist/0x0-git/bin
+  run cp ./packages/git/script/postinstall.mjs ./packages/git/dist/0x0-git/postinstall.mjs
+  run cp ./LICENSE ./packages/git/dist/0x0-git/LICENSE
+
+  SCOPE="$SCOPE" VERSION="$version" bun -e '
+    const scope = process.env.SCOPE
+    if (!scope) throw new Error("Missing SCOPE")
+
+    const dist = "./packages/git/dist"
+    const release = process.env.VERSION
+    if (!release) throw new Error("Missing VERSION")
+    const binaries = {}
+    const dirs = []
+
+    for await (const filepath of new Bun.Glob("*/package.json").scan({ cwd: dist })) {
+      const dir = filepath.split("/")[0]
+      if (!dir || dir === "0x0-git") continue
+
+      const file = `${dist}/${filepath}`
+      const info = await Bun.file(file).json()
+      binaries[dir] = release
+      dirs.push(dir)
+      await Bun.write(
+        file,
+        JSON.stringify(
+          {
+            ...info,
+            name: `${scope}/${dir}`,
+            version: release,
+          },
+          null,
+          2,
+        ) + "\n",
+      )
+    }
+
+    const version = Object.values(binaries)[0]
+    if (!version) throw new Error("No built binaries found in ./packages/git/dist")
+
+    const optionalDependencies = Object.fromEntries(
+      Object.entries(binaries).map(([name, value]) => [`${scope}/${name}`, value]),
+    )
+
+    await Bun.write(
+      `${dist}/0x0-git/package.json`,
+      JSON.stringify(
+        {
+          name: `${scope}/0x0-git`,
+          bin: {
+            "0x0-git": "./bin/0x0-git",
+          },
+          scripts: {
+            postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+          },
+          version,
+          license: "MIT",
+          optionalDependencies,
+        },
+        null,
+        2,
+      ) + "\n",
+    )
+
+    console.log(`Prepared git dist metadata for ${dirs.length} binaries at version ${version}`)
+  '
+}
+
+# ── Preflight ──────────────────────────────────────────────────────
+
 need_cmd git
 need_cmd bun
 need_cmd gh
@@ -228,6 +316,14 @@ need_cmd tar
   exit 1
 }
 
+if ! gh auth status >/dev/null 2>&1; then
+  echo "gh is not authenticated. Run: gh auth login"
+  exit 1
+fi
+
+# ── Version prompts (per package) ──────────────────────────────────
+
+# 0x0 version — from git tags
 latest_tag="$(pick_latest_tag)"
 if [[ -z "${latest_tag}" ]]; then
   echo "No semver tags or releases found. Start from 0.0.0."
@@ -235,33 +331,51 @@ if [[ -z "${latest_tag}" ]]; then
 fi
 latest_version="$(semver_from_tag "$latest_tag")"
 
+echo "── 0x0 (server/TUI) ──"
 echo "Latest tag: ${latest_tag}"
 echo "Select release type:"
 select release_type in major minor patch; do
   [[ -n "${release_type:-}" ]] && break
   echo "Choose 1, 2, or 3."
 done
-
 next_version="$(bump_version "$latest_version" "$release_type")"
-echo "Proposed version: ${next_version}"
+read -r -p "0x0 version [${next_version}]: " override
+VERSION_0X0="${override:-$next_version}"
+is_semver "$VERSION_0X0" || { echo "Invalid version: $VERSION_0X0"; exit 1; }
 
-read -r -p "Override version? (leave empty to keep ${next_version}): " override
-VERSION="${override:-$next_version}"
+# 0x0-git version — from package.json
+GIT_PKG_VERSION="$(bun -e 'const p = await Bun.file("./packages/git/package.json").json(); console.log(p.version)')"
+echo
+echo "── 0x0-git ──"
+echo "Current package.json version: ${GIT_PKG_VERSION}"
+echo "Select release type:"
+select git_release_type in major minor patch same; do
+  [[ -n "${git_release_type:-}" ]] && break
+  echo "Choose 1, 2, 3, or 4."
+done
+if [[ "$git_release_type" == "same" ]]; then
+  next_git_version="$GIT_PKG_VERSION"
+else
+  next_git_version="$(bump_version "$GIT_PKG_VERSION" "$git_release_type")"
+fi
+read -r -p "0x0-git version [${next_git_version}]: " git_override
+VERSION_GIT="${git_override:-$next_git_version}"
+is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 
-is_semver "$VERSION" || {
-  echo "Invalid version: $VERSION"
-  exit 1
-}
+# nvim versions
+echo
+echo "── Neovim plugins ──"
+read -r -p "nvim plugin version (leave empty to skip): " VERSION_NVIM
+read -r -p "nvim-completion version (leave empty to skip): " VERSION_NVIM_COMP
 
-if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-  echo "Tag v${VERSION} already exists."
-  exit 1
+if [[ -n "$VERSION_NVIM" ]]; then
+  is_semver "$VERSION_NVIM" || { echo "Invalid version: $VERSION_NVIM"; exit 1; }
+fi
+if [[ -n "$VERSION_NVIM_COMP" ]]; then
+  is_semver "$VERSION_NVIM_COMP" || { echo "Invalid version: $VERSION_NVIM_COMP"; exit 1; }
 fi
 
-if ! gh auth status >/dev/null 2>&1; then
-  echo "gh is not authenticated. Run: gh auth login"
-  exit 1
-fi
+# ── NPM auth ──────────────────────────────────────────────────────
 
 TOKEN="${ZEROXZERO_NPM_TOKEN:-${NPM_TOKEN:-${NODE_AUTH_TOKEN:-}}}"
 if [[ -z "$TOKEN" ]]; then
@@ -278,29 +392,45 @@ TMP_NPMRC="$(mktemp)"
 cleanup() { rm -f "$TMP_NPMRC"; }
 trap cleanup EXIT
 
-printf '//registry.npmjs.org/:_authToken=%s\n' "$TOKEN" > "$TMP_NPMRC"
+{
+  printf '%s:registry=https://registry.npmjs.org/\n' "$SCOPE"
+  printf '//registry.npmjs.org/:_authToken=%s\n' "$TOKEN"
+} > "$TMP_NPMRC"
 chmod 600 "$TMP_NPMRC"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY RUN: skipping npm whoami auth check"
 else
-  npm whoami --userconfig "$TMP_NPMRC" >/dev/null || {
+  npm_config_userconfig="$TMP_NPMRC" command npm whoami >/dev/null || {
     echo "npm auth failed. Check token scope/validity."
     exit 1
   }
 fi
 
+# ── Release plan ───────────────────────────────────────────────────
+
 echo
 echo "Release plan"
-echo "  Repo:    $REPO"
-echo "  Scope:   $SCOPE"
-echo "  Tag:     v$VERSION"
-echo "  NPM tag: $NPM_TAG"
-echo "  Dry run: $([[ "$DRY_RUN" -eq 1 ]] && echo yes || echo no)"
+echo "  Repo:              $REPO"
+echo "  Scope:             $SCOPE"
+echo "  NPM tag:           $NPM_TAG"
+echo "  Dry run:           $([[ "$DRY_RUN" -eq 1 ]] && echo yes || echo no)"
+echo
+echo "  0x0:               v$VERSION_0X0"
+echo "  0x0-git:           v$VERSION_GIT"
+echo "  nvim:              ${VERSION_NVIM:-skip}"
+echo "  nvim-completion:   ${VERSION_NVIM_COMP:-skip}"
 echo
 
 read -r -p "Proceed with publish? [y/N] " ok
 [[ "$ok" == "y" || "$ok" == "Y" ]] || exit 1
+
+# ══════════════════════════════════════════════════════════════════
+#  0x0 (server/TUI)
+# ══════════════════════════════════════════════════════════════════
+
+echo
+echo "════ 0x0 v$VERSION_0X0 ════"
 
 echo "1) Build artifacts"
 run bun ./packages/0x0/script/build.ts
@@ -327,39 +457,121 @@ fi
 
 echo "4) Ensure GitHub release exists"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  run gh release view "v$VERSION" --repo "$REPO"
-  run gh release create "v$VERSION" --repo "$REPO" --title "v$VERSION" --notes "Release v$VERSION"
+  run gh release view "v$VERSION_0X0" --repo "$REPO"
+  run gh release create "v$VERSION_0X0" --repo "$REPO" --title "v$VERSION_0X0" --notes "Release v$VERSION_0X0"
 else
-  gh release view "v$VERSION" --repo "$REPO" >/dev/null 2>&1 || \
-    gh release create "v$VERSION" --repo "$REPO" --title "v$VERSION" --notes "Release v$VERSION"
+  gh release view "v$VERSION_0X0" --repo "$REPO" >/dev/null 2>&1 || \
+    gh release create "v$VERSION_0X0" --repo "$REPO" --title "v$VERSION_0X0" --notes "Release v$VERSION_0X0"
 fi
 
 echo "5) Upload release assets"
-run gh release upload "v$VERSION" ./packages/0x0/dist/*.zip ./packages/0x0/dist/*.tar.gz --repo "$REPO" --clobber
+run gh release upload "v$VERSION_0X0" ./packages/0x0/dist/*.zip ./packages/0x0/dist/*.tar.gz --repo "$REPO" --clobber
 
 echo "6) Prepare npm package metadata"
-prepare_npm_dist "$VERSION"
+prepare_npm_dist "$VERSION_0X0"
 
 echo "7) Publish npm packages"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  run env -u ZEROXZERO_NPM_TOKEN -u NPM_TOKEN -u NODE_AUTH_TOKEN NPM_CONFIG_USERCONFIG="$TMP_NPMRC" bun ./packages/0x0/script/publish-npm-manual.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION"
+  run NPM_TOKEN="$TOKEN" bun ./packages/0x0/script/publish-npm-manual.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION_0X0"
 else
-  env \
-    -u ZEROXZERO_NPM_TOKEN \
-    -u NPM_TOKEN \
-    -u NODE_AUTH_TOKEN \
-    NPM_CONFIG_USERCONFIG="$TMP_NPMRC" \
+  NPM_TOKEN="$TOKEN" \
     bun ./packages/0x0/script/publish-npm-manual.ts \
       --scope "$SCOPE" \
       --tag "$NPM_TAG" \
-      --version "$VERSION"
+      --version "$VERSION_0X0"
 fi
 
-echo "8) Publish Homebrew tap"
-run bun ./script/publish-tap.ts --version "$VERSION" --repo "$REPO"
+echo "8) Publish Homebrew tap (zeroxzero)"
+run bun ./script/publish-tap.ts --version "$VERSION_0X0" --repo "$REPO"
 
-echo "9) Verify"
-run curl -fL -I "https://github.com/$REPO/releases/download/v$VERSION/0x0-darwin-arm64.zip"
-run npm view "$SCOPE/0x0@$VERSION" version
+# ══════════════════════════════════════════════════════════════════
+#  0x0-git
+# ══════════════════════════════════════════════════════════════════
 
-echo "Done: v$VERSION published."
+echo
+echo "════ 0x0-git v$VERSION_GIT ════"
+
+GIT_TAG="0x0-git-v${VERSION_GIT}"
+
+echo "9) Build git package"
+run bun ./packages/git/script/build.ts
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "10) DRY RUN: skipping git packaging"
+else
+  echo "10) Package git artifacts"
+  package_if_needed "0x0-git-darwin-arm64" "zip" "./packages/git"
+  package_if_needed "0x0-git-darwin-x64" "zip" "./packages/git"
+  package_if_needed "0x0-git-linux-arm64" "tgz" "./packages/git"
+  package_if_needed "0x0-git-linux-x64" "tgz" "./packages/git"
+fi
+
+echo "11) Ensure GitHub release for git"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  run gh release view "$GIT_TAG" --repo "$REPO"
+  run gh release create "$GIT_TAG" --repo "$REPO" --title "$GIT_TAG" --notes "Release $GIT_TAG"
+else
+  gh release view "$GIT_TAG" --repo "$REPO" >/dev/null 2>&1 || \
+    gh release create "$GIT_TAG" --repo "$REPO" --title "$GIT_TAG" --notes "Release $GIT_TAG"
+fi
+
+echo "12) Upload git release assets"
+run gh release upload "$GIT_TAG" ./packages/git/dist/*.zip ./packages/git/dist/*.tar.gz --repo "$REPO" --clobber
+
+echo "13) Prepare git npm metadata"
+prepare_git_npm_dist "$VERSION_GIT"
+
+echo "14) Publish git npm packages"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  run NPM_TOKEN="$TOKEN" bun ./packages/git/script/publish-npm.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION_GIT"
+else
+  NPM_TOKEN="$TOKEN" \
+    bun ./packages/git/script/publish-npm.ts \
+      --scope "$SCOPE" \
+      --tag "$NPM_TAG" \
+      --version "$VERSION_GIT"
+fi
+
+echo "15) Publish Homebrew tap (zeroxzero-git)"
+run bun ./script/publish-tap.ts --version "$VERSION_GIT" --repo "$REPO" --prefix 0x0-git --formula-name zeroxzero-git --tag "$GIT_TAG"
+
+# ══════════════════════════════════════════════════════════════════
+#  Neovim plugins
+# ══════════════════════════════════════════════════════════════════
+
+if [[ -n "$VERSION_NVIM" || -n "$VERSION_NVIM_COMP" ]]; then
+  echo
+  echo "════ Neovim plugins ════"
+fi
+
+if [[ -n "$VERSION_NVIM" ]]; then
+  echo "16) Publish nvim plugin v$VERSION_NVIM"
+  run bun ./script/publish-nvim.ts --plugin nvim --version "$VERSION_NVIM"
+fi
+
+if [[ -n "$VERSION_NVIM_COMP" ]]; then
+  echo "17) Publish nvim-completion v$VERSION_NVIM_COMP"
+  run bun ./script/publish-nvim.ts --plugin nvim-completion --version "$VERSION_NVIM_COMP"
+fi
+
+# ══════════════════════════════════════════════════════════════════
+#  Verify
+# ══════════════════════════════════════════════════════════════════
+
+echo
+echo "════ Verify ════"
+run curl -fL -I "https://github.com/$REPO/releases/download/v$VERSION_0X0/0x0-darwin-arm64.zip"
+run command npm view "$SCOPE/0x0@$VERSION_0X0" version
+run command npm view "$SCOPE/0x0-git@$VERSION_GIT" version
+
+echo
+echo "Done!"
+echo "  0x0:             v$VERSION_0X0"
+echo "  0x0-git:         v$VERSION_GIT"
+echo "  nvim:            ${VERSION_NVIM:-skipped}"
+echo "  nvim-completion: ${VERSION_NVIM_COMP:-skipped}"
+echo
+echo "Install:"
+echo "  brew tap anonymous-dev-org/tap"
+echo "  brew install 0x0"
+echo "  brew install 0x0-git"

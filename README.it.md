@@ -48,11 +48,11 @@ La CLI include due agenti integrati tra cui puoi passare usando il tasto `Tab`.
 È inoltre incluso un sotto-agente **general** per ricerche complesse e attività multi-step.
 Viene utilizzato internamente e può essere invocato usando `@general` nei messaggi.
 
-Scopri di più sugli [agenti](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Scopri di più sugli [agenti](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Documentazione
 
-Per maggiori informazioni su come configurare Terminal Agent, [**consulta la nostra documentazione**](https://docs.anonymous.dev/packages/0x0-cli).
+Per maggiori informazioni su come configurare Terminal Agent, [**consulta la nostra documentazione**](https://docs.anonymous.dev/packages/0x0).
 
 ### Contribuire
 

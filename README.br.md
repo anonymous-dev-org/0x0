@@ -48,11 +48,11 @@ O Terminal Agent inclui dois agents integrados, que você pode alternar com a te
 Também há um subagent **general** para buscas complexas e tarefas em várias etapas.
 Ele é usado internamente e pode ser invocado com `@general` nas mensagens.
 
-Saiba mais sobre [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Saiba mais sobre [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Documentação
 
-Para mais informações sobre como configurar o Terminal Agent, [**veja nossa documentação**](https://docs.anonymous.dev/packages/0x0-cli).
+Para mais informações sobre como configurar o Terminal Agent, [**veja nossa documentação**](https://docs.anonymous.dev/packages/0x0).
 
 ### Contribuir
 

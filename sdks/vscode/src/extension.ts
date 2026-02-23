@@ -3,15 +3,15 @@ export function deactivate() {}
 
 import * as vscode from "vscode"
 
-const TERMINAL_NAME = "zeroxzero"
+const TERMINAL_NAME = "0x0"
 
 export function activate(context: vscode.ExtensionContext) {
-  let openNewTerminalDisposable = vscode.commands.registerCommand("zeroxzero.openNewTerminal", async () => {
+  let openNewTerminalDisposable = vscode.commands.registerCommand("0x0.openNewTerminal", async () => {
     await openTerminal()
   })
 
-  let openTerminalDisposable = vscode.commands.registerCommand("zeroxzero.openTerminal", async () => {
-    // An zeroxzero terminal already exists => focus it
+  let openTerminalDisposable = vscode.commands.registerCommand("0x0.openTerminal", async () => {
+    // A 0x0 terminal already exists => focus it
     const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
     if (existingTerminal) {
       existingTerminal.show()
@@ -21,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
     await openTerminal()
   })
 
-  let addFilepathDisposable = vscode.commands.registerCommand("zeroxzero.addFilepathToTerminal", async () => {
+  let addFilepathDisposable = vscode.commands.registerCommand("0x0.addFilepathToTerminal", async () => {
     const fileRef = getActiveFile()
     if (!fileRef) {
       return
@@ -34,13 +34,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (terminal.name === TERMINAL_NAME) {
       // @ts-ignore
-      const port = terminal.creationOptions.env?.["_EXTENSION_ZEROXZERO_PORT"]
+      const port = terminal.creationOptions.env?.["_EXTENSION_0X0_PORT"]
       port ? await appendPrompt(parseInt(port), fileRef) : terminal.sendText(fileRef, false)
       terminal.show()
     }
   })
 
-  context.subscriptions.push(openTerminalDisposable, addFilepathDisposable)
+  context.subscriptions.push(openTerminalDisposable, openNewTerminalDisposable, addFilepathDisposable)
 
   async function openTerminal() {
     // Create a new terminal in split screen
@@ -56,13 +56,13 @@ export function activate(context: vscode.ExtensionContext) {
         preserveFocus: false,
       },
       env: {
-        _EXTENSION_ZEROXZERO_PORT: port.toString(),
+        _EXTENSION_0X0_PORT: port.toString(),
         ZEROXZERO_CALLER: "vscode",
       },
     })
 
     terminal.show()
-    terminal.sendText(`zeroxzero --port ${port}`)
+    terminal.sendText(`0x0 --port ${port}`)
 
     const fileRef = getActiveFile()
     if (!fileRef) {

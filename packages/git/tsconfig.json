@@ -3,6 +3,6 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext"],
-    "types": []
+    "types": ["bun"]
   }
 }

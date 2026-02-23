@@ -43,9 +43,10 @@ if (!version) throw new Error("Could not determine version. Pass --version.")
 
 const publishName = (name: string) => `${scope}/${name}`
 const config = token
-  ? await Bun.write(`./dist/.npmrc.publish`, `//registry.npmjs.org/:_authToken=${token}\n`).then(
-      () => `./dist/.npmrc.publish`,
-    )
+  ? await Bun.write(
+      `./dist/.npmrc.publish`,
+      `${scope}:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=${token}\n`,
+    ).then(() => `./dist/.npmrc.publish`)
   : undefined
 
 if (meta.optionalDependencies?.[publishName("0x0")]) {

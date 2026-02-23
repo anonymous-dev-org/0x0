@@ -48,11 +48,11 @@ brew install anonymous-dev-org/tap/0x0 # macOS و Linux
 بالاضافة الى ذلك يوجد وكيل فرعي **general** للبحث المعقد والمهام متعددة الخطوات.
 يستخدم داخليا ويمكن استدعاؤه بكتابة `@general` في الرسائل.
 
-تعرف على المزيد حول [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+تعرف على المزيد حول [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### التوثيق
 
-لمزيد من المعلومات حول كيفية ضبط Terminal Agent، [**راجع التوثيق**](https://docs.anonymous.dev/packages/0x0-cli).
+لمزيد من المعلومات حول كيفية ضبط Terminal Agent، [**راجع التوثيق**](https://docs.anonymous.dev/packages/0x0).
 
 ### المساهمة
 

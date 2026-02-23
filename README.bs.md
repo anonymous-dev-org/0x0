@@ -48,11 +48,11 @@ Terminal Agent uključuje dva ugrađena agenta između kojih možeš prebacivati
 Uključen je i **general** pod-agent za složene pretrage i višekoračne zadatke.
 Koristi se interno i može se pozvati pomoću `@general` u porukama.
 
-Saznaj više o [agentima](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Saznaj više o [agentima](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Dokumentacija
 
-Za više informacija o konfiguraciji Terminal Agent-a, [**pogledaj dokumentaciju**](https://docs.anonymous.dev/packages/0x0-cli).
+Za više informacija o konfiguraciji Terminal Agent-a, [**pogledaj dokumentaciju**](https://docs.anonymous.dev/packages/0x0).
 
 ### Doprinosi
 

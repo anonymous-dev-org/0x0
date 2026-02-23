@@ -48,11 +48,11 @@ brew install anonymous-dev-org/tap/0x0 # macOS и Linux
 Также включен сабагент **general** для сложных поисков и многошаговых задач.
 Он используется внутренне и может быть вызван в сообщениях через `@general`.
 
-Подробнее об [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Подробнее об [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Документация
 
-Больше информации о том, как настроить Terminal Agent: [**наши docs**](https://docs.anonymous.dev/packages/0x0-cli).
+Больше информации о том, как настроить Terminal Agent: [**наши docs**](https://docs.anonymous.dev/packages/0x0).
 
 ### Вклад
 

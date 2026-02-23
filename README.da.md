@@ -48,11 +48,11 @@ Terminal Agent har to indbyggede agents, som du kan skifte mellem med `Tab`-tast
 Derudover findes der en **general**-subagent til komplekse søgninger og flertrinsopgaver.
 Den bruges internt og kan kaldes via `@general` i beskeder.
 
-Læs mere om [agents](https://docs.anonymous.dev/packages/0x0-cli/agents).
+Læs mere om [agents](https://docs.anonymous.dev/packages/0x0/agents).
 
 ### Dokumentation
 
-For mere info om konfiguration af Terminal Agent, [**se vores docs**](https://docs.anonymous.dev/packages/0x0-cli).
+For mere info om konfiguration af Terminal Agent, [**se vores docs**](https://docs.anonymous.dev/packages/0x0).
 
 ### Bidrag
 

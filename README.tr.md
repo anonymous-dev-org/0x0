@@ -48,11 +48,11 @@ CLI, `Tab` tuşuyla aralarında geçiş yapabileceğiniz iki yerleşik ajan içe
 Ayrıca, karmaşık aramalar ve çok adımlı görevler için bir **genel** alt ajan bulunmaktadır.
 Bu dahili olarak kullanılır ve mesajlarda `@general` ile çağrılabilir.
 
-[Ajanlar](https://docs.anonymous.dev/packages/0x0-cli/agents) hakkında daha fazla bilgi edinin.
+[Ajanlar](https://docs.anonymous.dev/packages/0x0/agents) hakkında daha fazla bilgi edinin.
 
 ### Dokümantasyon
 
-Yapılandırma hakkında daha fazla bilgi için [**dokümantasyonumuza göz atın**](https://docs.anonymous.dev/packages/0x0-cli).
+Yapılandırma hakkında daha fazla bilgi için [**dokümantasyonumuza göz atın**](https://docs.anonymous.dev/packages/0x0).
 
 ### Katkıda Bulunma
 

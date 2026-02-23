@@ -46,11 +46,11 @@ Terminal Agent 內建了兩種 Agent，您可以使用 `Tab` 鍵快速切換。
 
 此外，Terminal Agent 還包含一個 **general** 子 Agent，用於處理複雜搜尋與多步驟任務。此 Agent 供系統內部使用，亦可透過在訊息中輸入 `@general` 來呼叫。
 
-了解更多關於 [Agents](https://docs.anonymous.dev/packages/0x0-cli/agents) 的資訊。
+了解更多關於 [Agents](https://docs.anonymous.dev/packages/0x0/agents) 的資訊。
 
 ### 線上文件
 
-關於如何設定 Terminal Agent 的詳細資訊，請參閱我們的 [**官方文件**](https://docs.anonymous.dev/packages/0x0-cli)。
+關於如何設定 Terminal Agent 的詳細資訊，請參閱我們的 [**官方文件**](https://docs.anonymous.dev/packages/0x0)。
 
 ### 參與貢獻
 
