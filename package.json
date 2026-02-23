@@ -48,8 +48,8 @@
     "turbo": "2.5.6"
   },
   "dependencies": {
-    "@0x0-ai/script": "workspace:*",
-    "@0x0-ai/sdk": "workspace:*",
+    "@anonymous-dev/0x0-script": "workspace:*",
+    "@anonymous-dev/0x0-sdk": "workspace:*",
     "typescript": "catalog:"
   },
   "repository": {

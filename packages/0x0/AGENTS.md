@@ -24,4 +24,4 @@
 - **Validation**: All inputs validated with Zod schemas
 - **Logging**: Use `Log.create({ service: "name" })` pattern
 - **Storage**: Use `Storage` namespace for persistence
-- **API Client**: The TypeScript TUI (built with SolidJS + OpenTUI) communicates with the 0x0 server using `@0x0-ai/sdk`. When adding/modifying server endpoints in `packages/0x0/src/server/server.ts`, run `./script/generate.ts` to regenerate the SDK and related files.
+- **API Client**: The TypeScript TUI (built with SolidJS + OpenTUI) communicates with the 0x0 server using `@anonymous-dev/0x0-sdk`. When adding/modifying server endpoints in `packages/0x0/src/server/server.ts`, run `./script/generate.ts` to regenerate the SDK and related files.

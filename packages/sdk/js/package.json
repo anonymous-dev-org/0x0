@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@0x0-ai/sdk",
+  "name": "@anonymous-dev/0x0-sdk",
   "version": "1.1.53",
   "type": "module",
   "license": "MIT",

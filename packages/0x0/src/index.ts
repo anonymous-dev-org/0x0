@@ -3,7 +3,7 @@ import { hideBin } from "yargs/helpers"
 import { Log } from "./util/log"
 import { UI } from "./cli/ui"
 import { Installation } from "./installation"
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 import { EOL } from "os"
 
 type BaseArgs = Record<string, unknown>

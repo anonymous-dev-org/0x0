@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { NamedError } from "@0x0-ai/util/error"
+import type { NamedError } from "@anonymous-dev/0x0-util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageV2 } from "../../src/session/message-v2"

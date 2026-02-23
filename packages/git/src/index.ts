@@ -24,7 +24,7 @@ async function commitMsg() {
   const config = resolveConfig(flags)
   const ctx = await getStagedContext()
   const prompt = buildPrompt(ctx)
-  const message = await generate(config.provider, config.model, prompt)
+  const message = await generate(config, prompt)
   process.stdout.write(message + "\n")
 }
 

@@ -2,7 +2,7 @@ import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { sortBy } from "remeda"
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 import { ProviderAuth } from "./auth"
 import { Instance } from "../project/instance"
 

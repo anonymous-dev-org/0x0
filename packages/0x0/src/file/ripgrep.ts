@@ -3,7 +3,7 @@ import path from "path"
 import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 import { lazy } from "../util/lazy"
 import { $ } from "bun"
 

@@ -1,5 +1,5 @@
 import z from "zod"
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))

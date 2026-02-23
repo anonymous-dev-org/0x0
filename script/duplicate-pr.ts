@@ -2,7 +2,7 @@
 
 import path from "path"
 import { pathToFileURL } from "bun"
-import { createZeroxzero } from "@0x0-ai/sdk"
+import { createZeroxzero } from "@anonymous-dev/0x0-sdk"
 import { parseArgs } from "util"
 
 async function main() {

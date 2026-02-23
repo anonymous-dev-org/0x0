@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { createZeroxzero } from "@0x0-ai/sdk/v2"
+import { createZeroxzero } from "@anonymous-dev/0x0-sdk/v2"
 import { parseArgs } from "util"
-import { Script } from "@0x0-ai/script"
+import { Script } from "@anonymous-dev/0x0-script"
 
 const repo =
   process.env.ZEROXZERO_RELEASE_REPO ||

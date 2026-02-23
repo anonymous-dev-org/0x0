@@ -13,7 +13,7 @@ const dir = path.resolve(__dirname, "..")
 process.chdir(dir)
 
 import pkg from "../package.json"
-import { Script } from "@0x0-ai/script"
+import { Script } from "@anonymous-dev/0x0-script"
 const modelsUrl = process.env.ZEROXZERO_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
 const modelsData = process.env.MODELS_DEV_API_JSON

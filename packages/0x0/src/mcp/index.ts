@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
 import { Installation } from "../installation"

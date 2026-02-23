@@ -1,4 +1,4 @@
-import { NamedError } from "@0x0-ai/util/error"
+import { NamedError } from "@anonymous-dev/0x0-util/error"
 import matter from "gray-matter"
 import { z } from "zod"
 

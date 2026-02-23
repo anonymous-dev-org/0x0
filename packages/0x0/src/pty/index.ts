@@ -6,7 +6,7 @@ import { Identifier } from "../id/id"
 import { Log } from "../util/log"
 import type { WSContext } from "hono/ws"
 import { Instance } from "../project/instance"
-import { lazy } from "@0x0-ai/util/lazy"
+import { lazy } from "@anonymous-dev/0x0-util/lazy"
 import { Shell } from "@/shell/shell"
 
 export namespace Pty {

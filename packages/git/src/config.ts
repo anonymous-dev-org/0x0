@@ -3,6 +3,8 @@ export type Provider = "claude" | "codex"
 export interface Config {
   provider: Provider
   model: string
+  url: string
+  auth?: { username: string; password: string }
 }
 
 const DEFAULT_MODELS: Record<Provider, string> = {
@@ -23,7 +25,16 @@ export function resolveConfig(flags?: {
     process.env.GIT_AI_MODEL ||
     DEFAULT_MODELS[provider]
 
-  return { provider, model }
+  const url = process.env.GIT_AI_URL || "http://localhost:4096"
+
+  const auth = process.env.GIT_AI_AUTH
+    ? (() => {
+        const [username, password] = process.env.GIT_AI_AUTH!.split(":")
+        return username && password ? { username, password } : undefined
+      })()
+    : undefined
+
+  return { provider, model, url, auth }
 }
 
 function resolveProvider(flag?: string): Provider {

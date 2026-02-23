@@ -1,4 +1,4 @@
-import type { NamedError } from "@0x0-ai/util/error"
+import type { NamedError } from "@anonymous-dev/0x0-util/error"
 import { MessageV2 } from "./message-v2"
 import { iife } from "@/util/iife"
 

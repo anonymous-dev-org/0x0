@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@0x0-ai/git",
+  "name": "@anonymous-dev/0x0-git",
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "build:single": "bun ./script/build.ts --single"
   },
   "devDependencies": {
-    "@0x0-ai/script": "workspace:*",
+    "@anonymous-dev/0x0-script": "workspace:*",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "typescript": "catalog:"

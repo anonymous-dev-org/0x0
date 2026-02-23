@@ -14,7 +14,7 @@ export const GenerateCommand = {
           {
             lang: "js",
             source: [
-              `import { createZeroxzeroClient } from "@0x0-ai/sdk`,
+              `import { createZeroxzeroClient } from "@anonymous-dev/0x0-sdk`,
               ``,
               `const client = createZeroxzeroClient()`,
               `await client.${operation.operationId}({`,

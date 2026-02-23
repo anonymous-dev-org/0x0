@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package",
-  "name": "@0x0-ai/script",
+  "name": "@anonymous-dev/0x0-script",
   "license": "MIT",
   "devDependencies": {
     "@types/bun": "catalog:"

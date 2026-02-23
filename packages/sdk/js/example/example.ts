@@ -1,4 +1,4 @@
-import { createZeroxzeroClient, createZeroxzeroServer } from "@0x0-ai/sdk"
+import { createZeroxzeroClient, createZeroxzeroServer } from "@anonymous-dev/0x0-sdk"
 import { pathToFileURL } from "bun"
 
 const server = await createZeroxzeroServer()

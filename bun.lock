@@ -5,8 +5,8 @@
     "": {
       "name": "0x0",
       "dependencies": {
-        "@0x0-ai/script": "workspace:*",
-        "@0x0-ai/sdk": "workspace:*",
+        "@anonymous-dev/0x0-script": "workspace:*",
+        "@anonymous-dev/0x0-sdk": "workspace:*",
         "typescript": "catalog:",
       },
       "devDependencies": {
@@ -23,13 +23,13 @@
         "0x0": "./bin/0x0",
       },
       "dependencies": {
-        "@0x0-ai/script": "workspace:*",
-        "@0x0-ai/util": "workspace:*",
         "@actions/core": "1.11.1",
         "@actions/github": "6.0.1",
         "@agentclientprotocol/sdk": "0.14.1",
         "@ai-sdk/provider": "2.0.1",
         "@ai-sdk/provider-utils": "3.0.20",
+        "@anonymous-dev/0x0-script": "workspace:*",
+        "@anonymous-dev/0x0-util": "workspace:*",
         "@clack/prompts": "1.0.0-alpha.1",
         "@gitlab/opencode-gitlab-auth": "1.3.2",
         "@hono/standard-validator": "0.1.5",
@@ -78,7 +78,7 @@
         "zod-to-json-schema": "3.24.5",
       },
       "devDependencies": {
-        "@0x0-ai/script": "workspace:*",
+        "@anonymous-dev/0x0-script": "workspace:*",
         "@babel/core": "7.28.4",
         "@octokit/webhooks-types": "7.6.1",
         "@parcel/watcher-darwin-arm64": "2.5.1",
@@ -102,26 +102,26 @@
       },
     },
     "packages/git": {
-      "name": "@0x0-ai/git",
+      "name": "@anonymous-dev/0x0-git",
       "version": "0.1.0",
       "bin": {
         "0x0-git": "./bin/0x0-git",
       },
       "devDependencies": {
-        "@0x0-ai/script": "workspace:*",
+        "@anonymous-dev/0x0-script": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
     "packages/script": {
-      "name": "@0x0-ai/script",
+      "name": "@anonymous-dev/0x0-script",
       "devDependencies": {
         "@types/bun": "catalog:",
       },
     },
     "packages/sdk/js": {
-      "name": "@0x0-ai/sdk",
+      "name": "@anonymous-dev/0x0-sdk",
       "version": "1.1.53",
       "devDependencies": {
         "@hey-api/openapi-ts": "0.90.10",
@@ -132,7 +132,7 @@
       },
     },
     "packages/util": {
-      "name": "@0x0-ai/util",
+      "name": "@anonymous-dev/0x0-util",
       "version": "1.1.53",
       "dependencies": {
         "zod": "catalog:",
@@ -175,14 +175,6 @@
   "packages": {
     "0x0": ["0x0@workspace:packages/0x0"],
 
-    "@0x0-ai/git": ["@0x0-ai/git@workspace:packages/git"],
-
-    "@0x0-ai/script": ["@0x0-ai/script@workspace:packages/script"],
-
-    "@0x0-ai/sdk": ["@0x0-ai/sdk@workspace:packages/sdk/js"],
-
-    "@0x0-ai/util": ["@0x0-ai/util@workspace:packages/util"],
-
     "@actions/core": ["@actions/core@1.11.1", "", { "dependencies": { "@actions/exec": "^1.1.1", "@actions/http-client": "^2.0.1" } }, "sha512-hXJCSrkwfA46Vd9Z3q4cpEpHB1rL5NG04+/rbqW9d3+CSvtB1tYe8UTpAlixa1vj0m/ULglfEK2UKxMGxCxv5A=="],
 
     "@actions/exec": ["@actions/exec@1.1.1", "", { "dependencies": { "@actions/io": "^1.0.1" } }, "sha512-+sCcHHbVdk93a0XT19ECtO/gIXoxvdsgQLzb2fE2/5sIZmWQuluYyjPQtrtTHdU1YzTZ7bAPN4sITq2xi1679w=="],
@@ -202,6 +194,14 @@
     "@ai-sdk/provider-utils": ["@ai-sdk/provider-utils@3.0.20", "", { "dependencies": { "@ai-sdk/provider": "2.0.1", "@standard-schema/spec": "^1.0.0", "eventsource-parser": "^3.0.6" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-iXHVe0apM2zUEzauqJwqmpC37A5rihrStAih5Ks+JE32iTe4LZ58y17UGBjpQQTCRw9YxMeo2UFLxLpBluyvLQ=="],
 
     "@ampproject/remapping": ["@ampproject/remapping@2.3.0", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw=="],
+
+    "@anonymous-dev/0x0-git": ["@anonymous-dev/0x0-git@workspace:packages/git"],
+
+    "@anonymous-dev/0x0-script": ["@anonymous-dev/0x0-script@workspace:packages/script"],
+
+    "@anonymous-dev/0x0-sdk": ["@anonymous-dev/0x0-sdk@workspace:packages/sdk/js"],
+
+    "@anonymous-dev/0x0-util": ["@anonymous-dev/0x0-util@workspace:packages/util"],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 

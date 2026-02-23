@@ -1,4 +1,4 @@
-import { Slug } from "@0x0-ai/util/slug"
+import { Slug } from "@anonymous-dev/0x0-util/slug"
 import path from "path"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
