@@ -724,7 +724,7 @@ export namespace SessionPrompt {
     )
 
     for (const item of await ToolRegistry.tools(
-      { modelID: input.model.api.id, providerID: input.model.providerID },
+      { modelID: input.model.id, providerID: input.model.providerID },
       input.agent,
       excluded,
     )) {

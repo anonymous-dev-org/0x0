@@ -1,10 +1,47 @@
 import type { Config } from "./config"
 
+async function isServerUp(baseUrl: string): Promise<boolean> {
+  try {
+    await fetch(baseUrl.replace(/\/$/, ""), { signal: AbortSignal.timeout(1_000) })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function ensureServer(baseUrl: string): Promise<void> {
+  if (await isServerUp(baseUrl)) return
+
+  const binary = Bun.which("0x0")
+  if (!binary) throw new Error("0x0 not found in PATH. Cannot auto-start server.")
+
+  const port = new URL(baseUrl).port || "4096"
+  process.stderr.write("Starting 0x0 server...\n")
+
+  const proc = Bun.spawn([binary, "server", "--port", port], {
+    detached: true,
+    stdout: "ignore",
+    stderr: "ignore",
+    stdin: "ignore",
+  })
+  proc.unref()
+
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    await new Promise<void>((r) => setTimeout(r, 300))
+    if (await isServerUp(baseUrl)) return
+  }
+
+  throw new Error("0x0 server did not start within 15 seconds.")
+}
+
 /**
  * One-shot text generation via the 0x0 server's /completion/text endpoint.
  * Returns the generated text or throws on failure.
  */
 export async function generate(config: Config, prompt: string): Promise<string> {
+  await ensureServer(config.url)
+
   const url = `${config.url.replace(/\/$/, "")}/completion/text`
 
   const headers: Record<string, string> = {

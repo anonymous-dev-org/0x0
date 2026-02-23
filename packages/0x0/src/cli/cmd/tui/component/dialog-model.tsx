@@ -67,7 +67,6 @@ export function DialogModel(props: { providerID?: string }) {
       .toSorted((a, b) => a.name.localeCompare(b.name))
       .flatMap((provider) =>
         Object.entries(provider.models)
-          .filter(([, info]) => info.status !== "deprecated")
           .filter(([, info]) => (props.providerID ? info.providerID === props.providerID : true))
           .filter(([modelID]) => {
             if (!showSections) return true

@@ -21,23 +21,14 @@ function createModel(opts: {
     id: "test-model",
     providerID: "test",
     name: "Test",
+    reasoning: false,
     limit: {
       context: opts.context,
       input: opts.input,
       output: opts.output,
     },
     cost: opts.cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
-    capabilities: {
-      toolcall: true,
-      attachment: false,
-      reasoning: false,
-      temperature: true,
-      input: { text: true, image: false, audio: false, video: false },
-      output: { text: true, image: false, audio: false, video: false },
-    },
-    api: { npm: "@ai-sdk/anthropic" },
-    options: {},
-  } as Provider.Model
+  }
 }
 
 describe("session.compaction.isOverflow", () => {

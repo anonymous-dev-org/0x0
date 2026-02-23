@@ -196,6 +196,10 @@ export const GithubInstallCommand = cmd({
           await installGitHubApp()
 
           const providers = Provider.all()
+          const providerEnv: Record<string, string[]> = {
+            "claude-code": ["ANTHROPIC_API_KEY"],
+            codex: ["OPENAI_API_KEY"],
+          }
 
           const provider = await promptProvider()
           const model = await promptModel()
@@ -213,7 +217,7 @@ export const GithubInstallCommand = cmd({
               step2 = [
                 `    2. Add the following secrets in org or repo (${app.owner}/${app.repo}) settings`,
                 "",
-                ...(providers[provider]?.env ?? []).map((e) => `       - ${e}`),
+                ...(providerEnv[provider] ?? []).map((e: string) => `       - ${e}`),
               ].join("\n")
             }
 
@@ -356,7 +360,7 @@ export const GithubInstallCommand = cmd({
             const envStr =
               provider === "amazon-bedrock"
                 ? ""
-                : `\n        env:${(providers[provider]?.env ?? []).map((e) => `\n          ${e}: \${{ secrets.${e} }}`).join("")}`
+                : `\n        env:${(providerEnv[provider] ?? []).map((e: string) => `\n          ${e}: \${{ secrets.${e} }}`).join("")}`
 
             await Bun.write(
               path.join(app.root, WORKFLOW_FILE),

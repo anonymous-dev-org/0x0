@@ -5,7 +5,9 @@ import type { Agent } from "@/agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
 import { claudeStream } from "@/provider/sdk/claude-code"
-import { codexStream } from "@/provider/sdk/codex-cli"
+import { codexAppServerStream, type CodexApprovalDecision } from "@/provider/sdk/codex-app-server"
+import { PermissionNext } from "@/permission/next"
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -46,6 +48,13 @@ export namespace LLM {
     cliSessionId?: string
     /** Codex thread ID for resuming a Codex session */
     codexThreadId?: string
+    /** Called before each Claude tool execution; return deny to block */
+    canUseTool?: CanUseTool
+    /** Called before Codex executes a command or applies file changes */
+    codexApproval?: {
+      onCommand: (params: { command: string; cwd: string; reason?: string }) => Promise<CodexApprovalDecision>
+      onFileChange: (params: { reason?: string }) => Promise<CodexApprovalDecision>
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +153,7 @@ export namespace LLM {
       systemPrompt: systemPrompt || undefined,
       cliSessionId: input.cliSessionId,
       abort: input.abort,
+      canUseTool: input.canUseTool,
     })) {
       switch (event.type) {
         case "text-delta":
@@ -177,17 +187,26 @@ export namespace LLM {
     }
   }
 
+  function codexApprovalPolicy(ruleset: PermissionNext.Ruleset): "never" | "on-request" {
+    const rule = PermissionNext.evaluate("*", "*", ruleset)
+    return rule.action === "allow" ? "never" : "on-request"
+  }
+
   async function* codexBridge(
     input: StreamInput,
     userPrompt: string,
     systemPrompt: string,
   ): AsyncGenerator<CliEvent> {
-    for await (const event of codexStream({
+    for await (const event of codexAppServerStream({
       modelId: input.model.id,
       prompt: userPrompt,
       systemPrompt: systemPrompt || undefined,
       threadId: input.codexThreadId,
       abort: input.abort,
+      cwd: typeof input.agent.options?.cwd === "string" ? input.agent.options.cwd : undefined,
+      approvalPolicy: codexApprovalPolicy(input.agent.permission),
+      onCommandApproval: input.codexApproval?.onCommand,
+      onFileChangeApproval: input.codexApproval?.onFileChange,
     })) {
       switch (event.type) {
         case "text-delta":

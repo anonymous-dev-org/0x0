@@ -3,6 +3,7 @@
 import { $ } from "bun"
 import { parseArgs } from "node:util"
 import { fileURLToPath } from "node:url"
+import path from "node:path"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -46,7 +47,7 @@ const config = token
   ? await Bun.write(
       `./dist/.npmrc.publish`,
       `${scope}:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=${token}\n`,
-    ).then(() => `./dist/.npmrc.publish`)
+    ).then(() => path.resolve(`./dist/.npmrc.publish`))
   : undefined
 
 if (meta.optionalDependencies?.[publishName("0x0")]) {

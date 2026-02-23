@@ -6,33 +6,8 @@ const sessionID = "session"
 const model: Provider.Model = {
   id: "test-model",
   providerID: "test",
-  api: {
-    id: "test-model",
-    url: "https://example.com",
-    npm: "",
-  },
   name: "Test Model",
-  capabilities: {
-    temperature: true,
-    reasoning: false,
-    attachment: false,
-    toolcall: true,
-    input: {
-      text: true,
-      audio: false,
-      image: false,
-      video: false,
-      pdf: false,
-    },
-    output: {
-      text: true,
-      audio: false,
-      image: false,
-      video: false,
-      pdf: false,
-    },
-    interleaved: false,
-  },
+  reasoning: false,
   cost: {
     input: 0,
     output: 0,
@@ -46,10 +21,6 @@ const model: Provider.Model = {
     input: 0,
     output: 0,
   },
-  status: "active",
-  options: {},
-  headers: {},
-  release_date: "2026-01-01",
 }
 
 function userInfo(id: string): MessageV2.User {
@@ -71,7 +42,7 @@ function assistantInfo(
   error?: MessageV2.Assistant["error"],
   meta?: { providerID: string; modelID: string },
 ): MessageV2.Assistant {
-  const infoModel = meta ?? { providerID: model.providerID, modelID: model.api.id }
+  const infoModel = meta ?? { providerID: model.providerID, modelID: model.id }
   return {
     id,
     sessionID,

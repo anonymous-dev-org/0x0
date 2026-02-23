@@ -447,8 +447,7 @@ export namespace MessageV2 {
     //
     // Only apply this workaround if the model actually supports image input -
     // otherwise there's no point extracting images.
-    // In CLI-delegating mode, model.api.npm is always empty, so media in tool
-    // results is never natively supported. Always extract media to user messages.
+    // CLI providers don't support media in tool results. Always extract to user messages.
     const supportsMediaInToolResults = false
 
     const toModelOutput = (output: unknown) => {

@@ -132,7 +132,7 @@ function SessionInner() {
       const title = extractReasoningTitle(part.text)
       if (!title) continue
 
-      return Locale.truncate(title, 72)
+      return title
     }
     for (let i = parts.length - 1; i >= 0; i--) {
       const part = parts[i]
@@ -153,7 +153,10 @@ function SessionInner() {
     if (settings.sidebar() === "auto" && wide()) return true
     return false
   }
-  const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0) - 2
+  const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0)
+
+  // 6 (dots) + 1 (gap) + 22 ("esc again to interrupt") = 29
+  const thinkingTitle = createMemo(() => Locale.truncate(thinkingStatus() ?? "", Math.max(10, contentWidth() - 29)))
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -361,7 +364,7 @@ function SessionInner() {
       }}
     >
       <box flexDirection="row" width={dimensions().width} height={dimensions().height}>
-        <box flexGrow={1} paddingLeft={1} paddingRight={1} gap={1}>
+        <box flexGrow={1} gap={1}>
           <Show when={session()}>
             <scrollbox
               ref={(r) => (scroll = r)}
@@ -381,14 +384,14 @@ function SessionInner() {
               flexGrow={1}
               scrollAcceleration={scrollAcceleration()}
             >
+              <Show when={messages().length === 0}>
+                <box flexGrow={1} justifyContent="center" alignItems="center">
+                  <Logo />
+                </box>
+              </Show>
               <SessionMessages
                 messages={messages() as (AssistantMessageType | UserMessageType)[]}
                 revertMessageID={revert()?.messageID}
-                fallback={
-                  <box flexGrow={1} justifyContent="center" alignItems="center">
-                    <Logo />
-                  </box>
-                }
                 renderRevertMarker={() => (
                   <RevertMarker
                     reverted={revert()!.reverted}
@@ -430,7 +433,7 @@ function SessionInner() {
                 visible={busy}
                 color={() => thinkingColor() ?? theme.text}
                 interrupt={interrupt}
-                title={thinkingStatus}
+                title={thinkingTitle}
                 text={theme.text}
                 textMuted={theme.textMuted}
                 primary={theme.primary}

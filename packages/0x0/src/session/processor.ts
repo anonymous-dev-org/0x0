@@ -8,6 +8,49 @@ import { Bus } from "@/bus"
 import { SessionStatus } from "./status"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
+import { PermissionNext } from "@/permission/next"
+import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
+
+function providerToolPermission(toolName: string): string {
+  switch (toolName) {
+    case "Bash": return "bash"
+    case "Edit":
+    case "Write":
+    case "MultiEdit":
+    case "NotebookEdit": return "edit"
+    case "Read": return "read"
+    case "Glob":
+    case "Grep": return "search"
+    case "Task": return "task"
+    case "WebFetch":
+    case "WebSearch": return "web"
+    default: return toolName.toLowerCase()
+  }
+}
+
+function providerToolPattern(toolName: string, input: Record<string, unknown>): string {
+  function field(...keys: string[]): string {
+    for (const key of keys) {
+      const val = input[key]
+      if (typeof val === "string" && val) return val
+    }
+    return "*"
+  }
+  switch (toolName) {
+    case "Bash": return field("command")
+    case "Edit":
+    case "Write":
+    case "MultiEdit":
+    case "NotebookEdit": return field("file_path", "path")
+    case "Read": return field("file_path")
+    case "Glob": return field("pattern")
+    case "Grep": return field("path", "pattern")
+    case "Task": return field("prompt", "description")
+    case "WebFetch": return field("url")
+    case "WebSearch": return field("query")
+    default: return "*"
+  }
+}
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -41,10 +84,67 @@ export namespace SessionProcessor {
         const cliSessionId = streamInput.cliSessionId ?? sessionInfo?.cliSessionId
         const codexThreadId = streamInput.codexThreadId ?? sessionInfo?.codexThreadId
 
+        const canUseTool = async (
+          toolName: string,
+          toolInput: Record<string, unknown>,
+        ): Promise<PermissionResult> => {
+          const session = await Session.get(input.sessionID).catch(() => null)
+          try {
+            await PermissionNext.ask({
+              sessionID: input.sessionID,
+              permission: providerToolPermission(toolName),
+              patterns: [providerToolPattern(toolName, toolInput)],
+              metadata: { tool: toolName },
+              always: [providerToolPattern(toolName, toolInput)],
+              ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
+            })
+            return { behavior: "allow" }
+          } catch (e) {
+            return { behavior: "deny", message: e instanceof Error ? e.message : "Permission denied." }
+          }
+        }
+
+        const codexApproval = {
+          async onCommand(params: { command: string; cwd: string; reason?: string }) {
+            const session = await Session.get(input.sessionID).catch(() => null)
+            try {
+              await PermissionNext.ask({
+                sessionID: input.sessionID,
+                permission: "bash",
+                patterns: [params.command],
+                metadata: { tool: "bash", command: params.command, cwd: params.cwd, reason: params.reason },
+                always: [params.command],
+                ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
+              })
+              return "accept" as const
+            } catch {
+              return "decline" as const
+            }
+          },
+          async onFileChange(params: { reason?: string }) {
+            const session = await Session.get(input.sessionID).catch(() => null)
+            try {
+              await PermissionNext.ask({
+                sessionID: input.sessionID,
+                permission: "edit",
+                patterns: ["*"],
+                metadata: { tool: "edit", reason: params.reason },
+                always: ["*"],
+                ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
+              })
+              return "accept" as const
+            } catch {
+              return "decline" as const
+            }
+          },
+        }
+
         const enrichedInput: LLM.StreamInput = {
           ...streamInput,
           cliSessionId,
           codexThreadId,
+          canUseTool,
+          codexApproval,
         }
 
         try {

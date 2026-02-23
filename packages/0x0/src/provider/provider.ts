@@ -4,7 +4,6 @@ import { Config } from "../config/config"
 import { sortBy } from "remeda"
 import { NamedError } from "@anonymous-dev/0x0-util/error"
 import { ProviderAuth } from "./auth"
-import { Instance } from "../project/instance"
 
 export namespace Provider {
 
@@ -16,39 +15,8 @@ export namespace Provider {
     .object({
       id: z.string(),
       providerID: z.string(),
-      api: z.object({
-        id: z.string(),
-        url: z.string(),
-        npm: z.string(),
-      }),
       name: z.string(),
-      family: z.string().optional(),
-      capabilities: z.object({
-        temperature: z.boolean(),
-        reasoning: z.boolean(),
-        attachment: z.boolean(),
-        toolcall: z.boolean(),
-        input: z.object({
-          text: z.boolean(),
-          audio: z.boolean(),
-          image: z.boolean(),
-          video: z.boolean(),
-          pdf: z.boolean(),
-        }),
-        output: z.object({
-          text: z.boolean(),
-          audio: z.boolean(),
-          image: z.boolean(),
-          video: z.boolean(),
-          pdf: z.boolean(),
-        }),
-        interleaved: z.union([
-          z.boolean(),
-          z.object({
-            field: z.enum(["reasoning_content", "reasoning_details"]),
-          }),
-        ]),
-      }),
+      reasoning: z.boolean(),
       cost: z.object({
         input: z.number(),
         output: z.number(),
@@ -72,11 +40,7 @@ export namespace Provider {
         input: z.number().optional(),
         output: z.number(),
       }),
-      status: z.enum(["alpha", "beta", "deprecated", "active"]),
-      options: z.record(z.string(), z.any()),
-      headers: z.record(z.string(), z.string()),
-      release_date: z.string(),
-      variants: z.record(z.string(), z.record(z.string(), z.any())).optional(),
+      variants: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
     })
     .meta({
       ref: "Model",
@@ -87,10 +51,6 @@ export namespace Provider {
     .object({
       id: z.string(),
       name: z.string(),
-      source: z.enum(["env", "config", "custom", "api"]),
-      env: z.string().array(),
-      key: z.string().optional(),
-      options: z.record(z.string(), z.any()),
       models: z.record(z.string(), Model),
     })
     .meta({
@@ -106,22 +66,8 @@ export namespace Provider {
     return {
       id,
       providerID,
-      api: { id, url: "", npm: "" },
       name,
-      status: "active",
-      release_date: "2025-01-01",
-      options: {},
-      headers: {},
-      variants: {},
-      capabilities: {
-        temperature: false,
-        reasoning: false,
-        attachment: true,
-        toolcall: true,
-        input: { text: true, audio: false, image: true, video: false, pdf: false },
-        output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: false,
-      },
+      reasoning: false,
       cost: {
         input: 0,
         output: 0,
@@ -146,39 +92,15 @@ export namespace Provider {
 
   const CODEX_MODELS: Record<string, Model> = {
     "gpt-5-codex": makeModel("codex", "gpt-5-codex", "GPT-5 Codex", {
-      capabilities: {
-        temperature: false,
-        reasoning: true,
-        attachment: true,
-        toolcall: true,
-        input: { text: true, audio: false, image: true, video: false, pdf: false },
-        output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: false,
-      },
+      reasoning: true,
       limit: { context: 400_000, input: 272_000, output: 128_000 },
     }),
     o3: makeModel("codex", "o3", "o3", {
-      capabilities: {
-        temperature: false,
-        reasoning: true,
-        attachment: true,
-        toolcall: true,
-        input: { text: true, audio: false, image: true, video: false, pdf: false },
-        output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: false,
-      },
+      reasoning: true,
       limit: { context: 200_000, output: 32_000 },
     }),
     "o4-mini": makeModel("codex", "o4-mini", "o4-mini", {
-      capabilities: {
-        temperature: false,
-        reasoning: true,
-        attachment: true,
-        toolcall: true,
-        input: { text: true, audio: false, image: true, video: false, pdf: false },
-        output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: false,
-      },
+      reasoning: true,
       limit: { context: 200_000, output: 32_000 },
     }),
   }
@@ -191,17 +113,11 @@ export namespace Provider {
     "claude-code": {
       id: "claude-code",
       name: "Claude Code",
-      source: "custom",
-      env: [],
-      options: {},
       models: CLAUDE_CODE_MODELS,
     },
     codex: {
       id: "codex",
       name: "Codex",
-      source: "custom",
-      env: [],
-      options: {},
       models: CODEX_MODELS,
     },
   }
@@ -249,17 +165,6 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
     return model
-  }
-
-  /**
-   * @deprecated CLI providers don't use language model instances.
-   * Use LLM.stream() instead.
-   */
-  export async function getLanguage(_model: Model): Promise<any> {
-    throw new Error(
-      `Provider.getLanguage() is not supported for CLI providers. ` +
-        `Use the LLM.stream() API instead.`,
-    )
   }
 
   export async function closest(
