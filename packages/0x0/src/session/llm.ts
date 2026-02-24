@@ -6,7 +6,6 @@ import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
 import { claudeStream } from "@/provider/sdk/claude-code"
 import { codexAppServerStream, type CodexApprovalDecision } from "@/provider/sdk/codex-app-server"
-import { PermissionNext } from "@/permission/next"
 import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
 
 export namespace LLM {
@@ -106,6 +105,62 @@ export namespace LLM {
     return ""
   }
 
+  function extractMessageText(msg: ModelMessage): string {
+    if (typeof msg.content === "string") return msg.content
+    if (Array.isArray(msg.content)) {
+      return msg.content
+        .filter((c: any) => c.type === "text")
+        .map((c: any) => c.text ?? "")
+        .filter(Boolean)
+        .join("\n")
+    }
+    return ""
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Build user prompt with conversation context when switching providers.
+  // Each CLI SDK manages its own session history via session/thread IDs, so
+  // when the target provider has no existing session, prior conversation
+  // context would be lost. This prepends the history to the user prompt.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function buildPromptWithContext(messages: ModelMessage[], hasExistingSession: boolean): string {
+    const userPrompt = extractUserPrompt(messages)
+    if (hasExistingSession) return userPrompt
+
+    // Find the last user message index
+    let lastUserIdx = -1
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === "user") {
+        lastUserIdx = i
+        break
+      }
+    }
+
+    // No prior conversation history
+    if (lastUserIdx <= 0) return userPrompt
+
+    const prior = messages.slice(0, lastUserIdx)
+    const lines: string[] = []
+    for (const msg of prior) {
+      if (!msg) continue
+      const text = extractMessageText(msg).trim()
+      if (!text) continue
+      lines.push(`${msg.role}: ${text}`)
+    }
+    if (lines.length === 0) return userPrompt
+
+    return [
+      "<conversation-context>",
+      "The following is the conversation history from a previous agent. Use it as context for the user's request.",
+      "",
+      ...lines,
+      "</conversation-context>",
+      "",
+      userPrompt,
+    ].join("\n")
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Main stream function — routes to the appropriate CLI bridge
   // ─────────────────────────────────────────────────────────────────────────────
@@ -121,14 +176,17 @@ export namespace LLM {
 
     const systemParts = await composeSystemParts(input)
     const systemPrompt = systemParts.filter(Boolean).join("\n\n")
-    const userPrompt = extractUserPrompt(input.messages)
+
+    const providerID = input.model.providerID
+    const hasExistingSession =
+      (providerID === "claude-code" && !!input.cliSessionId) ||
+      (providerID === "codex" && !!input.codexThreadId)
+    const userPrompt = buildPromptWithContext(input.messages, hasExistingSession)
 
     if (!userPrompt.trim()) {
       l.warn("empty user prompt, skipping stream")
       return
     }
-
-    const providerID = input.model.providerID
 
     if (providerID === "claude-code") {
       yield* claudeCodeBridge(input, userPrompt, systemPrompt)
@@ -154,6 +212,7 @@ export namespace LLM {
       cliSessionId: input.cliSessionId,
       abort: input.abort,
       canUseTool: input.canUseTool,
+      permissionMode: "bypassPermissions",
     })) {
       switch (event.type) {
         case "text-delta":
@@ -187,11 +246,6 @@ export namespace LLM {
     }
   }
 
-  function codexApprovalPolicy(ruleset: PermissionNext.Ruleset): "never" | "on-request" {
-    const rule = PermissionNext.evaluate("*", "*", ruleset)
-    return rule.action === "allow" ? "never" : "on-request"
-  }
-
   async function* codexBridge(
     input: StreamInput,
     userPrompt: string,
@@ -204,7 +258,7 @@ export namespace LLM {
       threadId: input.codexThreadId,
       abort: input.abort,
       cwd: typeof input.agent.options?.cwd === "string" ? input.agent.options.cwd : undefined,
-      approvalPolicy: codexApprovalPolicy(input.agent.permission),
+      approvalPolicy: "on-request",
       onCommandApproval: input.codexApproval?.onCommand,
       onFileChangeApproval: input.codexApproval?.onFileChange,
     })) {

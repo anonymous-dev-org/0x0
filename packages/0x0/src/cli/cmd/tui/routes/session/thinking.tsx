@@ -5,7 +5,6 @@ export function Thinking(props: {
   visible: () => boolean
   color: () => RGBA
   interrupt: () => number
-  title: () => string | undefined
   text: RGBA
   textMuted: RGBA
   primary: RGBA
@@ -54,7 +53,7 @@ export function Thinking(props: {
 
   return (
     <Show when={props.visible()}>
-      <box paddingBottom={1} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
+      <box paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
         <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="center">
           <box flexDirection="column" flexShrink={0}>
             <text>
@@ -69,7 +68,7 @@ export function Thinking(props: {
             </text>
           </box>
           <text fg={props.textMuted} attributes={TextAttributes.DIM}>
-            {props.title() ?? "Thinking"}
+            Thinking
           </text>
         </box>
         <text flexShrink={0} fg={props.interrupt() > 0 ? props.primary : props.text}>

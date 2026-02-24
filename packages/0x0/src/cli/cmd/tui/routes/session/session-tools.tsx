@@ -1,6 +1,7 @@
 import path from "path"
 import stripAnsi from "strip-ansi"
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
+import { Dynamic } from "solid-js/web"
 import { BoxRenderable, RGBA, TextAttributes } from "@opentui/core"
 import { useRenderer, type JSX } from "@opentui/solid"
 import type { Tool } from "@/tool/tool"
@@ -52,68 +53,30 @@ type ToolProps<T extends Tool.Info> = {
   ctx: SessionToolContext
 }
 
+const TOOL_COMPONENTS: Record<string, (props: ToolProps<Tool.Info>) => JSX.Element> = {
+  bash: Bash,
+  search: Search,
+  glob: Glob,
+  read: Read,
+  grep: Grep,
+  list: List,
+  webfetch: WebFetch,
+  search_remote: SearchRemote,
+  codesearch: CodeSearch,
+  websearch: WebSearch,
+  write: Write,
+  edit: Edit,
+  task: Task,
+  apply_patch: ApplyPatch,
+  todowrite: TodoWrite,
+  question: Question,
+  lsp: Lsp,
+  skill: Skill,
+}
+
 export function SessionTool(props: ToolProps<Tool.Info>) {
-  return (
-    <Switch>
-      <Match when={props.tool === "bash"}>
-        <Bash {...props} />
-      </Match>
-      <Match when={props.tool === "search"}>
-        <Search {...props} />
-      </Match>
-      <Match when={props.tool === "glob"}>
-        <Glob {...props} />
-      </Match>
-      <Match when={props.tool === "read"}>
-        <Read {...props} />
-      </Match>
-      <Match when={props.tool === "grep"}>
-        <Grep {...props} />
-      </Match>
-      <Match when={props.tool === "list"}>
-        <List {...props} />
-      </Match>
-      <Match when={props.tool === "webfetch"}>
-        <WebFetch {...props} />
-      </Match>
-      <Match when={props.tool === "search_remote"}>
-        <SearchRemote {...props} />
-      </Match>
-      <Match when={props.tool === "codesearch"}>
-        <CodeSearch {...props} />
-      </Match>
-      <Match when={props.tool === "websearch"}>
-        <WebSearch {...props} />
-      </Match>
-      <Match when={props.tool === "write"}>
-        <Write {...props} />
-      </Match>
-      <Match when={props.tool === "edit"}>
-        <Edit {...props} />
-      </Match>
-      <Match when={props.tool === "task"}>
-        <Task {...props} />
-      </Match>
-      <Match when={props.tool === "apply_patch"}>
-        <ApplyPatch {...props} />
-      </Match>
-      <Match when={props.tool === "todowrite"}>
-        <TodoWrite {...props} />
-      </Match>
-      <Match when={props.tool === "question"}>
-        <Question {...props} />
-      </Match>
-      <Match when={props.tool === "lsp"}>
-        <Lsp {...props} />
-      </Match>
-      <Match when={props.tool === "skill"}>
-        <Skill {...props} />
-      </Match>
-      <Match when={true}>
-        <GenericTool {...props} />
-      </Match>
-    </Switch>
-  )
+  const Component = () => TOOL_COMPONENTS[props.tool] ?? GenericTool
+  return <Dynamic component={Component()} {...props} />
 }
 
 function GenericTool(props: ToolProps<Tool.Info>) {

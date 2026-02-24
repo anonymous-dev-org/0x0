@@ -17,9 +17,26 @@ export function useAppEventHandlers() {
     return tui?.terminal_notifications ?? true
   }
 
-  const bell = () => {
+  let notifyId = 0
+  const notify = (message: string) => {
     if (!notificationsEnabled()) return
     if (!process.stdout.isTTY) return
+    const title = "0x0"
+    const id = ++notifyId
+    const passthrough = process.env["TMUX"] || process.env["STY"]
+    const write = (seq: string) => {
+      process.stdout.write(
+        passthrough ? `\x1bPtmux;\x1b${seq}\x1b\\` : seq,
+      )
+    }
+    // OSC 99 — Kitty
+    write(`\x1b]99;i=${id}:d=0;${title}\x1b\\`)
+    write(`\x1b]99;i=${id}:p=body;${message}\x1b\\`)
+    // OSC 9 — iTerm2, Windows Terminal, ConEmu
+    write(`\x1b]9;${message}\x1b\\`)
+    // OSC 777 — Ghostty, VTE, rxvt-unicode
+    write(`\x1b]777;notify;${title};${message}\x07`)
+    // BEL — universal fallback
     process.stdout.write("\u0007")
   }
 
@@ -54,15 +71,15 @@ export function useAppEventHandlers() {
       if (!running) return
       const session = sync.session.get(sessionID)
       if (session?.parentID) return
-      bell()
+      notify("Task complete")
     }),
     sdk.event.on("permission.asked", (evt) => {
       if (!mark(`permission:${evt.properties.id}`)) return
-      bell()
+      notify("Permission needed")
     }),
     sdk.event.on("question.asked", (evt) => {
       if (!mark(`question:${evt.properties.id}`)) return
-      bell()
+      notify("Input required")
     }),
     sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
       toast.show({

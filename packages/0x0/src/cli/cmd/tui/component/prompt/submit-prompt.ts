@@ -108,7 +108,7 @@ export async function submitPrompt(props: {
     return
   }
 
-  const snapshotPrompt = clonePromptInfo(props.prompt)
+  const snapshotPrompt = structuredClone(props.prompt) as PromptInfo
   const snapshotMode = props.mode
   const snapshotExtmarkToPartIndex = new Map(props.extmarkToPartIndex)
 
@@ -304,55 +304,6 @@ export async function submitPrompt(props: {
       },
     } as any)
     .catch(() => {})
-}
-
-function clonePromptInfo(prompt: PromptInfo): PromptInfo {
-  return {
-    input: prompt.input,
-    mode: prompt.mode,
-    parts: prompt.parts.map((part) => {
-      if (part.type === "text") {
-        return {
-          ...part,
-          ...(part.source
-            ? {
-                source: {
-                  text: {
-                    start: part.source.text.start,
-                    end: part.source.text.end,
-                    value: part.source.text.value,
-                  },
-                },
-              }
-            : {}),
-        }
-      }
-
-      if (part.type === "agent") {
-        return {
-          ...part,
-          ...(part.source
-            ? {
-                source: {
-                  value: part.source.value,
-                  start: part.source.start,
-                  end: part.source.end,
-                },
-              }
-            : {}),
-        }
-      }
-
-      if (part.type === "file") {
-        return {
-          ...part,
-          ...(part.source ? { source: { ...part.source } } : {}),
-        }
-      }
-
-      return part
-    }),
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

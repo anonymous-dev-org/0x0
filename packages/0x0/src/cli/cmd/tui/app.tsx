@@ -252,7 +252,7 @@ function ErrorComponent(props: {
   const handleExit = async () => {
     renderer.setTerminalTitle("")
     renderer.destroy()
-    props.onExit()
+    await props.onExit()
   }
 
   useKeyboard(evt => {

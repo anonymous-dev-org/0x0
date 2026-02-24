@@ -31,23 +31,6 @@ export function useSessionContext() {
 }
 
 export function normalizeReasoningText(text: string) {
-  return text.replace("[REDACTED]", "").trim()
+  return text.replaceAll("[REDACTED]", "").trim()
 }
 
-export function extractReasoningTitle(text: string) {
-  const content = normalizeReasoningText(text)
-  if (!content) return
-
-  const bold = content.match(/^\*\*(.+?)\*\*/)
-  if (bold?.[1]?.trim()) return bold[1].trim()
-
-  const heading = content.match(/^#{1,6}\s+(.+)$/)
-  if (heading?.[1]?.trim()) return heading[1].trim()
-
-  const firstLine = content.split(/\r?\n/, 1)[0]?.trim()
-  if (!firstLine) return
-
-  const normalizedLine = firstLine.replace(/^#{1,6}\s+/, "").trim()
-  const withoutPrefix = normalizedLine.replace(/^_?thinking:_?\s*/i, "").trim()
-  return withoutPrefix || normalizedLine
-}

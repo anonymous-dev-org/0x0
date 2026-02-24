@@ -6,7 +6,7 @@ import { local } from "@tui/state/local"
 import { sync } from "@tui/state/sync"
 import { SplitBorder } from "@tui/component/border"
 import { Locale } from "@/util/locale"
-import { useSessionContext } from "./session-context"
+import { useSessionContext, normalizeReasoningText } from "./session-context"
 import { SessionTool } from "./session-tools"
 import type {
   AssistantMessage as AssistantMessageType,
@@ -126,8 +126,27 @@ export function AssistantMessage(props: { message: AssistantMessageType; parts: 
   )
 }
 
-function ReasoningPart(_props: { last: boolean; part: ReasoningPartType; message: AssistantMessageType }) {
-  return <></>
+function ReasoningPart(props: { last: boolean; part: ReasoningPartType; message: AssistantMessageType }) {
+  const ctx = useSessionContext()
+  const subtleSyntax = themeState.subtleSyntax
+  const text = () => normalizeReasoningText(props.part.text)
+
+  return (
+    <Show when={ctx.showThinking() && text()}>
+      <box paddingLeft={3} marginTop={1} flexShrink={0}>
+        <text fg={theme.textMuted} attributes={TextAttributes.DIM | TextAttributes.ITALIC}>thinking</text>
+        <code
+          filetype="markdown"
+          drawUnstyledText={false}
+          streaming={true}
+          syntaxStyle={subtleSyntax()}
+          content={text()}
+          conceal={ctx.conceal()}
+          fg={theme.textMuted}
+        />
+      </box>
+    </Show>
+  )
 }
 
 function TextPart(props: { last: boolean; part: TextPartType; message: AssistantMessageType }) {

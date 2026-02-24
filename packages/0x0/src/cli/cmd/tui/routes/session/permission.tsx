@@ -208,7 +208,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     stage: "permission" as PermissionStage,
   })
 
-  const session = () => sync.data.session.find((s) => s.id === props.request.sessionID)
+  const session = () => sync.session.get(props.request.sessionID)
 
   const input = () => {
     const tool = props.request.tool

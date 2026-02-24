@@ -30,7 +30,7 @@ import { Logo } from "../../component/logo"
 import { useSessionCommands } from "./use-session-commands"
 import { SessionMessages } from "./session-messages"
 import { shouldShowAssistantHeader } from "./assistant-header"
-import { SessionContext, CustomSpeedScroll, extractReasoningTitle } from "./session-context"
+import { SessionContext, CustomSpeedScroll } from "./session-context"
 import { Thinking } from "./thinking"
 import { UserMessage } from "./user-message"
 import { AssistantMessage } from "./assistant-message"
@@ -90,62 +90,6 @@ function SessionInner() {
     }
   }
 
-  const toolStatus = (part: ToolPartType, seen = new Set<string>()) => {
-    if (part.tool === "task" && part.state.status !== "pending") {
-      const sessionId =
-        part.state.metadata && typeof part.state.metadata.sessionId === "string"
-          ? part.state.metadata.sessionId
-          : undefined
-      if (sessionId && !seen.has(sessionId)) {
-        seen.add(sessionId)
-        const nested = latestToolPart(sessionId, true) ?? latestToolPart(sessionId, false)
-        if (nested) return toolStatus(nested, seen)
-      }
-    }
-
-    const name = Locale.titlecase(part.tool.replaceAll("_", " "))
-    if (part.state.status !== "pending") {
-      const title = "title" in part.state && typeof part.state.title === "string" ? part.state.title.trim() : ""
-      if (title) return `Using ${name} · ${Locale.truncate(title, 56)}`
-    }
-    if ("input" in part.state && part.state.input) {
-      const cmd = part.state.input.command
-      if (typeof cmd === "string" && cmd.trim()) return `Using ${name} · ${Locale.truncate(cmd.trim(), 56)}`
-    }
-    return `Using ${name}`
-  }
-
-  const thinkingStatus = createMemo(() => {
-    const pendingID = pending()
-    if (!pendingID) return
-
-    const parts = sync.data.part[pendingID] ?? []
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const part = parts[i]
-      if (!part || part.type !== "tool") continue
-      const tool = part as ToolPartType
-      if (tool.state.status === "running" || tool.state.status === "pending") return toolStatus(tool)
-    }
-
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const part = parts[i]
-      if (part?.type !== "reasoning") continue
-
-      const title = extractReasoningTitle(part.text)
-      if (!title) continue
-
-      return title
-    }
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const part = parts[i]
-      if (!part || part.type !== "tool") continue
-      const tool = part as ToolPartType
-      if (tool.state.status === "pending" || tool.state.status === "running") continue
-      return toolStatus(tool)
-    }
-    return "Thinking"
-  })
-
   const dimensions = useTerminalDimensions()
 
   const wide = () => dimensions().width > 120
@@ -156,9 +100,6 @@ function SessionInner() {
     return false
   }
   const contentWidth = () => dimensions().width - (sidebarVisible() ? 42 : 0)
-
-  // 4 (dots) + 1 (gap) + 22 ("esc again to interrupt") = 27
-  const thinkingTitle = createMemo(() => Locale.truncate(thinkingStatus() ?? "", Math.max(10, contentWidth() - 27)))
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -171,6 +112,8 @@ function SessionInner() {
 
     return new CustomSpeedScroll(3)
   })
+
+  const toast = useToast()
 
   let version = 0
   createEffect(
@@ -204,15 +147,6 @@ function SessionInner() {
       },
     ),
   )
-
-  const toast = useToast()
-
-  // Handle initial prompt from fork
-  createEffect(() => {
-    if (route.data.initialPrompt && prompt) {
-      prompt.set(route.data.initialPrompt)
-    }
-  })
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
@@ -435,7 +369,6 @@ function SessionInner() {
                 visible={busy}
                 color={() => thinkingColor() ?? theme.text}
                 interrupt={interrupt}
-                title={thinkingTitle}
                 text={theme.text}
                 textMuted={theme.textMuted}
                 primary={theme.primary}

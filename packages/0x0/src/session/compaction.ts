@@ -175,7 +175,6 @@ export namespace SessionCompaction {
     })
 
     if (result === "stop" && input.auto) {
-      log.warn("auto compaction failed, continuing", { sessionID: input.sessionID })
       return "continue"
     }
 

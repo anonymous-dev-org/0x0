@@ -318,80 +318,30 @@ export function useSessionCommands(props: {
         dialog.clear()
       },
     },
-    {
-      title: "Page up",
-      value: "session.page.up",
-      keybind: "messages_page_up",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
+    ...([
+      { title: "Page up", value: "session.page.up", keybind: "messages_page_up", amount: (s: ScrollBoxRenderable) => -s.height / 2 },
+      { title: "Page down", value: "session.page.down", keybind: "messages_page_down", amount: (s: ScrollBoxRenderable) => s.height / 2 },
+      { title: "Half page up", value: "session.half.page.up", keybind: "messages_half_page_up", amount: (s: ScrollBoxRenderable) => -s.height / 4 },
+      { title: "Half page down", value: "session.half.page.down", keybind: "messages_half_page_down", amount: (s: ScrollBoxRenderable) => s.height / 4 },
+      { title: "Line up", value: "session.line.up", keybind: "messages_line_up", amount: () => -1, disabled: true },
+      { title: "Line down", value: "session.line.down", keybind: "messages_line_down", amount: () => 1, disabled: true },
+    ] as const).map((cmd) => ({
+      title: cmd.title,
+      value: cmd.value,
+      keybind: cmd.keybind,
+      category: "Session" as const,
+      hidden: !("disabled" in cmd && cmd.disabled),
+      disabled: "disabled" in cmd && cmd.disabled,
+      onSelect: (dialog: ReturnType<typeof useDialog>) => {
         const scroll = props.scroll()
-        scroll.scrollBy(-scroll.height / 2)
+        scroll.scrollBy(cmd.amount(scroll))
         dialog.clear()
       },
-    },
-    {
-      title: "Page down",
-      value: "session.page.down",
-      keybind: "messages_page_down",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        const scroll = props.scroll()
-        scroll.scrollBy(scroll.height / 2)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line up",
-      value: "session.line.up",
-      keybind: "messages_line_up",
-      category: "Session",
-      disabled: true,
-      onSelect: (dialog) => {
-        props.scroll().scrollBy(-1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line down",
-      value: "session.line.down",
-      keybind: "messages_line_down",
-      category: "Session",
-      disabled: true,
-      onSelect: (dialog) => {
-        props.scroll().scrollBy(1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page up",
-      value: "session.half.page.up",
-      keybind: "messages_half_page_up",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        const scroll = props.scroll()
-        scroll.scrollBy(-scroll.height / 4)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page down",
-      value: "session.half.page.down",
-      keybind: "messages_half_page_down",
-      category: "Session",
-      hidden: true,
-      onSelect: (dialog) => {
-        const scroll = props.scroll()
-        scroll.scrollBy(scroll.height / 4)
-        dialog.clear()
-      },
-    },
+    })),
     {
       title: "First message",
       value: "session.first",
-      keybind: "messages_first",
+      keybind: "messages_first" as const,
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
@@ -402,7 +352,7 @@ export function useSessionCommands(props: {
     {
       title: "Last message",
       value: "session.last",
-      keybind: "messages_last",
+      keybind: "messages_last" as const,
       category: "Session",
       hidden: true,
       onSelect: (dialog) => {
@@ -414,7 +364,7 @@ export function useSessionCommands(props: {
     {
       title: "Jump to last user message",
       value: "session.messages_last_user",
-      keybind: "messages_last_user",
+      keybind: "messages_last_user" as const,
       category: "Session",
       hidden: true,
       onSelect: () => {
@@ -442,7 +392,7 @@ export function useSessionCommands(props: {
     {
       title: "Next message",
       value: "session.message.next",
-      keybind: "messages_next",
+      keybind: "messages_next" as const,
       category: "Session",
       hidden: true,
       onSelect: (dialog) => props.scrollToMessage("next", dialog),
@@ -450,7 +400,7 @@ export function useSessionCommands(props: {
     {
       title: "Previous message",
       value: "session.message.previous",
-      keybind: "messages_previous",
+      keybind: "messages_previous" as const,
       category: "Session",
       hidden: true,
       onSelect: (dialog) => props.scrollToMessage("prev", dialog),
@@ -458,7 +408,7 @@ export function useSessionCommands(props: {
     {
       title: "Copy last assistant message",
       value: "messages.copy",
-      keybind: "messages_copy",
+      keybind: "messages_copy" as const,
       category: "Session",
       onSelect: (dialog) => {
         const revertID = session()?.revert?.messageID
@@ -532,7 +482,7 @@ export function useSessionCommands(props: {
     {
       title: "Export session transcript",
       value: "session.export",
-      keybind: "session_export",
+      keybind: "session_export" as const,
       category: "Session",
       slash: {
         name: "export",

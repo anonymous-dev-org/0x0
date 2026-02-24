@@ -76,7 +76,7 @@ export namespace SessionProcessor {
       partFromToolCall(toolCallID: string) {
         return toolParts[toolCallID]
       },
-      async process(streamInput: LLM.StreamInput): Promise<"continue" | "stop" | "compact"> {
+      async process(streamInput: LLM.StreamInput): Promise<"continue" | "stop"> {
         log.info("process", { sessionID: input.sessionID, model: streamInput.model.id })
 
         // Look up the current CLI session IDs from session storage
