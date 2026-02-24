@@ -72,6 +72,19 @@ export namespace LLM {
   }
 
   export function transparencySection(agent: Agent.Info): string {
+    const actions = agent.actions ?? {}
+    const actionsEntries = Object.entries(actions)
+    const actionsStr =
+      actionsEntries.length > 0
+        ? actionsEntries
+            .map(
+              ([provider, tools]) =>
+                `${provider}: ${Object.entries(tools)
+                  .map(([t, p]) => `${t}=${p}`)
+                  .join(", ")}`,
+            )
+            .join("; ")
+        : "(default: ask for all)"
     const toolsAllowed = agent.toolsAllowed ?? []
     const knowledgeBase = agent.knowledgeBase ?? []
     const tools = toolsAllowed.length > 0 ? toolsAllowed.join(", ") : "(none)"
@@ -80,6 +93,7 @@ export namespace LLM {
       "## Effective Agent Configuration",
       `- Agent ID: ${agent.name}`,
       `- Agent Name: ${agent.displayName ?? agent.name}`,
+      `- Actions: ${actionsStr}`,
       `- Tools Allowed: ${tools}`,
       `- Thinking Effort: ${agent.thinkingEffort ?? "(unset)"}`,
       `- Knowledge Base:\n- ${knowledge}`,
@@ -212,7 +226,6 @@ export namespace LLM {
       cliSessionId: input.cliSessionId,
       abort: input.abort,
       canUseTool: input.canUseTool,
-      permissionMode: "bypassPermissions",
     })) {
       switch (event.type) {
         case "text-delta":

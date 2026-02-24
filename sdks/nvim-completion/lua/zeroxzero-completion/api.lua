@@ -41,21 +41,25 @@ local function read_discovery_file()
   return data.url
 end
 
----Get the 0x0 server URL base from discovery file or zeroxzero plugin config
+---Get the 0x0 server URL base.
+---Priority: env var > discovery file > plugin config > default
 ---@return string
 local function get_server_url()
-  -- 1. Try discovery file first
+  -- 1. Env var (any plugin/tool can set this)
+  local env_url = os.getenv("ZEROXZERO_SERVER_URL")
+  if env_url and env_url ~= "" then
+    return env_url
+  end
+  -- 2. Discovery file written by `0x0 serve`
   local discovered = read_discovery_file()
   if discovered then
     return discovered
   end
-  -- 2. Fall back to zeroxzero plugin config
-  local ok, zxz_config = pcall(require, "zeroxzero.config")
-  if ok then
-    local cfg = zxz_config.current
-    return string.format("http://%s:%d", cfg.hostname, cfg.port)
+  -- 3. Plugin setup() config
+  if config.current.server_url then
+    return config.current.server_url
   end
-  -- 3. Fall back to default
+  -- 4. Default
   return "http://127.0.0.1:4096"
 end
 
@@ -70,13 +74,6 @@ function M.stream(ctx, on_delta, on_done, on_error)
   local request_id = next_request_id
 
   local base_url = get_server_url()
-  if not base_url then
-    vim.schedule(function()
-      on_error("zeroxzero plugin not loaded — install and configure zeroxzero first", request_id)
-    end)
-    return { id = request_id, process = nil }
-  end
-
   local cfg = config.current
 
   local body = vim.json.encode({
@@ -100,11 +97,11 @@ function M.stream(ctx, on_delta, on_done, on_error)
     url,
   }
 
-  -- Add basic auth if configured in zeroxzero
-  local ok, zxz_config = pcall(require, "zeroxzero.config")
-  if ok and zxz_config.current.auth then
+  -- Add basic auth if configured
+  local auth = config.current.auth
+  if auth then
     table.insert(cmd, 5, "-u")
-    table.insert(cmd, 6, zxz_config.current.auth.username .. ":" .. zxz_config.current.auth.password)
+    table.insert(cmd, 6, auth.username .. ":" .. auth.password)
   end
 
   local buffer = ""

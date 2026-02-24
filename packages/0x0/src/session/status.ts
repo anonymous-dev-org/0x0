@@ -17,6 +17,8 @@ export namespace SessionStatus {
       }),
       z.object({
         type: z.literal("busy"),
+        phase: z.enum(["thinking", "writing", "tool"]).optional(),
+        detail: z.string().optional(),
       }),
     ])
     .meta({

@@ -2,16 +2,6 @@ local M = {}
 
 ---@param opts? table
 function M.setup(opts)
-  -- Verify zeroxzero (main plugin) is available
-  local ok, _ = pcall(require, "zeroxzero.config")
-  if not ok then
-    vim.notify(
-      "zeroxzero-completion requires the zeroxzero plugin. Install it first.",
-      vim.log.levels.ERROR
-    )
-    return
-  end
-
   local config = require("zeroxzero-completion.config")
   config.setup(opts)
 

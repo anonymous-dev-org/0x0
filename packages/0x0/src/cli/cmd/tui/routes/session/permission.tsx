@@ -15,7 +15,7 @@ import { Locale } from "@/util/locale"
 import { useDialog } from "../../ui/dialog"
 import { filetype, normalizePath } from "./session-tool-format"
 
-type PermissionStage = "permission" | "always" | "reject"
+type PermissionStage = "permission" | "always" | "always_deny" | "reject"
 
 function EditBody(props: { request: PermissionRequest }) {
   const dimensions = useTerminalDimensions()
@@ -229,30 +229,13 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         <Prompt
           title="Always allow"
           body={
-            <Switch>
-              <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
-                <TextBody
-                  title={"This will allow " + props.request.permission + " until Terminal Agent is restarted."}
-                />
-              </Match>
-              <Match when={true}>
-                <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>
-                    This will allow the following patterns until Terminal Agent is restarted
-                  </text>
-                  <box>
-                    <For each={props.request.always}>
-                      {(pattern) => (
-                        <text fg={theme.text}>
-                          {"- "}
-                          {pattern}
-                        </text>
-                      )}
-                    </For>
-                  </box>
-                </box>
-              </Match>
-            </Switch>
+            <TextBody
+              title={
+                "This will always allow " +
+                ((props.request.metadata?.tool as string) ?? props.request.permission) +
+                " for this agent. This will be saved to config.yaml."
+              }
+            />
           }
           options={{ confirm: "Confirm", cancel: "Cancel" }}
           escapeKey="cancel"
@@ -262,6 +245,30 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "always" },
+            } as any)
+          }}
+        />
+      </Match>
+      <Match when={store.stage === "always_deny"}>
+        <Prompt
+          title="Always deny"
+          body={
+            <TextBody
+              title={
+                "This will always deny " +
+                ((props.request.metadata?.tool as string) ?? props.request.permission) +
+                " for this agent. This will be saved to config.yaml."
+              }
+            />
+          }
+          options={{ confirm: "Confirm", cancel: "Cancel" }}
+          escapeKey="cancel"
+          onSelect={(option) => {
+            setStore("stage", "permission")
+            if (option === "cancel") return
+            sdk.client.permission[":requestID"].reply.$post({
+              param: { requestID: props.request.id },
+              json: { reply: "always_deny" },
             } as any)
           }}
         />
@@ -286,13 +293,17 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           options={
             props.request.permission === "task_handoff"
               ? { once: "Allow once", reject: "Deny" }
-              : { once: "Allow once", always: "Allow always", reject: "Reject" }
+              : { once: "Accept", always: "Always accept", always_deny: "Always deny", reject: "Deny" }
           }
           escapeKey="reject"
           fullscreen
           onSelect={(option) => {
             if (option === "always") {
               setStore("stage", "always")
+              return
+            }
+            if (option === "always_deny") {
+              setStore("stage", "always_deny")
               return
             }
             if (option === "reject") {

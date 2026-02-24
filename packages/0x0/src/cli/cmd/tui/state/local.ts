@@ -45,6 +45,7 @@ function createAgent() {
     permission: [],
     options: {},
     toolsAllowed: [],
+    actions: {},
     knowledgeBase: [],
   }
   const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))

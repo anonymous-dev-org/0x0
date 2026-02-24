@@ -68,6 +68,22 @@ export namespace SessionProcessor {
     let currentText: MessageV2.TextPart | undefined
     let currentReasoning: Record<string, MessageV2.ReasoningPart> = {}
     let snapshot: string | undefined
+    let lastPhase: string | undefined
+
+    function setPhase(phase: "thinking" | "writing" | "tool", detail?: string) {
+      const key = `${phase}:${detail ?? ""}`
+      if (key === lastPhase) return
+      lastPhase = key
+      SessionStatus.set(input.sessionID, { type: "busy", phase, detail })
+    }
+
+    function formatToolDetail(tool: string, command?: string): string {
+      if (command) {
+        const truncated = command.length > 40 ? command.slice(0, 40) + "\u2026" : command
+        return `${tool}: ${truncated}`
+      }
+      return tool
+    }
 
     const result = {
       get message() {
@@ -84,18 +100,27 @@ export namespace SessionProcessor {
         const cliSessionId = streamInput.cliSessionId ?? sessionInfo?.cliSessionId
         const codexThreadId = streamInput.codexThreadId ?? sessionInfo?.codexThreadId
 
+        const providerID = streamInput.model.providerID
+        const agentActions = streamInput.agent.actions?.[providerID] ?? {}
+        const agentName = streamInput.agent.name
+
         const canUseTool = async (
           toolName: string,
           toolInput: Record<string, unknown>,
         ): Promise<PermissionResult> => {
+          const policy = agentActions[toolName]
+          if (policy === "allow") return { behavior: "allow" }
+          if (policy === "deny")
+            return { behavior: "deny", message: `Tool "${toolName}" is denied by agent action policy.` }
+
           const session = await Session.get(input.sessionID).catch(() => null)
           try {
             await PermissionNext.ask({
               sessionID: input.sessionID,
               permission: providerToolPermission(toolName),
               patterns: [providerToolPattern(toolName, toolInput)],
-              metadata: { tool: toolName },
-              always: [providerToolPattern(toolName, toolInput)],
+              metadata: { tool: toolName, provider: providerID, agent: agentName },
+              always: ["*"],
               ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
             })
             return { behavior: "allow" }
@@ -106,14 +131,25 @@ export namespace SessionProcessor {
 
         const codexApproval = {
           async onCommand(params: { command: string; cwd: string; reason?: string }) {
+            const policy = agentActions.commandExecution
+            if (policy === "allow") return "accept" as const
+            if (policy === "deny") return "decline" as const
+
             const session = await Session.get(input.sessionID).catch(() => null)
             try {
               await PermissionNext.ask({
                 sessionID: input.sessionID,
                 permission: "bash",
                 patterns: [params.command],
-                metadata: { tool: "bash", command: params.command, cwd: params.cwd, reason: params.reason },
-                always: [params.command],
+                metadata: {
+                  tool: "commandExecution",
+                  provider: providerID,
+                  agent: agentName,
+                  command: params.command,
+                  cwd: params.cwd,
+                  reason: params.reason,
+                },
+                always: ["*"],
                 ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
               })
               return "accept" as const
@@ -122,13 +158,22 @@ export namespace SessionProcessor {
             }
           },
           async onFileChange(params: { reason?: string }) {
+            const policy = agentActions.fileChange
+            if (policy === "allow") return "accept" as const
+            if (policy === "deny") return "decline" as const
+
             const session = await Session.get(input.sessionID).catch(() => null)
             try {
               await PermissionNext.ask({
                 sessionID: input.sessionID,
                 permission: "edit",
                 patterns: ["*"],
-                metadata: { tool: "edit", reason: params.reason },
+                metadata: {
+                  tool: "fileChange",
+                  provider: providerID,
+                  agent: agentName,
+                  reason: params.reason,
+                },
                 always: ["*"],
                 ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
               })
@@ -166,6 +211,7 @@ export namespace SessionProcessor {
               // ── Text ───────────────────────────────────────────────────────
 
               case "text-delta": {
+                setPhase("writing")
                 if (!currentText) {
                   currentText = {
                     id: Identifier.ascending("part"),
@@ -184,6 +230,7 @@ export namespace SessionProcessor {
               // ── Reasoning ─────────────────────────────────────────────────
 
               case "reasoning-delta": {
+                setPhase("thinking")
                 let part = currentReasoning[event.id]
                 if (!part) {
                   part = {
@@ -204,6 +251,7 @@ export namespace SessionProcessor {
               // ── Tool call starts (pending → running display) ───────────────
 
               case "tool-start": {
+                setPhase("tool", formatToolDetail(event.tool, event.command))
                 finalizeText()
                 const toolInput = event.command ? { command: event.command } : {}
                 const toolPart = (await Session.updatePart({
@@ -245,6 +293,7 @@ export namespace SessionProcessor {
               }
 
               case "tool-end": {
+                setPhase("thinking")
                 const toolPart = toolParts[event.id]
                 if (toolPart) {
                   const startTime =
@@ -312,6 +361,8 @@ export namespace SessionProcessor {
               // ── Step boundaries ───────────────────────────────────────────
 
               case "step-start": {
+                lastPhase = undefined
+                SessionStatus.set(input.sessionID, { type: "busy" })
                 snapshot = await Snapshot.track()
                 break
               }

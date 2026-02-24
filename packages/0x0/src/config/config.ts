@@ -727,6 +727,13 @@ export namespace Config {
       mode: z.enum(["primary", "all"]).optional().describe("Agent mode"),
       permission: z.record(z.string(), z.unknown()).optional().describe("Per-agent permission overrides"),
       tools: z.record(z.string(), z.boolean()).optional().describe("Legacy tools config (use permission instead)"),
+      actions: z
+        .record(
+          z.string(),
+          z.record(z.string(), z.enum(["allow", "deny", "ask"])),
+        )
+        .optional()
+        .describe("Per-provider tool action policies using SDK tool names (e.g. claude-code: { Bash: allow, Edit: ask })"),
       maxSteps: z.number().int().positive().optional().describe("Alias for steps"),
     })
     .passthrough()

@@ -17,27 +17,27 @@ function M.check()
     vim.health.error("curl not found in PATH")
   end
 
-  -- Check zeroxzero plugin is installed
-  local ok, zxz_config = pcall(require, "zeroxzero.config")
-  if ok then
-    vim.health.ok("zeroxzero plugin loaded")
-    vim.health.info("Server: " .. zxz_config.current.hostname .. ":" .. zxz_config.current.port)
+  -- Show resolved server URL
+  local config = require("zeroxzero-completion.config")
+  local env_url = os.getenv("ZEROXZERO_SERVER_URL")
+  if env_url and env_url ~= "" then
+    vim.health.ok("Server URL from ZEROXZERO_SERVER_URL: " .. env_url)
+  elseif config.current.server_url then
+    vim.health.ok("Server URL from setup() config: " .. config.current.server_url)
   else
-    vim.health.error("zeroxzero plugin not found — install it first")
-    return
+    vim.health.info("Server URL: http://127.0.0.1:4096 (default)")
   end
 
-  -- Check server connectivity
-  local zxz_api = require("zeroxzero.api")
-  local err, resp = zxz_api.request_sync("GET", "/app", { timeout = 2 })
-  if not err and resp and resp.status == 200 then
+  -- Check server connectivity via curl
+  local url = env_url or config.current.server_url or "http://127.0.0.1:4096"
+  local result = vim.system({ "curl", "--silent", "--max-time", "2", "-o", "/dev/null", "-w", "%{http_code}", url }, { text = true }):wait()
+  if result.code == 0 and result.stdout and result.stdout:match("^2") then
     vim.health.ok("0x0 server is reachable")
   else
-    vim.health.warn("0x0 server not reachable (is it running?)")
+    vim.health.warn("0x0 server not reachable at " .. url .. " (is it running?)")
   end
 
   -- Info
-  local config = require("zeroxzero-completion.config")
   vim.health.info("Model: " .. config.current.model)
   vim.health.info("Debounce: " .. config.current.debounce_ms .. "ms")
 end

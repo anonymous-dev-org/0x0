@@ -85,7 +85,7 @@ export namespace PermissionNext {
 
   export type Request = z.infer<typeof Request>
 
-  export const Reply = z.enum(["once", "always", "reject"])
+  export const Reply = z.enum(["once", "always", "reject", "always_deny"])
   export type Reply = z.infer<typeof Reply>
 
   export const Approval = z.object({
@@ -220,13 +220,54 @@ export namespace PermissionNext {
           pending.resolve()
         }
 
-        // TODO: we don't save the permission ruleset to disk yet until there's
-        // UI to manage it
-        // await Storage.write(["permission", Instance.project.id], s.approved)
+        await persistAction(existing.info.metadata, "allow")
+        return
+      }
+      if (input.reply === "always_deny") {
+        for (const pattern of existing.info.always) {
+          s.approved.push({
+            permission: existing.info.permission,
+            pattern,
+            action: "deny",
+          })
+        }
+
+        await persistAction(existing.info.metadata, "deny")
+
+        existing.reject(new DeniedError(s.approved.filter((r) => r.action === "deny")))
+        const sessionID = existing.info.sessionID
+        for (const [id, pending] of Object.entries(s.pending)) {
+          if (pending.info.sessionID === sessionID) {
+            delete s.pending[id]
+            Bus.publish(Event.Replied, {
+              sessionID: pending.info.sessionID,
+              requestID: pending.info.id,
+              reply: "reject",
+            })
+            pending.reject(new RejectedError())
+          }
+        }
         return
       }
     },
   )
+
+  async function persistAction(
+    metadata: Record<string, unknown> | undefined,
+    policy: "allow" | "deny",
+  ) {
+    const tool = metadata?.tool
+    const provider = metadata?.provider
+    const agent = metadata?.agent
+    if (typeof tool !== "string" || typeof provider !== "string" || typeof agent !== "string") return
+    try {
+      await Config.update({
+        agent: { [agent]: { actions: { [provider]: { [tool]: policy } } } },
+      })
+    } catch (e) {
+      log.error("failed to persist action policy", { tool, provider, agent, policy, error: e })
+    }
+  }
 
   export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
     const merged = merge(...rulesets)

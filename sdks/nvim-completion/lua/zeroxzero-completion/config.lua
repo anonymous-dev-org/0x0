@@ -1,6 +1,8 @@
 local M = {}
 
 ---@class zeroxzero_completion.Config
+---@field server_url string?
+---@field auth zeroxzero_completion.AuthConfig?
 ---@field model string
 ---@field max_tokens number
 ---@field debounce_ms number
@@ -9,6 +11,10 @@ local M = {}
 ---@field cache_size number
 ---@field disabled_filetypes table<string, boolean>
 ---@field keymaps zeroxzero_completion.KeymapConfig
+
+---@class zeroxzero_completion.AuthConfig
+---@field username string
+---@field password string
 
 ---@class zeroxzero_completion.KeymapConfig
 ---@field accept string
@@ -19,6 +25,8 @@ local M = {}
 
 ---@type zeroxzero_completion.Config
 M.defaults = {
+  server_url = nil,
+  auth = nil,
   model = "claude-haiku-4-5-20251001",
   max_tokens = 256,
   debounce_ms = 150,

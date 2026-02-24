@@ -3,6 +3,8 @@ import { RGBA, TextAttributes } from "@opentui/core"
 
 export function Thinking(props: {
   visible: () => boolean
+  phase: () => string | undefined
+  detail: () => string | undefined
   color: () => RGBA
   interrupt: () => number
   text: RGBA
@@ -16,6 +18,14 @@ export function Thinking(props: {
     const color = props.color()
     const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
     return RGBA.fromInts(Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255), alpha)
+  }
+
+  const label = () => {
+    const phase = props.phase()
+    const detail = props.detail()
+    if (phase === "writing") return "Writing"
+    if (phase === "tool") return detail ?? "Running tool"
+    return "Thinking"
   }
 
   createEffect(() => {
@@ -54,7 +64,7 @@ export function Thinking(props: {
   return (
     <Show when={props.visible()}>
       <box paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
-        <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="center">
+        <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="flex-end">
           <box flexDirection="column" flexShrink={0}>
             <text>
               <For each={[0, 1, 2]}>
@@ -68,7 +78,7 @@ export function Thinking(props: {
             </text>
           </box>
           <text fg={props.textMuted} attributes={TextAttributes.DIM}>
-            Thinking
+            {label()}
           </text>
         </box>
         <text flexShrink={0} fg={props.interrupt() > 0 ? props.primary : props.text}>

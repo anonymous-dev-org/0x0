@@ -367,6 +367,14 @@ function SessionInner() {
             <box flexShrink={0}>
               <Thinking
                 visible={busy}
+                phase={() => {
+                  const s = status()
+                  return s.type === "busy" ? s.phase : undefined
+                }}
+                detail={() => {
+                  const s = status()
+                  return s.type === "busy" ? s.detail : undefined
+                }}
                 color={() => thinkingColor() ?? theme.text}
                 interrupt={interrupt}
                 text={theme.text}

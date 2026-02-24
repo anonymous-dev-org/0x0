@@ -40,6 +40,12 @@ export namespace Agent {
       options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
       toolsAllowed: z.array(z.string()).default([]),
+      actions: z
+        .record(
+          z.string(),
+          z.record(z.string(), z.enum(["allow", "deny", "ask"])),
+        )
+        .default({}),
       thinkingEffort: z.string().optional(),
       knowledgeBase: z.array(z.string()).default([]),
     })
@@ -170,6 +176,7 @@ export namespace Agent {
       item.displayName = value.name ?? item.displayName
       item.steps = value.steps ?? value.maxSteps ?? item.steps
       item.toolsAllowed = [...toolsAllowed]
+      item.actions = value.actions ?? item.actions ?? {}
       item.thinkingEffort = value.thinking_effort ?? item.thinkingEffort
       item.knowledgeBase = Array.from(new Set([...(cfg.knowledge_base ?? []), ...(value.knowledge_base ?? [])]))
       item.options = mergeDeep(item.options, value.options ?? {})
@@ -218,6 +225,7 @@ export namespace Agent {
         "steps",
         "maxSteps",
         "tools_allowed",
+        "actions",
         "thinking_effort",
         "knowledge_base",
         "mode",
