@@ -362,18 +362,88 @@ read -r -p "0x0-git version [${next_git_version}]: " git_override
 VERSION_GIT="${git_override:-$next_git_version}"
 is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 
-# nvim versions
-echo
-echo "── Neovim plugins ──"
-read -r -p "nvim plugin version (leave empty to skip): " VERSION_NVIM
-read -r -p "nvim-completion version (leave empty to skip): " VERSION_NVIM_COMP
+# nvim versions — fetched from standalone repo tags
 
-if [[ -n "$VERSION_NVIM" ]]; then
-  is_semver "$VERSION_NVIM" || { echo "Invalid version: $VERSION_NVIM"; exit 1; }
-fi
-if [[ -n "$VERSION_NVIM_COMP" ]]; then
-  is_semver "$VERSION_NVIM_COMP" || { echo "Invalid version: $VERSION_NVIM_COMP"; exit 1; }
-fi
+pick_latest_nvim_tag() {
+  local nvim_repo="$1"
+  local best=""
+  local tag=""
+  local version=""
+
+  while IFS= read -r tag; do
+    [[ -n "$tag" && "$tag" != "null" ]] || continue
+    version="$(semver_from_tag "$tag")"
+    if ! is_semver "$version"; then
+      continue
+    fi
+    if [[ -z "$best" ]] || semver_gt "$version" "$best"; then
+      best="$version"
+    fi
+  done < <(gh release list --repo "$nvim_repo" --limit 200 --json tagName --jq '.[].tagName' 2>/dev/null || true)
+
+  # Also check git tags via ls-remote in case there are no GH releases
+  while IFS= read -r tag; do
+    [[ -n "$tag" ]] || continue
+    version="$(semver_from_tag "$tag")"
+    if ! is_semver "$version"; then
+      continue
+    fi
+    if [[ -z "$best" ]] || semver_gt "$version" "$best"; then
+      best="$version"
+    fi
+  done < <(git ls-remote --tags "git@github.com:${nvim_repo}.git" 2>/dev/null | sed 's/.*refs\/tags\///' | grep -v '\^{}' || true)
+
+  if [[ -n "$best" ]]; then
+    echo "$best"
+  fi
+}
+
+prompt_nvim_version() {
+  local label="$1"
+  local nvim_repo="$2"
+  local result_var="$3"
+
+  echo
+  echo "── ${label} ──"
+
+  local current
+  current="$(pick_latest_nvim_tag "$nvim_repo")"
+
+  if [[ -z "$current" ]]; then
+    echo "No existing version found in ${nvim_repo}."
+    echo "Select release type:"
+    select nvim_type in skip "start at 0.1.0"; do
+      case "$nvim_type" in
+        skip) eval "$result_var=''"; return ;;
+        "start at 0.1.0") eval "$result_var='0.1.0'"; return ;;
+        *) echo "Choose 1 or 2." ;;
+      esac
+    done
+  else
+    echo "Current version: v${current}  (from ${nvim_repo})"
+    echo "Select release type:"
+    select nvim_type in major minor patch skip; do
+      [[ -n "${nvim_type:-}" ]] && break
+      echo "Choose 1, 2, 3, or 4."
+    done
+    if [[ "$nvim_type" == "skip" ]]; then
+      eval "$result_var=''"
+      return
+    fi
+    local next
+    next="$(bump_version "$current" "$nvim_type")"
+    read -r -p "${label} version [${next}]: " nvim_override
+    local final="${nvim_override:-$next}"
+    is_semver "$final" || { echo "Invalid version: $final"; exit 1; }
+    eval "$result_var='$final'"
+  fi
+}
+
+# Determine nvim repo owner
+NVIM_OWNER="$(echo "$REPO" | cut -d/ -f1)"
+
+prompt_nvim_version "nvim" "${NVIM_OWNER}/0x0.nvim" VERSION_NVIM
+prompt_nvim_version "nvim-completion" "${NVIM_OWNER}/0x0-completion.nvim" VERSION_NVIM_COMP
 
 # ── NPM auth ──────────────────────────────────────────────────────
 

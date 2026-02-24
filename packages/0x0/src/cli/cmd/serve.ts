@@ -9,7 +9,7 @@ export const ServeCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless 0x0 server",
   handler: async (args) => {
-    const config = await Config.get()
+    const config = await Config.global()
     if (!config.server?.password) {
       console.log("Warning: server.password is not set in config.yaml; server is unsecured.")
     }

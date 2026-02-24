@@ -108,7 +108,7 @@ export async function submitPrompt(props: {
     return
   }
 
-  const snapshotPrompt = structuredClone(props.prompt) as PromptInfo
+  const snapshotPrompt = JSON.parse(JSON.stringify(props.prompt)) as PromptInfo
   const snapshotMode = props.mode
   const snapshotExtmarkToPartIndex = new Map(props.extmarkToPartIndex)
 
