@@ -11,6 +11,9 @@ import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
 import { PermissionNext } from "@/permission/next"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tool.task" })
 
 const parameters = z.object({
   mode: z
@@ -147,7 +150,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const session = await iife(async () => {
         if (params.task_id) {
-          const found = await Session.get(params.task_id).catch(() => {})
+          const found = await Session.get(params.task_id).catch((e) => { log.warn("failed to lookup task session", { error: e, taskId: params.task_id }); return undefined })
           if (found) return found
         }
 

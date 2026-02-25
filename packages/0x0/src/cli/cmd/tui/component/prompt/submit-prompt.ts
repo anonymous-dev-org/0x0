@@ -194,7 +194,7 @@ export async function submitPrompt(props: {
           command: inputText,
         },
       } as any)
-      .catch(() => {})
+      .catch((error: unknown) => rollbackSubmit(error))
     return
   }
 
@@ -259,7 +259,7 @@ export async function submitPrompt(props: {
           parts: fileParts,
         },
       } as any)
-      .catch(() => {})
+      .catch((error: unknown) => rollbackSubmit(error))
     return
   }
 
@@ -303,7 +303,7 @@ export async function submitPrompt(props: {
         parts,
       },
     } as any)
-    .catch(() => {})
+    .catch((error: unknown) => rollbackSubmit(error))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

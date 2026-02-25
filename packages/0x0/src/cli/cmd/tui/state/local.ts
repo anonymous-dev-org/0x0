@@ -44,7 +44,6 @@ function createAgent() {
     mode: "primary",
     permission: [],
     options: {},
-    toolsAllowed: [],
     actions: {},
     knowledgeBase: [],
   }

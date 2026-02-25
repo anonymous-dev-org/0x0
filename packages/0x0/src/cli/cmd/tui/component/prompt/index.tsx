@@ -626,7 +626,10 @@ export function Prompt(props: PromptProps) {
         const file = Bun.file(filepath)
         if (file.type === "image/svg+xml") {
           event.preventDefault()
-          const content = await file.text().catch(() => {})
+          const content = await file.text().catch(() => {
+            toast.show({ variant: "warning", message: "Could not read pasted SVG file", duration: 3000 })
+            return undefined
+          })
           if (content) return pasteText(content, `[SVG: ${file.name ?? "image"}]`)
         }
         if (file.type.startsWith("image/")) {
@@ -634,7 +637,10 @@ export function Prompt(props: PromptProps) {
           const content = await file
             .arrayBuffer()
             .then((buffer) => Buffer.from(buffer).toString("base64"))
-            .catch(() => {})
+            .catch(() => {
+              toast.show({ variant: "warning", message: "Could not read pasted image file", duration: 3000 })
+              return undefined
+            })
           if (content) {
             await pasteImage({ filename: file.name, mime: file.type, content })
             return

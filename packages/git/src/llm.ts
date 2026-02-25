@@ -27,11 +27,18 @@ async function ensureServer(baseUrl: string): Promise<void> {
   proc.unref()
 
   const deadline = Date.now() + 15_000
+  let dots = 0
   while (Date.now() < deadline) {
     await new Promise<void>((r) => setTimeout(r, 300))
-    if (await isServerUp(baseUrl)) return
+    if (await isServerUp(baseUrl)) {
+      if (dots > 0) process.stderr.write("\n")
+      return
+    }
+    process.stderr.write(".")
+    dots++
   }
 
+  if (dots > 0) process.stderr.write("\n")
   throw new Error("0x0 server did not start within 15 seconds.")
 }
 
@@ -56,12 +63,17 @@ export async function generate(config: Config, prompt: string): Promise<string> 
   const body: Record<string, unknown> = { prompt }
   if (config.model) body.model = config.model
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(60_000),
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    })
+  } catch (err) {
+    throw new Error(`Failed to connect to 0x0 server at ${config.url}`, { cause: err })
+  }
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "Unknown error")
@@ -104,11 +116,11 @@ export async function generate(config: Config, prompt: string): Promise<string> 
           throw new Error(parsed.error || "Server stream error")
         }
       } catch (err) {
-        if (err instanceof Error && err.message !== "Server stream error") {
-          // skip malformed JSON
-          continue
+        if (err instanceof Error && (err.message === "Server stream error" || err.message.startsWith("Server"))) {
+          throw err
         }
-        throw err
+        process.stderr.write(`Warning: skipping malformed stream chunk\n`)
+        continue
       }
     }
   }

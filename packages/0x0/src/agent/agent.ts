@@ -3,6 +3,7 @@ import z from "zod"
 import { Provider } from "../provider/provider"
 import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncation"
+import { Log } from "../util/log"
 
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
@@ -14,9 +15,10 @@ import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
 import path from "path"
 import { Skill } from "../skill"
-import { ToolRegistry } from "@/tool/registry"
 
 export namespace Agent {
+  const log = Log.create({ service: "agent" })
+
   export const Info = z
     .object({
       name: z.string(),
@@ -39,7 +41,6 @@ export namespace Agent {
       prompt: z.string().optional(),
       options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
-      toolsAllowed: z.array(z.string()).default([]),
       actions: z
         .record(
           z.string(),
@@ -54,9 +55,67 @@ export namespace Agent {
     })
   export type Info = z.input<typeof Info>
 
+  // Backward-compat: convert legacy tools_allowed IDs to actions
+  const LEGACY_TOOL_TO_ACTIONS: Record<string, Record<string, string[]>> = {
+    bash:          { "claude-code": ["Bash"],                     codex: ["commandExecution"] },
+    read:          { "claude-code": ["Read"] },
+    search:        { "claude-code": ["Glob", "Grep"] },
+    search_remote: { "claude-code": ["WebFetch", "WebSearch"] },
+    apply_patch:   { "claude-code": ["Edit", "Write", "MultiEdit", "NotebookEdit"], codex: ["fileChange"] },
+    task:          { "claude-code": ["Task"] },
+    todowrite:     { "claude-code": ["TodoWrite"] },
+    question:      { "claude-code": ["AskUserQuestion"] },
+  }
+
+  function convertToolsAllowedToActions(toolsAllowed: string[]): Record<string, Record<string, "allow">> {
+    const result: Record<string, Record<string, "allow">> = {}
+    for (const tool of toolsAllowed) {
+      const mapping = LEGACY_TOOL_TO_ACTIONS[tool]
+      if (!mapping) continue
+      for (const [provider, sdkTools] of Object.entries(mapping)) {
+        if (!result[provider]) result[provider] = {}
+        for (const sdkTool of sdkTools) {
+          result[provider]![sdkTool] = "allow"
+        }
+      }
+    }
+    return result
+  }
+
+  // Map SDK tool names → permission keys (same as processor.ts)
+  function sdkToolToPermission(toolName: string): string {
+    switch (toolName) {
+      case "Bash":
+      case "commandExecution": return "bash"
+      case "Edit":
+      case "Write":
+      case "MultiEdit":
+      case "NotebookEdit":
+      case "fileChange": return "edit"
+      case "Read": return "read"
+      case "Glob":
+      case "Grep": return "search"
+      case "Task": return "task"
+      case "WebFetch":
+      case "WebSearch": return "web"
+      case "TodoWrite": return "todowrite"
+      case "AskUserQuestion": return "question"
+      default: return toolName.toLowerCase()
+    }
+  }
+
+  function derivePermissionKeysFromActions(actions: Record<string, Record<string, string>>): string[] {
+    const keys = new Set<string>()
+    for (const tools of Object.values(actions)) {
+      for (const [tool, policy] of Object.entries(tools)) {
+        if (policy === "allow") keys.add(sdkToolToPermission(tool))
+      }
+    }
+    return [...keys]
+  }
+
   const state = Instance.state(async () => {
     const cfg = await Config.get()
-    const availableTools = new Set(await ToolRegistry.ids())
 
     const skillDirs = await Skill.dirs()
     const defaults = PermissionNext.fromConfig({
@@ -94,7 +153,6 @@ export namespace Agent {
           user,
         ),
         options: {},
-        toolsAllowed: [],
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
       title: {
@@ -113,7 +171,6 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_TITLE,
-        toolsAllowed: [],
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
       summary: {
@@ -131,7 +188,6 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_SUMMARY,
-        toolsAllowed: [],
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
       },
     }
@@ -152,15 +208,13 @@ export namespace Agent {
           permission: PermissionNext.merge(defaults, PermissionNext.fromConfig({ "*": "deny" }), user),
           options: {},
           native: native.has(key),
-          toolsAllowed: [],
           knowledgeBase: [...(cfg.knowledge_base ?? [])],
         }
 
-      const toolsAllowed = value.tools_allowed ?? []
-      for (const tool of toolsAllowed) {
-        if (!availableTools.has(tool)) {
-          throw new Error(`Unknown tool \"${tool}\" in agent \"${key}\". Update tools_allowed to valid tool IDs.`)
-        }
+      // Backward-compat: convert tools_allowed → actions if actions not set
+      if (value.tools_allowed && !value.actions) {
+        log.warn(`agent "${key}": tools_allowed is deprecated — use actions instead`)
+        value.actions = convertToolsAllowedToActions(value.tools_allowed)
       }
 
       if (key === "explore" && !value.prompt) item.prompt = PROMPT_EXPLORE
@@ -175,7 +229,6 @@ export namespace Agent {
       item.hidden = value.hidden ?? item.hidden
       item.displayName = value.name ?? item.displayName
       item.steps = value.steps ?? value.maxSteps ?? item.steps
-      item.toolsAllowed = [...toolsAllowed]
       item.actions = value.actions ?? item.actions ?? {}
       item.thinkingEffort = value.thinking_effort ?? item.thinkingEffort
       item.knowledgeBase = Array.from(new Set([...(cfg.knowledge_base ?? []), ...(value.knowledge_base ?? [])]))
@@ -184,11 +237,12 @@ export namespace Agent {
       if (native.has(key)) {
         item.permission = PermissionNext.merge(defaults, user)
       } else {
+        const permKeys = derivePermissionKeysFromActions(item.actions)
         item.permission = PermissionNext.merge(
           defaults,
           user,
           PermissionNext.fromConfig({ "*": "deny" }),
-          PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
+          PermissionNext.fromConfig(Object.fromEntries(permKeys.map((k) => [k, "allow" as const]))),
         )
       }
 
@@ -237,10 +291,11 @@ export namespace Agent {
       }
 
       if (key === "planner") {
+        const plannerPermKeys = derivePermissionKeysFromActions(item.actions)
         item.permission = PermissionNext.merge(
           item.permission,
           PermissionNext.fromConfig({ "*": "deny" }),
-          PermissionNext.fromConfig(Object.fromEntries(toolsAllowed.map((tool) => [tool, "allow" as const]))),
+          PermissionNext.fromConfig(Object.fromEntries(plannerPermKeys.map((k) => [k, "allow" as const]))),
           PermissionNext.fromConfig({
             read: { "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow" },
             edit: { ".zeroxzero/plans/*": "allow" },

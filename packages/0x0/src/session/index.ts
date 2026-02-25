@@ -358,7 +358,7 @@ export namespace Session {
       for (const child of await children(sessionID)) {
         await remove(child.id)
       }
-      await unshare(sessionID).catch(() => {})
+      await unshare(sessionID).catch((e) => log.warn("failed to unshare during session delete", { error: e, sessionID }))
       for (const msg of await Storage.list(["message", sessionID])) {
         for (const part of await Storage.list(["part", msg.at(-1)!])) {
           await Storage.remove(part)

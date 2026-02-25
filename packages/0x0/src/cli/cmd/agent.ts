@@ -12,15 +12,18 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 
 const AVAILABLE_TOOLS = [
-  "bash",
-  "read",
-  "search",
-  "search_remote",
-  "apply_patch",
-  "task",
-  "todowrite",
-  "question",
-  "lsp",
+  "Bash",
+  "Read",
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Task",
+  "TodoWrite",
+  "AskUserQuestion",
 ]
 
 const AgentCreateCommand = cmd({
@@ -139,13 +142,15 @@ const AgentCreateCommand = cmd({
         const frontmatter: {
           name: string
           color: string
-          tools_allowed: string[]
+          actions: { "claude-code": Record<string, "allow"> }
           thinking_effort: string
           description: string
         } = {
           name: generated.identifier,
           color: "#2563EB",
-          tools_allowed: selectedTools,
+          actions: {
+            "claude-code": Object.fromEntries(selectedTools.map((t) => [t, "allow" as const])),
+          },
           thinking_effort: "medium",
           description: generated.whenToUse,
         }

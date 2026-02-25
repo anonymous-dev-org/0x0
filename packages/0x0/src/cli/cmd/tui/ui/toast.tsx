@@ -23,6 +23,7 @@ export function Toast() {
           top={2}
           right={2}
           maxWidth={Math.min(60, dimensions().width - 6)}
+          maxHeight={Math.max(5, dimensions().height - 6)}
           paddingLeft={2}
           paddingRight={2}
           paddingTop={1}
@@ -32,14 +33,16 @@ export function Toast() {
           border={["left", "right"]}
           customBorderChars={SplitBorder.customBorderChars}
         >
-          <Show when={current().title}>
-            <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>
-              {current().title}
+          <scrollbox height="100%">
+            <Show when={current().title}>
+              <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>
+                {current().title}
+              </text>
+            </Show>
+            <text fg={theme.text} wrapMode="word" width="100%">
+              {current().message}
             </text>
-          </Show>
-          <text fg={theme.text} wrapMode="word" width="100%">
-            {current().message}
-          </text>
+          </scrollbox>
         </box>
       )}
     </Show>

@@ -181,7 +181,7 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch(() => {})
+      if (changed) Storage.write(["session_diff", input.sessionID], next).catch((e) => log.warn("failed to write session diff", { error: e, sessionID: input.sessionID }))
       return next
     },
   )

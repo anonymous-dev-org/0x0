@@ -22,9 +22,14 @@ function parseFlags(args: string[]): Record<string, string | undefined> {
 async function commitMsg() {
   const flags = parseFlags(args)
   const config = resolveConfig(flags)
+  process.stderr.write(`Provider: ${config.provider} (${config.model})\n`)
+  process.stderr.write("Reading staged changes...\n")
   const ctx = await getStagedContext()
+  process.stderr.write(`${ctx.files.length} file${ctx.files.length === 1 ? "" : "s"} staged\n`)
   const prompt = buildPrompt(ctx)
+  process.stderr.write("Generating commit message...\n")
   const message = await generate(config, prompt)
+  process.stderr.write("Done\n")
   process.stdout.write(message + "\n")
 }
 
@@ -61,7 +66,10 @@ async function main() {
         process.exit(1)
     }
   } catch (err: any) {
-    console.error(err.message)
+    process.stderr.write(`\nError: ${err.message}\n`)
+    if (err.cause) {
+      process.stderr.write(`Cause: ${err.cause.message ?? err.cause}\n`)
+    }
     process.exit(1)
   }
 }

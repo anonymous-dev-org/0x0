@@ -135,7 +135,15 @@ export namespace Config {
           color: "#6EE7B7",
           thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
-          tools_allowed: ["bash", "read", "search", "search_remote", "apply_patch", "task", "todowrite", "question"],
+          actions: {
+            "claude-code": {
+              Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
+              MultiEdit: "allow", NotebookEdit: "allow", Glob: "allow", Grep: "allow",
+              WebFetch: "allow", WebSearch: "allow", Task: "allow",
+              TodoWrite: "allow", AskUserQuestion: "allow",
+            },
+            codex: { commandExecution: "allow", fileChange: "allow" },
+          },
           prompt: [
             "You are the executioner. You take the plan and ship it. No thinking in circles, no second-guessing, no over-engineering.",
             "",
@@ -172,7 +180,13 @@ export namespace Config {
           color: "#A5B4FC",
           thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
-          tools_allowed: ["question", "read", "search", "search_remote", "task"],
+          actions: {
+            "claude-code": {
+              Read: "allow", Glob: "allow", Grep: "allow",
+              WebFetch: "allow", WebSearch: "allow", Task: "allow",
+              AskUserQuestion: "allow",
+            },
+          },
           prompt: [
             "You are the architect. You don't write code. You write the battle plan that makes code inevitable.",
             "",
@@ -410,7 +424,7 @@ export namespace Config {
         ...(proxied() ? ["--no-cache"] : []),
       ],
       { cwd: dir },
-    ).catch(() => {})
+    ).catch((e) => log.warn("bun install failed", { error: e }))
   }
 
   async function isWritable(dir: string) {
@@ -718,7 +732,7 @@ export namespace Config {
         .positive()
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
-      tools_allowed: z.array(z.string()).min(1).optional().describe("Allowlist of tool IDs that this agent may use"),
+      tools_allowed: z.array(z.string()).min(1).optional().describe("[Deprecated: use actions] Allowlist of tool IDs"),
       thinking_effort: z
         .string()
         .optional()
@@ -1295,7 +1309,7 @@ export namespace Config {
       if (!parsed.data.$schema) {
         parsed.data.$schema = configSchemaURL
         const updated = addYamlSchemaMetadata(original)
-        await Bun.write(configFilepath, updated).catch(() => {})
+        await Bun.write(configFilepath, updated).catch((e) => log.warn("failed to write schema metadata to config", { error: e }))
       }
       return parsed.data
     }

@@ -17,7 +17,7 @@ export namespace Share {
     const [sub, sessionID] = splits
     if (sub === "share") return
     if (!sessionID) return
-    const share = await Session.getShare(sessionID).catch(() => {})
+    const share = await Session.getShare(sessionID).catch((e) => { log.warn("failed to lookup share for sync", { error: e, sessionID }); return undefined })
     if (!share) return
     const { secret } = share
     pending.set(key, content)

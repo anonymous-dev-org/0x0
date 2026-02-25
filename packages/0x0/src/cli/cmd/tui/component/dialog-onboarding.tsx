@@ -40,7 +40,14 @@ export function DialogOnboarding() {
       ...(config.agent[custom] ?? {}),
       name: config.agent[custom]?.name ?? "My Agent",
       color: config.agent[custom]?.color ?? "#A0A0A0",
-      tools_allowed: config.agent[custom]?.tools_allowed ?? ["bash", "read", "search", "apply_patch", "task"],
+      actions: config.agent[custom]?.actions ?? {
+        "claude-code": {
+          Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
+          MultiEdit: "allow", Glob: "allow", Grep: "allow",
+          Task: "allow", AskUserQuestion: "allow",
+        },
+        codex: { commandExecution: "allow", fileChange: "allow" },
+      },
       thinking_effort: config.agent[custom]?.thinking_effort ?? "medium",
       hidden: false,
       description: config.agent[custom]?.description ?? "My custom agent",

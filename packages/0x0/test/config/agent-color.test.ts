@@ -18,13 +18,13 @@ test("agent color parsed from project config", async () => {
             build: {
               name: "Build",
               color: "#FFA500",
-              tools_allowed: ["read"],
+              actions: { "claude-code": { Read: "allow" } },
               thinking_effort: "medium",
             },
             plan: {
               name: "Plan",
               color: "#7C3AED",
-              tools_allowed: ["read"],
+              actions: { "claude-code": { Read: "allow" } },
               thinking_effort: "high",
             },
           },
@@ -53,13 +53,13 @@ test("Agent.get includes color from config", async () => {
             plan: {
               name: "Plan",
               color: "#A855F7",
-              tools_allowed: ["read"],
+              actions: { "claude-code": { Read: "allow" } },
               thinking_effort: "high",
             },
             build: {
               name: "Build",
               color: "#2563EB",
-              tools_allowed: ["read"],
+              actions: { "claude-code": { Read: "allow" } },
               thinking_effort: "medium",
             },
           },

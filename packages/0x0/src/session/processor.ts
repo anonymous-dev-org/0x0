@@ -284,7 +284,7 @@ export namespace SessionProcessor {
                       const extracted = providerToolPattern(toolPart.tool, parsed)
                       if (extracted !== "*" && toolPart.state.status === "running" && toolPart.state.title !== extracted) {
                         toolPart.state = { ...toolPart.state, title: extracted }
-                        Session.updatePart(toolPart).catch(() => {})
+                        Session.updatePart(toolPart).catch((e) => log.warn("failed to update tool part title", { error: e }))
                       }
                     }
                   } catch {}
@@ -478,7 +478,9 @@ export namespace SessionProcessor {
       if (!currentText) return
       currentText.text = currentText.text.trimEnd()
       currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
-      Session.updatePart(currentText).catch(() => {})
+      Session.updatePart(currentText).catch((e) =>
+        log.error("failed to persist finalized text part", { error: e, messageID: currentText!.messageID }),
+      )
       currentText = undefined
     }
 
@@ -486,7 +488,9 @@ export namespace SessionProcessor {
       for (const part of Object.values(currentReasoning)) {
         part.text = part.text.trimEnd()
         part.time = { start: part.time.start, end: Date.now() }
-        Session.updatePart(part).catch(() => {})
+        Session.updatePart(part).catch((e) =>
+          log.error("failed to persist finalized reasoning part", { error: e, messageID: part.messageID }),
+        )
       }
       currentReasoning = {}
     }
@@ -506,7 +510,7 @@ export namespace SessionProcessor {
                 end: Date.now(),
               },
             },
-          }).catch(() => {})
+          }).catch((e) => log.error("failed to mark tool as aborted", { error: e, toolCallID: id }))
         }
         delete toolParts[id]
       }

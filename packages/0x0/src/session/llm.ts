@@ -85,16 +85,13 @@ export namespace LLM {
             )
             .join("; ")
         : "(default: ask for all)"
-    const toolsAllowed = agent.toolsAllowed ?? []
     const knowledgeBase = agent.knowledgeBase ?? []
-    const tools = toolsAllowed.length > 0 ? toolsAllowed.join(", ") : "(none)"
     const knowledge = knowledgeBase.length > 0 ? knowledgeBase.join("\n- ") : "(none)"
     return [
       "## Effective Agent Configuration",
       `- Agent ID: ${agent.name}`,
       `- Agent Name: ${agent.displayName ?? agent.name}`,
       `- Actions: ${actionsStr}`,
-      `- Tools Allowed: ${tools}`,
       `- Thinking Effort: ${agent.thinkingEffort ?? "(unset)"}`,
       `- Knowledge Base:\n- ${knowledge}`,
     ].join("\n")

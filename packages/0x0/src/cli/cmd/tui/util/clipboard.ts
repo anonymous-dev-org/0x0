@@ -95,7 +95,7 @@ export namespace Clipboard {
           const proc = Bun.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await proc.exited
         }
       }
       if (Bun.which("xclip")) {
@@ -108,7 +108,7 @@ export namespace Clipboard {
           })
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await proc.exited
         }
       }
       if (Bun.which("xsel")) {
@@ -121,7 +121,7 @@ export namespace Clipboard {
           })
           proc.stdin.write(text)
           proc.stdin.end()
-          await proc.exited.catch(() => {})
+          await proc.exited
         }
       }
     }
@@ -147,13 +147,13 @@ export namespace Clipboard {
 
         proc.stdin.write(text)
         proc.stdin.end()
-        await proc.exited.catch(() => {})
+        await proc.exited
       }
     }
 
     console.log("clipboard: no native support")
     return async (text: string) => {
-      await clipboardy.write(text).catch(() => {})
+      await clipboardy.write(text)
     }
   })
 

@@ -116,7 +116,7 @@ function props(input = "hello") {
 }
 
 describe("submitPrompt", () => {
-  test("does not rollback on prompt failure (fire-and-forget)", async () => {
+  test("rolls back on prompt failure with error toast", async () => {
     const setup = props("hello")
     setup.value.sdk.client.session[":sessionID"].prompt_async.$post = async () => {
       throw new Error("network down")
@@ -124,17 +124,14 @@ describe("submitPrompt", () => {
 
     await submitPrompt(setup.value)
 
-    expect(setup.calls.onSubmitError.length).toBe(0)
-    expect(setup.calls.setPrompt).toBe(1)
-    expect(setup.calls.clearExtmarks).toBe(1)
-    expect(setup.calls.clearInput).toBe(1)
-    expect(setup.calls.historyAppend).toBe(1)
-    expect(setup.calls.setText).toBe(0)
-    expect(setup.calls.restorePromptParts).toBe(0)
-    expect(setup.calls.gotoBufferEnd).toBe(0)
+    expect(setup.calls.onSubmitError.length).toBe(1)
+    expect(setup.calls.onSubmitError[0]).toBe("network down")
+    expect(setup.calls.setText).toBe(1)
+    expect(setup.calls.restorePromptParts).toBe(1)
+    expect(setup.calls.gotoBufferEnd).toBe(1)
   })
 
-  test("does not rollback on command failure (fire-and-forget)", async () => {
+  test("rolls back on command failure with error toast", async () => {
     const setup = props("/hello world")
     setup.value.sync.data.command = [{ name: "hello" }]
     setup.value.sdk.client.session[":sessionID"].command.$post = async () => {
@@ -143,17 +140,14 @@ describe("submitPrompt", () => {
 
     await submitPrompt(setup.value)
 
-    expect(setup.calls.onSubmitError.length).toBe(0)
-    expect(setup.calls.setPrompt).toBe(1)
-    expect(setup.calls.clearExtmarks).toBe(1)
-    expect(setup.calls.clearInput).toBe(1)
-    expect(setup.calls.historyAppend).toBe(1)
-    expect(setup.calls.setText).toBe(0)
-    expect(setup.calls.restorePromptParts).toBe(0)
-    expect(setup.calls.gotoBufferEnd).toBe(0)
+    expect(setup.calls.onSubmitError.length).toBe(1)
+    expect(setup.calls.onSubmitError[0]).toBe("command failed")
+    expect(setup.calls.setText).toBe(1)
+    expect(setup.calls.restorePromptParts).toBe(1)
+    expect(setup.calls.gotoBufferEnd).toBe(1)
   })
 
-  test("does not rollback on shell failure (fire-and-forget)", async () => {
+  test("rolls back on shell failure with error toast", async () => {
     const setup = props("ls -la")
     setup.value.mode = "shell"
     setup.value.sdk.client.session[":sessionID"].shell.$post = async () => {
@@ -162,15 +156,11 @@ describe("submitPrompt", () => {
 
     await submitPrompt(setup.value)
 
-    expect(setup.calls.onSubmitError.length).toBe(0)
-    expect(setup.calls.setMode).toBe(1)
-    expect(setup.calls.setPrompt).toBe(1)
-    expect(setup.calls.clearExtmarks).toBe(1)
-    expect(setup.calls.clearInput).toBe(1)
-    expect(setup.calls.historyAppend).toBe(1)
-    expect(setup.calls.setText).toBe(0)
-    expect(setup.calls.restorePromptParts).toBe(0)
-    expect(setup.calls.gotoBufferEnd).toBe(0)
+    expect(setup.calls.onSubmitError.length).toBe(1)
+    expect(setup.calls.onSubmitError[0]).toBe("shell failed")
+    expect(setup.calls.setText).toBe(1)
+    expect(setup.calls.restorePromptParts).toBe(1)
+    expect(setup.calls.gotoBufferEnd).toBe(1)
   })
 
   test("clears input on success", async () => {
