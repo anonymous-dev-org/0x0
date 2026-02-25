@@ -77,6 +77,23 @@ is_semver() {
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
 
+set_pkg_version() {
+  local file="$1"
+  local ver="$2"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: set $file version to $ver"
+    return
+  fi
+  FILE="$file" VER="$ver" bun -e '
+    const f = process.env.FILE!
+    const v = process.env.VER!
+    const p = await Bun.file(f).json()
+    p.version = v
+    await Bun.write(f, JSON.stringify(p, null, 2) + "\n")
+    console.log(`Updated ${f} to ${v}`)
+  '
+}
+
 semver_gt() {
   local a="$1"
   local b="$2"
@@ -554,6 +571,9 @@ fi
 echo "8) Publish Homebrew tap (zeroxzero)"
 run bun ./script/publish-tap.ts --version "$VERSION_0X0" --repo "$REPO"
 
+echo "8b) Update source package.json versions"
+set_pkg_version "./packages/0x0/package.json" "$VERSION_0X0"
+
 # ══════════════════════════════════════════════════════════════════
 #  0x0-git
 # ══════════════════════════════════════════════════════════════════
@@ -605,6 +625,9 @@ fi
 echo "15) Publish Homebrew tap (zeroxzero-git)"
 run bun ./script/publish-tap.ts --version "$VERSION_GIT" --repo "$REPO" --prefix 0x0-git --formula-name zeroxzero-git --tag "$GIT_TAG"
 
+echo "15b) Update git source package.json version"
+set_pkg_version "./packages/git/package.json" "$VERSION_GIT"
+
 # ══════════════════════════════════════════════════════════════════
 #  Neovim plugins
 # ══════════════════════════════════════════════════════════════════
@@ -622,6 +645,23 @@ fi
 if [[ -n "$VERSION_NVIM_COMP" ]]; then
   echo "17) Publish nvim-completion v$VERSION_NVIM_COMP"
   run bun ./script/publish-nvim.ts --plugin nvim-completion --version "$VERSION_NVIM_COMP"
+fi
+
+# ══════════════════════════════════════════════════════════════════
+#  Commit version bumps
+# ══════════════════════════════════════════════════════════════════
+echo
+echo "════ Commit version bumps ════"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "DRY RUN: would commit version bumps to package.json files"
+else
+  if ! git diff --quiet ./packages/0x0/package.json ./packages/git/package.json 2>/dev/null; then
+    git add ./packages/0x0/package.json ./packages/git/package.json
+    git commit -m "chore: bump versions — 0x0@${VERSION_0X0}, 0x0-git@${VERSION_GIT}"
+    echo "Committed version bumps"
+  else
+    echo "No package.json changes to commit"
+  fi
 fi
 
 # ══════════════════════════════════════════════════════════════════
