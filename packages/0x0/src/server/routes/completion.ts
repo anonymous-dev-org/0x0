@@ -6,6 +6,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import { claudeStream } from "@/provider/sdk/claude-code"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "completion" })
 
