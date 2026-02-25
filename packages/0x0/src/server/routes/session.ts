@@ -14,6 +14,7 @@ import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
+import { Caffeinate } from "@/caffeinate"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -381,6 +382,39 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         SessionPrompt.cancel(c.req.valid("param").sessionID)
         return c.json(true)
+      },
+    )
+    .post(
+      "/:sessionID/caffeinate",
+      describeRoute({
+        summary: "Toggle caffeinate",
+        description: "Toggle caffeinate (prevent system sleep) for the current session request. Auto-disables on request completion.",
+        operationId: "session.caffeinate",
+        responses: {
+          200: {
+            description: "Caffeinate toggled",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    active: z.boolean(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string(),
+        }),
+      ),
+      async (c) => {
+        const active = Caffeinate.toggle(c.req.valid("param").sessionID)
+        return c.json({ active })
       },
     )
     .post(

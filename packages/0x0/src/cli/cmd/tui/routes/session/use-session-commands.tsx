@@ -24,6 +24,8 @@ export function useSessionCommands(props: {
   setPrompt: (prompt: PromptInfo) => void
   toBottom: () => void
   scrollToMessage: (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => void
+  caffeinated: () => boolean
+  setCaffeinated: (v: boolean) => void
 }) {
   const command = useCommandDialog()
   const toast = useToast()
@@ -155,6 +157,41 @@ export function useSessionCommands(props: {
             providerID: selectedModel.providerID,
           },
         } as any)
+        dialog.clear()
+      },
+    },
+    {
+      title: props.caffeinated() ? "Disable caffeinate" : "Enable caffeinate",
+      value: "session.caffeinate",
+      keybind: "session_caffeinate",
+      category: "Session",
+      enabled: process.platform === "darwin",
+      slash: {
+        name: "caffeinate",
+        aliases: ["awake", "nosleep"],
+      },
+      onSelect: async (dialog) => {
+        const res = await sdk.client.session[":sessionID"].caffeinate
+          .$post({
+            param: { sessionID: route.data.sessionID },
+          } as any)
+          .then((r: any) => r.json() as Promise<{ active: boolean }>)
+          .catch(() => null)
+        if (res) {
+          props.setCaffeinated(res.active)
+          toast.show({
+            message: res.active
+              ? "Caffeinate enabled \u2014 system sleep prevented until request completes"
+              : "Caffeinate disabled",
+            variant: res.active ? "success" : "info",
+            duration: 3000,
+          })
+        } else {
+          toast.show({
+            message: "Failed to toggle caffeinate",
+            variant: "error",
+          })
+        }
         dialog.clear()
       },
     },

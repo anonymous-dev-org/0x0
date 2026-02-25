@@ -503,7 +503,7 @@ echo
 echo "════ 0x0 v$VERSION_0X0 ════"
 
 echo "1) Build artifacts"
-run bun ./packages/0x0/script/build.ts
+run env ZEROXZERO_VERSION="$VERSION_0X0" bun ./packages/0x0/script/build.ts
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "2) DRY RUN: skipping packaging and asset checks"
@@ -564,7 +564,7 @@ echo "════ 0x0-git v$VERSION_GIT ════"
 GIT_TAG="0x0-git-v${VERSION_GIT}"
 
 echo "9) Build git package"
-run bun ./packages/git/script/build.ts
+run env ZEROXZERO_VERSION="$VERSION_GIT" bun ./packages/git/script/build.ts
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "10) DRY RUN: skipping git packaging"

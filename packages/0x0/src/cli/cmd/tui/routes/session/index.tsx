@@ -227,6 +227,16 @@ function SessionInner() {
     return local.agent.color(agent ?? local.agent.current().name)
   })
   const [interrupt, setInterrupt] = createSignal(0)
+  const [caffeinated, setCaffeinated] = createSignal(false)
+
+  // Auto-clear caffeinated on busy → idle transition
+  createEffect(
+    on(busy, (isBusy, wasBusy) => {
+      if (wasBusy && !isBusy && caffeinated()) {
+        setCaffeinated(false)
+      }
+    }),
+  )
 
   const revertInfo = () => session()?.revert
 
@@ -276,10 +286,15 @@ function SessionInner() {
     setPrompt: (promptInfo) => prompt.set(promptInfo),
     toBottom,
     scrollToMessage,
+    caffeinated,
+    setCaffeinated,
   })
 
   // snap to bottom when session changes
   createEffect(on(() => route.data.sessionID, toBottom))
+
+  // reset caffeinated state on session change
+  createEffect(on(() => route.data.sessionID, () => setCaffeinated(false)))
 
   return (
     <SessionContext.Provider

@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "includes": ["**/test/**", "**/gen/**", "**/*.gen.ts", "**/models-snapshot.ts"],
+      "includes": ["**/test/**", "**/gen/**", "**/*.gen.ts"],
       "linter": {
         "rules": {
           "style": {

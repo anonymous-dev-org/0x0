@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { APICallError } from "ai"
 import { MessageV2 } from "../../src/session/message-v2"
 import type { Provider } from "../../src/provider/provider"
 
@@ -757,5 +758,68 @@ describe("session.message-v2.toModelMessage", () => {
         ],
       },
     ])
+  })
+})
+
+describe("session.message-v2.fromError", () => {
+  test.concurrent(
+    "converts ECONNRESET socket errors to retryable APIError",
+    async () => {
+      using server = Bun.serve({
+        port: 0,
+        idleTimeout: 8,
+        async fetch(req) {
+          return new Response(
+            new ReadableStream({
+              async pull(controller) {
+                controller.enqueue("Hello,")
+                await Bun.sleep(10000)
+                controller.enqueue(" World!")
+                controller.close()
+              },
+            }),
+            { headers: { "Content-Type": "text/plain" } },
+          )
+        },
+      })
+
+      const error = await fetch(new URL("/", server.url.origin))
+        .then((res) => res.text())
+        .catch((e) => e)
+
+      const result = MessageV2.fromError(error, { providerID: "test" })
+
+      expect(MessageV2.APIError.isInstance(result)).toBe(true)
+      expect((result as MessageV2.APIError).data.isRetryable).toBe(true)
+      expect((result as MessageV2.APIError).data.message).toBe("Connection reset by server")
+      expect((result as MessageV2.APIError).data.metadata?.code).toBe("ECONNRESET")
+      expect((result as MessageV2.APIError).data.metadata?.message).toInclude("socket connection")
+    },
+    15_000,
+  )
+
+  test("ECONNRESET socket error is retryable", () => {
+    const error = new MessageV2.APIError({
+      message: "Connection reset by server",
+      isRetryable: true,
+      metadata: { code: "ECONNRESET", message: "The socket connection was closed unexpectedly" },
+    }).toObject() as MessageV2.APIError
+
+    expect(MessageV2.APIError.isInstance(error)).toBe(true)
+    expect(error.data.isRetryable).toBe(true)
+  })
+
+  test("marks OpenAI 404 status codes as retryable", () => {
+    const error = new APICallError({
+      message: "boom",
+      url: "https://api.openai.com/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 404,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: '{"error":"boom"}',
+      isRetryable: false,
+    })
+    const result = MessageV2.fromError(error, { providerID: "openai" }) as MessageV2.APIError
+    expect(result.data.isRetryable).toBe(true)
   })
 })
