@@ -2,10 +2,10 @@ import { Hono } from "hono"
 import { streamSSE } from "hono/streaming"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import { Config } from "../../config/config"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
+import { claudeStream } from "@/provider/sdk/claude-code"
 
 const log = Log.create({ service: "completion" })
 

@@ -379,55 +379,23 @@ read -r -p "0x0-git version [${next_git_version}]: " git_override
 VERSION_GIT="${git_override:-$next_git_version}"
 is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 
-# nvim versions — fetched from standalone repo tags
-
-pick_latest_nvim_tag() {
-  local nvim_repo="$1"
-  local best=""
-  local tag=""
-  local version=""
-
-  while IFS= read -r tag; do
-    [[ -n "$tag" && "$tag" != "null" ]] || continue
-    version="$(semver_from_tag "$tag")"
-    if ! is_semver "$version"; then
-      continue
-    fi
-    if [[ -z "$best" ]] || semver_gt "$version" "$best"; then
-      best="$version"
-    fi
-  done < <(gh release list --repo "$nvim_repo" --limit 200 --json tagName --jq '.[].tagName' 2>/dev/null || true)
-
-  # Also check git tags via ls-remote in case there are no GH releases
-  while IFS= read -r tag; do
-    [[ -n "$tag" ]] || continue
-    version="$(semver_from_tag "$tag")"
-    if ! is_semver "$version"; then
-      continue
-    fi
-    if [[ -z "$best" ]] || semver_gt "$version" "$best"; then
-      best="$version"
-    fi
-  done < <(git ls-remote --tags "git@github.com:${nvim_repo}.git" 2>/dev/null | sed 's/.*refs\/tags\///' | grep -v '\^{}' || true)
-
-  if [[ -n "$best" ]]; then
-    echo "$best"
-  fi
-}
+# nvim versions — read from local version.txt files
 
 prompt_nvim_version() {
   local label="$1"
-  local nvim_repo="$2"
+  local version_file="$2"
   local result_var="$3"
 
   echo
   echo "── ${label} ──"
 
-  local current
-  current="$(pick_latest_nvim_tag "$nvim_repo")"
+  local current=""
+  if [[ -f "$version_file" ]]; then
+    current="$(tr -d '[:space:]' < "$version_file")"
+  fi
 
-  if [[ -z "$current" ]]; then
-    echo "No existing version found in ${nvim_repo}."
+  if [[ -z "$current" ]] || ! is_semver "$current"; then
+    echo "No valid version found in ${version_file}."
     echo "Select release type:"
     select nvim_type in skip "start at 0.1.0"; do
       case "$nvim_type" in
@@ -437,7 +405,7 @@ prompt_nvim_version() {
       esac
     done
   else
-    echo "Current version: v${current}  (from ${nvim_repo})"
+    echo "Current version: v${current}  (from ${version_file})"
     echo "Select release type:"
     select nvim_type in major minor patch skip; do
       [[ -n "${nvim_type:-}" ]] && break
@@ -456,11 +424,8 @@ prompt_nvim_version() {
   fi
 }
 
-# Determine nvim repo owner
-NVIM_OWNER="$(echo "$REPO" | cut -d/ -f1)"
-
-prompt_nvim_version "nvim" "${NVIM_OWNER}/0x0.nvim" VERSION_NVIM
-prompt_nvim_version "nvim-completion" "${NVIM_OWNER}/0x0-completion.nvim" VERSION_NVIM_COMP
+prompt_nvim_version "nvim" "./sdks/nvim/version.txt" VERSION_NVIM
+prompt_nvim_version "nvim-completion" "./sdks/nvim-completion/version.txt" VERSION_NVIM_COMP
 
 # ── NPM auth ──────────────────────────────────────────────────────
 
@@ -640,11 +605,25 @@ fi
 if [[ -n "$VERSION_NVIM" ]]; then
   echo "16) Publish nvim plugin v$VERSION_NVIM"
   run bun ./script/publish-nvim.ts --plugin nvim --version "$VERSION_NVIM"
+  echo "16b) Update nvim version.txt"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: set ./sdks/nvim/version.txt to $VERSION_NVIM"
+  else
+    printf '%s\n' "$VERSION_NVIM" > ./sdks/nvim/version.txt
+    echo "Updated ./sdks/nvim/version.txt to $VERSION_NVIM"
+  fi
 fi
 
 if [[ -n "$VERSION_NVIM_COMP" ]]; then
   echo "17) Publish nvim-completion v$VERSION_NVIM_COMP"
   run bun ./script/publish-nvim.ts --plugin nvim-completion --version "$VERSION_NVIM_COMP"
+  echo "17b) Update nvim-completion version.txt"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: set ./sdks/nvim-completion/version.txt to $VERSION_NVIM_COMP"
+  else
+    printf '%s\n' "$VERSION_NVIM_COMP" > ./sdks/nvim-completion/version.txt
+    echo "Updated ./sdks/nvim-completion/version.txt to $VERSION_NVIM_COMP"
+  fi
 fi
 
 # ══════════════════════════════════════════════════════════════════
@@ -653,14 +632,23 @@ fi
 echo
 echo "════ Commit version bumps ════"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "DRY RUN: would commit version bumps to package.json files"
+  echo "DRY RUN: would commit version bumps to package.json and version.txt files"
 else
-  if ! git diff --quiet ./packages/0x0/package.json ./packages/git/package.json 2>/dev/null; then
-    git add ./packages/0x0/package.json ./packages/git/package.json
-    git commit -m "chore: bump versions — 0x0@${VERSION_0X0}, 0x0-git@${VERSION_GIT}"
+  VERSION_FILES=(./packages/0x0/package.json ./packages/git/package.json)
+  [[ -n "$VERSION_NVIM" ]] && VERSION_FILES+=(./sdks/nvim/version.txt)
+  [[ -n "$VERSION_NVIM_COMP" ]] && VERSION_FILES+=(./sdks/nvim-completion/version.txt)
+
+  if ! git diff --quiet "${VERSION_FILES[@]}" 2>/dev/null; then
+    git add "${VERSION_FILES[@]}"
+
+    COMMIT_MSG="chore: bump versions — 0x0@${VERSION_0X0}, 0x0-git@${VERSION_GIT}"
+    [[ -n "$VERSION_NVIM" ]] && COMMIT_MSG+=", nvim@${VERSION_NVIM}"
+    [[ -n "$VERSION_NVIM_COMP" ]] && COMMIT_MSG+=", nvim-completion@${VERSION_NVIM_COMP}"
+
+    git commit -m "$COMMIT_MSG"
     echo "Committed version bumps"
   else
-    echo "No package.json changes to commit"
+    echo "No version changes to commit"
   fi
 fi
 

@@ -109,7 +109,7 @@ export namespace SessionProcessor {
           toolInput: Record<string, unknown>,
         ): Promise<PermissionResult> => {
           const policy = agentActions[toolName]
-          if (policy === "allow") return { behavior: "allow" }
+          if (policy === "allow") return { behavior: "allow", updatedInput: toolInput }
           if (policy === "deny")
             return { behavior: "deny", message: `Tool "${toolName}" is denied by agent action policy.` }
 
@@ -123,7 +123,7 @@ export namespace SessionProcessor {
               always: ["*"],
               ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
             })
-            return { behavior: "allow" }
+            return { behavior: "allow", updatedInput: toolInput }
           } catch (e) {
             return { behavior: "deny", message: e instanceof Error ? e.message : "Permission denied." }
           }

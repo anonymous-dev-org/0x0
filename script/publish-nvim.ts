@@ -26,7 +26,7 @@ if (flag("help")) {
       "",
       "Options:",
       "  --plugin <name>       Plugin directory under sdks/ (required)",
-      "  --version <semver>    Release version without v prefix (required)",
+      "  --version <semver>    Release version without v prefix (reads sdks/<plugin>/version.txt if omitted)",
       "  --repo <org/repo>     Target repo (default: derived from plugin name)",
       "  --no-push             Do not push commit or tag",
       "  --help                Show this help",
@@ -44,11 +44,6 @@ if (!plugin) {
   throw new Error("--plugin is required. Pass --help for usage.")
 }
 
-const version = read("version")
-if (!version) {
-  throw new Error("--version is required. Pass --help for usage.")
-}
-
 const noPush = flag("no-push")
 
 const root = new URL("..", import.meta.url).pathname
@@ -59,6 +54,15 @@ try {
 } catch {
   throw new Error(`Source directory not found: ${sourceDir}`)
 }
+
+const version = read("version") ?? await (async () => {
+  const versionFile = path.join(sourceDir, "version.txt")
+  try {
+    return (await fs.readFile(versionFile, "utf-8")).trim()
+  } catch {
+    throw new Error(`--version is required (no version.txt found at ${versionFile})`)
+  }
+})()
 
 const currentRepo =
   process.env.GITHUB_REPOSITORY ||
