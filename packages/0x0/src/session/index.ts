@@ -86,7 +86,9 @@ export namespace Session {
         })
         .optional(),
       cliSessionId: z.string().optional(),
+      cliSessionAgent: z.string().optional(),
       codexThreadId: z.string().optional(),
+      codexThreadAgent: z.string().optional(),
     })
     .meta({
       ref: "Session",

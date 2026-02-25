@@ -95,10 +95,21 @@ export namespace SessionProcessor {
       async process(streamInput: LLM.StreamInput): Promise<"continue" | "stop"> {
         log.info("process", { sessionID: input.sessionID, model: streamInput.model.id })
 
-        // Look up the current CLI session IDs from session storage
+        // Look up the current CLI session IDs from session storage.
+        // If the agent changed since the session was created, start a fresh
+        // CLI/Codex session so the model doesn't carry stale context from the
+        // previous agent (e.g. planner permissions leaking into builder).
         const sessionInfo = await Session.get(input.sessionID).catch(() => null)
-        const cliSessionId = streamInput.cliSessionId ?? sessionInfo?.cliSessionId
-        const codexThreadId = streamInput.codexThreadId ?? sessionInfo?.codexThreadId
+        const cliSessionId =
+          streamInput.cliSessionId ??
+          (sessionInfo?.cliSessionAgent === streamInput.agent.name
+            ? sessionInfo?.cliSessionId
+            : undefined)
+        const codexThreadId =
+          streamInput.codexThreadId ??
+          (sessionInfo?.codexThreadAgent === streamInput.agent.name
+            ? sessionInfo?.codexThreadId
+            : undefined)
 
         const providerID = streamInput.model.providerID
         const agentActions = streamInput.agent.actions?.[providerID] ?? {}
@@ -411,8 +422,14 @@ export namespace SessionProcessor {
               case "done": {
                 if (event.cliSessionId || event.codexThreadId) {
                   await Session.update(input.sessionID, (draft) => {
-                    if (event.cliSessionId) draft.cliSessionId = event.cliSessionId
-                    if (event.codexThreadId) draft.codexThreadId = event.codexThreadId
+                    if (event.cliSessionId) {
+                      draft.cliSessionId = event.cliSessionId
+                      draft.cliSessionAgent = streamInput.agent.name
+                    }
+                    if (event.codexThreadId) {
+                      draft.codexThreadId = event.codexThreadId
+                      draft.codexThreadAgent = streamInput.agent.name
+                    }
                   })
                 }
                 break
