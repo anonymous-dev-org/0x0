@@ -1,0 +1,14 @@
+{
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["browser"],
+    "paths": {
+      "@tui/*": ["./src/tui/*"],
+      "@/*": ["../server/src/*"],
+      "@anonymous-dev/0x0-server/*": ["../server/src/*"]
+    }
+  }
+}
