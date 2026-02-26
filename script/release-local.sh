@@ -172,18 +172,18 @@ prepare_npm_dist() {
     return
   fi
 
-  run rm -rf ./packages/0x0/dist/0x0
-  run mkdir -p ./packages/0x0/dist/0x0
-  run cp -r ./packages/0x0/bin ./packages/0x0/dist/0x0/bin
-  run cp ./packages/0x0/script/postinstall.mjs ./packages/0x0/dist/0x0/postinstall.mjs
-  run cp ./LICENSE ./packages/0x0/dist/0x0/LICENSE
+  run rm -rf ./packages/tui/dist/0x0
+  run mkdir -p ./packages/tui/dist/0x0
+  run cp -r ./packages/tui/bin ./packages/tui/dist/0x0/bin
+  run cp ./packages/tui/script/postinstall.mjs ./packages/tui/dist/0x0/postinstall.mjs
+  run cp ./LICENSE ./packages/tui/dist/0x0/LICENSE
 
   SCOPE="$SCOPE" VERSION="$version" bun -e '
     const scope = process.env.SCOPE
     if (!scope) throw new Error("Missing SCOPE")
 
-    const pkg = await Bun.file("./packages/0x0/package.json").json()
-    const dist = "./packages/0x0/dist"
+    const pkg = await Bun.file("./packages/tui/package.json").json()
+    const dist = "./packages/tui/dist"
     const release = process.env.VERSION
     if (!release) throw new Error("Missing VERSION")
     const binaries = {}
@@ -212,7 +212,7 @@ prepare_npm_dist() {
     }
 
     const version = Object.values(binaries)[0]
-    if (!version) throw new Error("No built binaries found in ./packages/0x0/dist")
+    if (!version) throw new Error("No built binaries found in ./packages/tui/dist")
 
     const optionalDependencies = Object.fromEntries(
       Object.entries(binaries).map(([name, value]) => [`${scope}/${name}`, value]),
@@ -328,7 +328,7 @@ need_cmd curl
 need_cmd zip
 need_cmd tar
 
-[[ -f "./packages/0x0/script/build.ts" ]] || {
+[[ -f "./packages/tui/script/build.ts" ]] || {
   echo "Run this from repo root."
   exit 1
 }
@@ -485,7 +485,7 @@ echo
 echo "════ 0x0 v$VERSION_0X0 ════"
 
 echo "1) Build artifacts"
-run env ZEROXZERO_VERSION="$VERSION_0X0" bun ./packages/0x0/script/build.ts
+run env ZEROXZERO_VERSION="$VERSION_0X0" bun ./packages/tui/script/build.ts
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "2) DRY RUN: skipping packaging and asset checks"
@@ -498,10 +498,10 @@ else
 
   echo "3) Verify required assets"
   for f in \
-    "./packages/0x0/dist/0x0-darwin-arm64.zip" \
-    "./packages/0x0/dist/0x0-darwin-x64.zip" \
-    "./packages/0x0/dist/0x0-linux-arm64.tar.gz" \
-    "./packages/0x0/dist/0x0-linux-x64.tar.gz"
+    "./packages/tui/dist/0x0-darwin-arm64.zip" \
+    "./packages/tui/dist/0x0-darwin-x64.zip" \
+    "./packages/tui/dist/0x0-linux-arm64.tar.gz" \
+    "./packages/tui/dist/0x0-linux-x64.tar.gz"
   do
     [[ -f "$f" ]] || { echo "Missing required asset: $f"; exit 1; }
   done
@@ -517,17 +517,17 @@ else
 fi
 
 echo "5) Upload release assets"
-run gh release upload "v$VERSION_0X0" ./packages/0x0/dist/*.zip ./packages/0x0/dist/*.tar.gz --repo "$REPO" --clobber
+run gh release upload "v$VERSION_0X0" ./packages/tui/dist/*.zip ./packages/tui/dist/*.tar.gz --repo "$REPO" --clobber
 
 echo "6) Prepare npm package metadata"
 prepare_npm_dist "$VERSION_0X0"
 
 echo "7) Publish npm packages"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  run NPM_TOKEN="$TOKEN" bun ./packages/0x0/script/publish-npm-manual.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION_0X0"
+  run NPM_TOKEN="$TOKEN" bun ./packages/tui/script/publish-npm-manual.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION_0X0"
 else
   NPM_TOKEN="$TOKEN" \
-    bun ./packages/0x0/script/publish-npm-manual.ts \
+    bun ./packages/tui/script/publish-npm-manual.ts \
       --scope "$SCOPE" \
       --tag "$NPM_TAG" \
       --version "$VERSION_0X0"
@@ -537,7 +537,8 @@ echo "8) Publish Homebrew tap (zeroxzero)"
 run bun ./script/publish-tap.ts --version "$VERSION_0X0" --repo "$REPO"
 
 echo "8b) Update source package.json versions"
-set_pkg_version "./packages/0x0/package.json" "$VERSION_0X0"
+set_pkg_version "./packages/server/package.json" "$VERSION_0X0"
+set_pkg_version "./packages/tui/package.json" "$VERSION_0X0"
 
 # ══════════════════════════════════════════════════════════════════
 #  0x0-git
@@ -634,7 +635,7 @@ echo "════ Commit version bumps ════"
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY RUN: would commit version bumps to package.json and version.txt files"
 else
-  VERSION_FILES=(./packages/0x0/package.json ./packages/git/package.json)
+  VERSION_FILES=(./packages/server/package.json ./packages/tui/package.json ./packages/git/package.json)
   [[ -n "$VERSION_NVIM" ]] && VERSION_FILES+=(./sdks/nvim/version.txt)
   [[ -n "$VERSION_NVIM_COMP" ]] && VERSION_FILES+=(./sdks/nvim-completion/version.txt)
 

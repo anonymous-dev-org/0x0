@@ -8,6 +8,10 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@anonymous-dev/0x0-server#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "0x0#test": {
       "dependsOn": ["^build"],
       "outputs": []

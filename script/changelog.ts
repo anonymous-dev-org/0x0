@@ -67,7 +67,7 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
 
   // Get commits that touch the relevant packages
   const log =
-    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/0x0 packages/sdk packages/plugin`.text()
+    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/server packages/tui packages/sdk packages/plugin`.text()
   const hashes = log.split("\n").filter(Boolean)
 
   const commits: Commit[] = []
@@ -82,8 +82,8 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
     const areas = new Set<string>()
 
     for (const file of files.split("\n").filter(Boolean)) {
-      if (file.startsWith("packages/0x0/src/cli/cmd/")) areas.add("tui")
-      else if (file.startsWith("packages/0x0/")) areas.add("core")
+      if (file.startsWith("packages/tui/")) areas.add("tui")
+      else if (file.startsWith("packages/server/")) areas.add("core")
       else if (file.startsWith("packages/sdk/")) areas.add("sdk")
       else if (file.startsWith("packages/plugin/")) areas.add("plugin")
     }
