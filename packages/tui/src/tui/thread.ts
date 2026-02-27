@@ -3,8 +3,8 @@ import path from "path"
 import { UI } from "@anonymous-dev/0x0-server/cli/ui"
 import { Log } from "@anonymous-dev/0x0-server/util/log"
 import { withNetworkOptions, resolveNetworkOptions } from "@anonymous-dev/0x0-server/cli/network"
-import { Config } from "@anonymous-dev/0x0-server/config/config"
-import type { Event } from "@anonymous-dev/0x0-server/bus/bus-event"
+import { Config } from "@anonymous-dev/0x0-server/core/config/config"
+import type { Event } from "@anonymous-dev/0x0-server/core/bus/bus-event"
 import type { EventSource } from "./state/sdk"
 import { Daemon } from "../daemon"
 
@@ -172,6 +172,7 @@ export const TuiThreadCommand = cmd({
 
     const tuiPromise = tui({
       url,
+      directory: cwd,
       headers,
       events,
       args: {

@@ -3,15 +3,15 @@ import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { $ } from "bun"
-import { Storage } from "../storage/storage"
+import { Storage } from "@/core/storage/storage"
 import { Log } from "../util/log"
-import { Flag } from "@/flag/flag"
+import { Flag } from "@/core/flag/flag"
 import { Session } from "../session"
 import { work } from "../util/queue"
-import { fn } from "@anonymous-dev/0x0-util/fn"
-import { BusEvent } from "@/bus/bus-event"
+import { fn } from "@/util/fn"
+import { BusEvent } from "@/core/bus/bus-event"
 import { iife } from "@/util/iife"
-import { GlobalBus } from "@/bus/global"
+import { GlobalBus } from "@/core/bus/global"
 import { existsSync } from "fs"
 
 export namespace Project {
@@ -195,7 +195,7 @@ export namespace Project {
     // migrate old projects before sandboxes
     if (!existing.sandboxes) existing.sandboxes = []
 
-    const { Config } = await import("@/config/config")
+    const { Config } = await import("@/core/config/config")
     const config = await Config.getGlobal()
     if (config.experimental?.icon_discovery)
       discover(existing).catch((e) => log.warn("icon discovery failed", { error: e }))

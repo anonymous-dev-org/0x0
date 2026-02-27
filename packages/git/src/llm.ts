@@ -1,5 +1,11 @@
 import type { Config } from "./config"
 
+function createDebug(verbose: boolean) {
+  return (msg: string) => {
+    if (verbose) process.stderr.write(`[debug] ${msg}\n`)
+  }
+}
+
 async function isServerUp(baseUrl: string): Promise<boolean> {
   try {
     await fetch(baseUrl.replace(/\/$/, ""), { signal: AbortSignal.timeout(1_000) })
@@ -9,13 +15,17 @@ async function isServerUp(baseUrl: string): Promise<boolean> {
   }
 }
 
-async function ensureServer(baseUrl: string): Promise<void> {
-  if (await isServerUp(baseUrl)) return
+async function ensureServer(baseUrl: string, debug: (msg: string) => void): Promise<void> {
+  if (await isServerUp(baseUrl)) {
+    debug(`server already running at ${baseUrl}`)
+    return
+  }
 
   const binary = Bun.which("0x0")
   if (!binary) throw new Error("0x0 not found in PATH. Cannot auto-start server.")
 
   const port = new URL(baseUrl).port || "4096"
+  debug(`spawning server: ${binary} server --port ${port}`)
   process.stderr.write("Starting 0x0 server...\n")
 
   const proc = Bun.spawn([binary, "server", "--port", port], {
@@ -47,7 +57,11 @@ async function ensureServer(baseUrl: string): Promise<void> {
  * Returns the generated text or throws on failure.
  */
 export async function generate(config: Config, prompt: string): Promise<string> {
-  await ensureServer(config.url)
+  const debug = createDebug(config.verbose)
+
+  debug(`config: url=${config.url} provider=${config.provider} model=${config.model} auth=${config.auth ? "yes" : "no"}`)
+
+  await ensureServer(config.url, debug)
 
   const url = `${config.url.replace(/\/$/, "")}/completion/text`
 
@@ -63,6 +77,9 @@ export async function generate(config: Config, prompt: string): Promise<string> 
   const body: Record<string, unknown> = { prompt }
   if (config.model) body.model = config.model
 
+  debug(`POST ${url} (auth=${config.auth ? "yes" : "no"})`)
+  debug(`request body: ${JSON.stringify(body)}`)
+
   let response: Response
   try {
     response = await fetch(url, {
@@ -75,8 +92,12 @@ export async function generate(config: Config, prompt: string): Promise<string> 
     throw new Error(`Failed to connect to 0x0 server at ${config.url}`, { cause: err })
   }
 
+  debug(`response: ${response.status} ${response.statusText}`)
+  debug(`response headers: content-type=${response.headers.get("content-type")}`)
+
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "Unknown error")
+    debug(`error response body: ${errorBody}`)
     throw new Error(`Server error (${response.status}): ${errorBody}`)
   }
 
@@ -112,20 +133,29 @@ export async function generate(config: Config, prompt: string): Promise<string> 
         const parsed = JSON.parse(jsonStr)
         if (parsed.type === "delta" && parsed.text) {
           parts.push(parsed.text)
+          debug(`stream: delta chunk=${parsed.text.length}b total=${parts.length}`)
         } else if (parsed.type === "error") {
+          debug(`stream: error — ${parsed.error}`)
           throw new Error(parsed.error || "Server stream error")
+        } else if (parsed.type === "done") {
+          debug(`stream: done`)
+        } else {
+          debug(`stream: unexpected event type=${parsed.type} data=${jsonStr.slice(0, 200)}`)
         }
       } catch (err) {
-        if (err instanceof Error && (err.message === "Server stream error" || err.message.startsWith("Server"))) {
-          throw err
+        // Re-throw errors from parsed server error events
+        if (err instanceof SyntaxError) {
+          debug(`stream: malformed JSON chunk: ${jsonStr.slice(0, 200)}`)
+          continue
         }
-        process.stderr.write(`Warning: skipping malformed stream chunk\n`)
-        continue
+        throw err
       }
     }
   }
 
   const text = parts.join("").trim()
+  debug(`result: ${parts.length} deltas, ${text.length} chars`)
+
   if (!text) {
     throw new Error("No response text from server")
   }

@@ -15,8 +15,8 @@ Practical steps for shipping 0x0 safely.
 
 ## Build artifacts
 
-- Build from source with `bun ./packages/0x0/script/build.ts`.
-- This generates platform packages under `packages/0x0/dist/*` and archives in `packages/0x0/dist/*.zip` and `packages/0x0/dist/*.tar.gz`.
+- Build from source with `bun ./packages/tui/script/build.ts`.
+- This generates platform packages under `packages/tui/dist/*` and archives in `packages/tui/dist/*.zip` and `packages/tui/dist/*.tar.gz`.
 - Default build targets include Linux (glibc, musl, baseline variants), macOS (arm64, x64, x64-baseline), and Windows (x64, x64-baseline).
 - Use `--single` only for local checks, because publishing needs the full multi-platform output.
 
@@ -37,8 +37,8 @@ Practical steps for shipping 0x0 safely.
 
 ## Publish on npm
 
-- Use the manual sequential publisher: `bun ./packages/0x0/script/publish-npm-manual.ts --scope @anonymous-dev --tag latest`.
-- This publishes `@anonymous-dev/0x0` plus platform packages from `packages/0x0/dist` one by one.
+- Use the manual sequential publisher: `bun ./packages/tui/script/publish-npm-manual.ts --scope @anonymous-dev --tag latest`.
+- This publishes `@anonymous-dev/0x0` plus platform packages from `packages/tui/dist` one by one.
 - Expected platform package names are:
   - `@anonymous-dev/0x0-linux-x64-baseline`
   - `@anonymous-dev/0x0-linux-x64`
@@ -93,17 +93,17 @@ V="X.Y.Z"
 REPO="anonymous-dev-org/0x0"
 
 # 1) Build all platform artifacts
-bun ./packages/0x0/script/build.ts
+bun ./packages/tui/script/build.ts
 
 # 2) Create public non-draft release if missing
 gh release view "v$V" --repo "$REPO" >/dev/null 2>&1 || \
   gh release create "v$V" --repo "$REPO" --title "v$V" --notes "Release v$V"
 
 # 3) Upload archives (required tap assets must exist)
-gh release upload "v$V" ./packages/0x0/dist/*.zip ./packages/0x0/dist/*.tar.gz --repo "$REPO" --clobber
+gh release upload "v$V" ./packages/tui/dist/*.zip ./packages/tui/dist/*.tar.gz --repo "$REPO" --clobber
 
 # 4) Publish npm packages sequentially
-bun ./packages/0x0/script/publish-npm-manual.ts --scope @anonymous-dev --tag latest --version "$V"
+bun ./packages/tui/script/publish-npm-manual.ts --scope @anonymous-dev --tag latest --version "$V"
 
 # 5) Publish tap formula + alias
 bun ./script/publish-tap.ts --version "$V"

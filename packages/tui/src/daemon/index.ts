@@ -1,13 +1,31 @@
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 import { Log } from "@anonymous-dev/0x0-server/util/log"
 import path from "path"
 import fs from "fs/promises"
+import { existsSync } from "fs"
 
 const DEFAULT_PORT = 4096
 const LOCK_PATH = path.join(Global.Path.state, "server.lock")
 const HEALTH_ENDPOINT = "/doc"
 const POLL_INTERVAL_MS = 50
 const POLL_TIMEOUT_MS = 10_000
+
+/**
+ * Resolve the server command + args for spawning.
+ * In dev (running from source), spawn via `bun run <source entry>` to avoid
+ * the bin shim's CJS/ESM incompatibility with Node.js v25+.
+ * In prod (compiled binary), spawn the binary directly.
+ */
+function resolveServerCommand(extraArgs: string[]): string[] {
+  // Dev mode: if the server source entry exists nearby, run it directly with bun
+  const serverEntry = path.resolve(import.meta.dirname, "../../../server/src/index.ts")
+  if (existsSync(serverEntry)) {
+    return ["bun", "run", serverEntry, "serve", ...extraArgs]
+  }
+
+  // Prod: use the compiled binary from PATH
+  return ["0x0-server", "serve", ...extraArgs]
+}
 
 export namespace Daemon {
   interface LockFile {
@@ -58,12 +76,13 @@ export namespace Daemon {
     const port = opts?.port ?? DEFAULT_PORT
     const hostname = opts?.hostname ?? "127.0.0.1"
 
-    const args = ["0x0-server", "--port", String(port)]
+    const portArgs = ["--port", String(port)]
     if (opts?.hostname) {
-      args.push("--hostname", hostname)
+      portArgs.push("--hostname", hostname)
     }
+    const cmd = resolveServerCommand(portArgs)
 
-    const proc = Bun.spawn(args, {
+    const proc = Bun.spawn(cmd, {
       stdio: ["ignore", Bun.file(logFile), Bun.file(logFile)],
       env: {
         ...process.env,

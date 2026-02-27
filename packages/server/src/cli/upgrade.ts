@@ -1,6 +1,6 @@
-import { Bus } from "@/bus"
-import { Config } from "@/config/config"
-import { Installation } from "@/installation"
+import { Bus } from "@/core/bus"
+import { Config } from "@/core/config/config"
+import { Installation } from "@/core/installation"
 
 export async function upgrade() {
   const config = await Config.global()

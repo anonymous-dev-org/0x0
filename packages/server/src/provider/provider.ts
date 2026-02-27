@@ -1,8 +1,8 @@
 import z from "zod"
 import fuzzysort from "fuzzysort"
-import { Config } from "../config/config"
+import { Config } from "@/core/config/config"
 import { sortBy } from "remeda"
-import { NamedError } from "@anonymous-dev/0x0-util/error"
+import { NamedError } from "@/util/error"
 import { ProviderAuth } from "./auth"
 
 export namespace Provider {

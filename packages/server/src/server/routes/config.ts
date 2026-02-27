@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
-import { Config } from "../../config/config"
+import { Config } from "@/core/config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 

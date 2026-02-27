@@ -1,23 +1,23 @@
 // Domain types re-exported with SDK-compatible names.
 // Single source of truth — no code generation needed.
 
-export type { Event } from "@/bus/bus-event"
+export type { Event } from "@/core/bus/bus-event"
 
 import type { Session as SessionMod } from "@/session"
 import type { MessageV2 } from "@/session/message-v2"
-import type { Config as ConfigMod } from "@/config/config"
+import type { Config as ConfigMod } from "@/core/config/config"
 import type { Provider as ProviderMod } from "@/provider/provider"
-import type { Agent as AgentMod } from "@/agent/agent"
-import type { Command as CommandMod } from "@/command"
+import type { Agent as AgentMod } from "@/runtime/agent/agent"
+import type { Command as CommandMod } from "@/runtime/command"
 import type { Todo as TodoMod } from "@/session/todo"
 import type { SessionStatus as SessionStatusMod } from "@/session/status"
 import type { PermissionNext } from "@/permission/next"
-import type { Question } from "@/question"
+import type { Question } from "@/runtime/question"
 import type { Vcs } from "@/project/vcs"
-import type { LSP } from "@/lsp"
-import type { MCP } from "@/mcp"
-import type { Format } from "@/format"
-import type { Snapshot } from "@/snapshot"
+import type { LSP } from "@/integration/lsp"
+import type { MCP } from "@/integration/mcp"
+import type { Format } from "@/runtime/format"
+import type { Snapshot } from "@/workspace/snapshot"
 
 // Session
 export type Session = SessionMod.Info

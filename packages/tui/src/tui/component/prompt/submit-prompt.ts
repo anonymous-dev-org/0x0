@@ -1,4 +1,4 @@
-import { Identifier } from "@anonymous-dev/0x0-server/id/id"
+import { Identifier } from "@anonymous-dev/0x0-server/core/id/id"
 import { iife } from "@anonymous-dev/0x0-server/util/iife"
 import type { PromptInfo } from "./history"
 

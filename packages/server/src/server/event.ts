@@ -1,4 +1,4 @@
-import { BusEvent } from "@/bus/bus-event"
+import { BusEvent } from "@/core/bus/bus-event"
 import z from "zod"
 
 export const Event = {

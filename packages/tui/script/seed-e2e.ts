@@ -11,7 +11,7 @@ const seed = async () => {
   const { Instance } = await import("@anonymous-dev/0x0-server/project/instance")
   const { InstanceBootstrap } = await import("@anonymous-dev/0x0-server/project/bootstrap")
   const { Session } = await import("@anonymous-dev/0x0-server/session")
-  const { Identifier } = await import("@anonymous-dev/0x0-server/id/id")
+  const { Identifier } = await import("@anonymous-dev/0x0-server/core/id/id")
   const { Project } = await import("@anonymous-dev/0x0-server/project/project")
 
   await Instance.provide({

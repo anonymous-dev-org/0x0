@@ -63,7 +63,7 @@ export function Thinking(props: {
 
   return (
     <Show when={props.visible()}>
-      <box paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
+      <box paddingLeft={3} paddingRight={3} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
         <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="flex-end">
           <box flexDirection="column" flexShrink={0}>
             <text>

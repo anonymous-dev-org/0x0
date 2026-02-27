@@ -1,7 +1,7 @@
 import { Server } from "../../server/server"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Config } from "../../config/config"
+import { Config } from "@/core/config/config"
 
 export const ServeCommand = cmd({
   command: "server",

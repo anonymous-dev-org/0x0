@@ -3,9 +3,9 @@ import type { Session as SDKSession, Message, Part } from "@/server/types"
 import { Session } from "../../session"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
-import { Storage } from "../../storage/storage"
+import { Storage } from "@/core/storage/storage"
 import { Instance } from "../../project/instance"
-import { ShareNext } from "../../share/share-next"
+import { ShareNext } from "@/runtime/share/share-next"
 import { EOL } from "os"
 
 /** Discriminated union returned by the ShareNext API (GET /api/share/:id/data) */

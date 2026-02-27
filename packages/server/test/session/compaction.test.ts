@@ -7,7 +7,7 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
-import { Config } from "../../src/config/config"
+import { Config } from "../../src/core/config/config"
 
 Log.init({ print: false })
 

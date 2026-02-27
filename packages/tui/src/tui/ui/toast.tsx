@@ -5,7 +5,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { SplitBorder } from "../component/border"
 import { TextAttributes } from "@opentui/core"
 import z from "zod"
-import { TuiEvent } from "@anonymous-dev/0x0-server/bus/tui-event"
+import { TuiEvent } from "@anonymous-dev/0x0-server/core/bus/tui-event"
 
 export type ToastOptions = z.infer<typeof TuiEvent.ToastShow.properties>
 

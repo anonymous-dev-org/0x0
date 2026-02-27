@@ -2,8 +2,8 @@ import yargs, { type Argv, type ArgumentsCamelCase, type CommandModule } from "y
 import { hideBin } from "yargs/helpers"
 import { Log } from "./util/log"
 import { UI } from "./cli/ui"
-import { Installation } from "./installation"
-import { NamedError } from "@anonymous-dev/0x0-util/error"
+import { Installation } from "./core/installation"
+import { NamedError } from "@/util/error"
 import { EOL } from "os"
 
 type BaseArgs = Record<string, unknown>

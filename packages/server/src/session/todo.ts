@@ -1,7 +1,7 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Bus } from "@/core/bus"
 import z from "zod"
-import { Storage } from "../storage/storage"
+import { Storage } from "@/core/storage/storage"
 
 export namespace Todo {
   export const Info = z

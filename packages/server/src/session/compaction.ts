@@ -1,7 +1,7 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Bus } from "@/core/bus"
 import { Session } from "."
-import { Identifier } from "../id/id"
+import { Identifier } from "@/core/id/id"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
 import { MessageV2 } from "./message-v2"
@@ -9,8 +9,8 @@ import z from "zod"
 import { Log } from "../util/log"
 import { SessionProcessor } from "./processor"
 import { fn } from "@/util/fn"
-import { Agent } from "@/agent/agent"
-import { Config } from "@/config/config"
+import { Agent } from "@/runtime/agent/agent"
+import { Config } from "@/core/config/config"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })

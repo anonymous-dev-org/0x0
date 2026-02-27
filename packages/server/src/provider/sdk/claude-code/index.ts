@@ -97,6 +97,120 @@ export async function* claudeStream(input: ClaudeStreamInput): AsyncGenerator<Cl
   }
 }
 
+export type CompletionEvent =
+  | { type: "delta"; text: string }
+  | { type: "error"; error: string }
+  | { type: "done" }
+
+export async function* completionStream(input: {
+  model: string
+  prompt: string
+  systemPrompt?: string
+  stopSequences?: string[]
+  abort?: AbortSignal
+}): AsyncGenerator<CompletionEvent> {
+  const controller = new AbortController()
+  if (input.abort?.aborted) {
+    controller.abort()
+  } else if (input.abort) {
+    input.abort.addEventListener("abort", () => controller.abort(), { once: true })
+  }
+
+  log.info("starting completion stream", { model: input.model })
+
+  // Strip CLAUDECODE env var so the SDK subprocess doesn't think it's nested
+  const env: Record<string, string | undefined> = { ...process.env }
+  delete env.CLAUDECODE
+
+  let accumulated = ""
+
+  try {
+    const result = query({
+      prompt: input.prompt,
+      options: {
+        abortController: controller,
+        model: input.model,
+        maxTurns: 1,
+        tools: [],
+        persistSession: false,
+        systemPrompt: input.systemPrompt ?? "",
+        thinking: { type: "disabled" },
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        env,
+      },
+    })
+
+    for await (const msg of result) {
+      const m = msg as Record<string, unknown>
+      switch (msg.type) {
+        case "auth_status": {
+          if (m["error"]) {
+            yield { type: "error", error: String(m["error"]) }
+            return
+          }
+          break
+        }
+
+        // The SDK emits "assistant" messages with the full message content.
+        // Extract text blocks from message.content[].
+        case "assistant": {
+          const message = m["message"] as Record<string, unknown> | undefined
+          const content = message?.["content"] as Array<Record<string, unknown>> | undefined
+          if (!content) break
+
+          for (const block of content) {
+            if (block["type"] === "text" && block["text"]) {
+              let text = block["text"] as string
+
+              // Check stop sequences
+              if (input.stopSequences?.length) {
+                for (const stop of input.stopSequences) {
+                  const stopIdx = text.indexOf(stop)
+                  if (stopIdx !== -1) {
+                    text = text.slice(0, stopIdx)
+                    if (text) yield { type: "delta", text }
+                    yield { type: "done" }
+                    return
+                  }
+                }
+              }
+
+              if (text) yield { type: "delta", text }
+              accumulated += text
+            }
+          }
+          break
+        }
+
+        case "result": {
+          const subtype = m["subtype"] as string | undefined
+          if (subtype?.startsWith("error_")) {
+            const errors = (m["errors"] as string[]) ?? []
+            yield { type: "error", error: errors.join(", ") || "Unknown error" }
+            return
+          }
+          // If no text was yielded from assistant messages, use the result text
+          if (!accumulated) {
+            const resultText = m["result"] as string | undefined
+            if (resultText) {
+              yield { type: "delta", text: resultText }
+            }
+          }
+          break
+        }
+      }
+    }
+
+    yield { type: "done" }
+  } catch (err: unknown) {
+    const e = err as { name?: string; message?: string }
+    if (e?.name !== "AbortError") {
+      yield { type: "error", error: String(e?.message ?? err) }
+    }
+  }
+}
+
 function* parseClaudeApiEvent(
   event: Record<string, unknown>,
   toolBlocks: Record<number, { id: string; name: string }>,

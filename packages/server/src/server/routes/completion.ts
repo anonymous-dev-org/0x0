@@ -5,8 +5,7 @@ import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
-import { claudeStream } from "@/provider/sdk/claude-code"
-import { Config } from "@/config/config"
+import { completionStream } from "@/provider/sdk/claude-code"
 
 const log = Log.create({ service: "completion" })
 
@@ -31,11 +30,11 @@ type TextInput = z.infer<typeof TextInput>
 const SYSTEM_PROMPT =
   "You are a code completion engine. Output ONLY the raw code that should be inserted at the cursor position. No explanations, no markdown fences, no comments about what the code does. Just the code itself."
 
-function buildAnthropicBody(input: CompletionInput) {
+function buildCodeCompletionPrompt(input: CompletionInput): string {
   const language = input.language || "text"
   const filename = input.filename || "untitled"
 
-  const userContent = [
+  return [
     `<file_info>`,
     `Language: ${language}`,
     `File: ${filename}`,
@@ -47,160 +46,6 @@ function buildAnthropicBody(input: CompletionInput) {
     input.suffix,
     `</code_after_cursor>`,
   ].join("\n")
-
-  return {
-    model: input.model || "claude-haiku-4-5-20251001",
-    max_tokens: input.max_tokens || 256,
-    temperature: 0,
-    stream: true,
-    stop_sequences: ["\n\n\n"],
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user" as const, content: userContent }],
-  }
-}
-
-function buildTextBody(input: TextInput) {
-  return {
-    model: input.model || "claude-haiku-4-5-20251001",
-    max_tokens: input.max_tokens || 4096,
-    temperature: 0,
-    stream: true,
-    ...(input.system ? { system: input.system } : {}),
-    messages: [{ role: "user" as const, content: input.prompt }],
-  }
-}
-
-async function getApiKey(): Promise<string | undefined> {
-  // 1. Check config providers for an anthropic provider with apiKey
-  try {
-    const config = await Config.get()
-    const anthropicProvider = config.provider?.["anthropic"]
-    if (anthropicProvider?.options?.apiKey) {
-      return anthropicProvider.options.apiKey as string
-    }
-  } catch {
-    // Config may not be available during startup
-  }
-
-  // 2. Fall back to env var
-  return process.env.ANTHROPIC_API_KEY
-}
-
-async function streamAnthropicResponse(
-  apiKey: string,
-  body: Record<string, unknown>,
-  stream: { writeSSE: (data: { data: string }) => Promise<void> },
-  timeout = 30_000,
-) {
-  let response: Response
-  try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        Connection: "keep-alive",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeout),
-    })
-  } catch (err) {
-    log.error("completion.fetch_error", { error: err })
-    await stream.writeSSE({
-      data: JSON.stringify({
-        type: "error",
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    })
-    return
-  }
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "Unknown error")
-    log.error("completion.api_error", { status: response.status, body: errorBody })
-    await stream.writeSSE({
-      data: JSON.stringify({
-        type: "error",
-        error: `Anthropic API error (${response.status}): ${errorBody}`,
-      }),
-    })
-    return
-  }
-
-  if (!response.body) {
-    await stream.writeSSE({
-      data: JSON.stringify({ type: "error", error: "No response body" }),
-    })
-    return
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
-  let currentEvent = ""
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-
-      while (true) {
-        const newlinePos = buffer.indexOf("\n")
-        if (newlinePos === -1) break
-
-        const line = buffer.slice(0, newlinePos)
-        buffer = buffer.slice(newlinePos + 1)
-
-        if (line.startsWith("event:")) {
-          currentEvent = line.slice(6).trim()
-        } else if (line.startsWith("data:")) {
-          const jsonStr = line.slice(5).trim()
-          if (currentEvent === "content_block_delta") {
-            try {
-              const parsed = JSON.parse(jsonStr)
-              if (parsed?.delta?.text) {
-                await stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "delta",
-                    text: parsed.delta.text,
-                  }),
-                })
-              }
-            } catch {
-              // skip malformed JSON
-            }
-          } else if (currentEvent === "error") {
-            try {
-              const parsed = JSON.parse(jsonStr)
-              await stream.writeSSE({
-                data: JSON.stringify({
-                  type: "error",
-                  error: parsed?.error?.message || "API error",
-                }),
-              })
-            } catch {
-              // skip
-            }
-          }
-        }
-      }
-    }
-  } catch (err) {
-    log.error("completion.stream_error", { error: err })
-    await stream.writeSSE({
-      data: JSON.stringify({
-        type: "error",
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    })
-  }
-
-  await stream.writeSSE({
-    data: JSON.stringify({ type: "done" }),
-  })
 }
 
 const sseResponseSchema = resolver(
@@ -225,31 +70,30 @@ export const CompletionRoutes = lazy(() =>
             description: "SSE stream of completion text deltas",
             content: { "text/event-stream": { schema: sseResponseSchema } },
           },
-          ...errors(400, 401),
+          ...errors(400),
         },
       }),
       validator("json", CompletionInput),
       async (c) => {
         const input = c.req.valid("json")
-        const apiKey = await getApiKey()
-
-        if (!apiKey) {
-          return c.json(
-            { error: "No Anthropic API key configured. Set ANTHROPIC_API_KEY or configure provider.anthropic.options.apiKey in config." },
-            401,
-          )
-        }
-
-        const body = buildAnthropicBody(input)
+        const model = input.model || "claude-haiku-4-5-20251001"
 
         log.info("completion.start", {
-          model: body.model,
+          model,
           prefix_len: input.prefix.length,
           suffix_len: input.suffix.length,
         })
 
         return streamSSE(c, async (stream) => {
-          await streamAnthropicResponse(apiKey, body, stream, 10_000)
+          for await (const event of completionStream({
+            model,
+            prompt: buildCodeCompletionPrompt(input),
+            systemPrompt: SYSTEM_PROMPT,
+            stopSequences: ["\n\n\n"],
+          })) {
+            await stream.writeSSE({ data: JSON.stringify(event) })
+            if (event.type === "done" || event.type === "error") break
+          }
         })
       },
     )
@@ -265,30 +109,28 @@ export const CompletionRoutes = lazy(() =>
             description: "SSE stream of generated text deltas",
             content: { "text/event-stream": { schema: sseResponseSchema } },
           },
-          ...errors(400, 401),
+          ...errors(400),
         },
       }),
       validator("json", TextInput),
       async (c) => {
         const input = c.req.valid("json")
-        const apiKey = await getApiKey()
-
-        if (!apiKey) {
-          return c.json(
-            { error: "No Anthropic API key configured. Set ANTHROPIC_API_KEY or configure provider.anthropic.options.apiKey in config." },
-            401,
-          )
-        }
-
-        const body = buildTextBody(input)
+        const model = input.model || "claude-haiku-4-5-20251001"
 
         log.info("completion.text.start", {
-          model: body.model,
+          model,
           prompt_len: input.prompt.length,
         })
 
         return streamSSE(c, async (stream) => {
-          await streamAnthropicResponse(apiKey, body, stream, 30_000)
+          for await (const event of completionStream({
+            model,
+            prompt: input.prompt,
+            systemPrompt: input.system,
+          })) {
+            await stream.writeSSE({ data: JSON.stringify(event) })
+            if (event.type === "done" || event.type === "error") break
+          }
         })
       },
     ),

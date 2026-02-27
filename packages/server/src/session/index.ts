@@ -1,26 +1,26 @@
-import { Slug } from "@anonymous-dev/0x0-util/slug"
+import { Slug } from "@/util/slug"
 import path from "path"
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Bus } from "@/core/bus"
 import { Decimal } from "decimal.js"
 import z from "zod"
 import { type LanguageModelUsage, type ProviderMetadata } from "ai"
-import { Config } from "../config/config"
-import { Identifier } from "../id/id"
-import { Installation } from "../installation"
+import { Config } from "@/core/config/config"
+import { Identifier } from "@/core/id/id"
+import { Installation } from "@/core/installation"
 
-import { Storage } from "../storage/storage"
+import { Storage } from "@/core/storage/storage"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import { fn } from "@/util/fn"
-import { Command } from "../command"
-import { Snapshot } from "@/snapshot"
+import { Command } from "@/runtime/command"
+import { Snapshot } from "@/workspace/snapshot"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
-import { Global } from "@/global"
+import { Global } from "@/core/global"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -270,7 +270,7 @@ export namespace Session {
     if (cfg.share === "disabled") {
       throw new Error("Sharing is disabled in configuration")
     }
-    const { ShareNext } = await import("@/share/share-next")
+    const { ShareNext } = await import("@/runtime/share/share-next")
     const share = await ShareNext.create(id)
     await update(
       id,
@@ -286,7 +286,7 @@ export namespace Session {
 
   export const unshare = fn(Identifier.schema("session"), async (id) => {
     // Use ShareNext to remove the share (same as share function uses ShareNext to create)
-    const { ShareNext } = await import("@/share/share-next")
+    const { ShareNext } = await import("@/runtime/share/share-next")
     await ShareNext.remove(id)
     await update(
       id,

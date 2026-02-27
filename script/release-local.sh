@@ -150,7 +150,7 @@ pick_latest_tag() {
 package_if_needed() {
   local name="$1"
   local mode="$2"
-  local pkg_dir="${3:-./packages/0x0}"
+  local pkg_dir="${3:-./packages/tui}"
   local src="${pkg_dir}/dist/${name}/bin"
   local out="${pkg_dir}/dist/${name}"
 
@@ -424,8 +424,8 @@ prompt_nvim_version() {
   fi
 }
 
-prompt_nvim_version "nvim" "./sdks/nvim/version.txt" VERSION_NVIM
-prompt_nvim_version "nvim-completion" "./sdks/nvim-completion/version.txt" VERSION_NVIM_COMP
+prompt_nvim_version "nvim" "./packages/nvim/version.txt" VERSION_NVIM
+prompt_nvim_version "nvim-completion" "./packages/nvim-completion/version.txt" VERSION_NVIM_COMP
 
 # ── NPM auth ──────────────────────────────────────────────────────
 
@@ -608,10 +608,10 @@ if [[ -n "$VERSION_NVIM" ]]; then
   run bun ./script/publish-nvim.ts --plugin nvim --version "$VERSION_NVIM"
   echo "16b) Update nvim version.txt"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "DRY RUN: set ./sdks/nvim/version.txt to $VERSION_NVIM"
+    echo "DRY RUN: set ./packages/nvim/version.txt to $VERSION_NVIM"
   else
-    printf '%s\n' "$VERSION_NVIM" > ./sdks/nvim/version.txt
-    echo "Updated ./sdks/nvim/version.txt to $VERSION_NVIM"
+    printf '%s\n' "$VERSION_NVIM" > ./packages/nvim/version.txt
+    echo "Updated ./packages/nvim/version.txt to $VERSION_NVIM"
   fi
 fi
 
@@ -620,10 +620,10 @@ if [[ -n "$VERSION_NVIM_COMP" ]]; then
   run bun ./script/publish-nvim.ts --plugin nvim-completion --version "$VERSION_NVIM_COMP"
   echo "17b) Update nvim-completion version.txt"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "DRY RUN: set ./sdks/nvim-completion/version.txt to $VERSION_NVIM_COMP"
+    echo "DRY RUN: set ./packages/nvim-completion/version.txt to $VERSION_NVIM_COMP"
   else
-    printf '%s\n' "$VERSION_NVIM_COMP" > ./sdks/nvim-completion/version.txt
-    echo "Updated ./sdks/nvim-completion/version.txt to $VERSION_NVIM_COMP"
+    printf '%s\n' "$VERSION_NVIM_COMP" > ./packages/nvim-completion/version.txt
+    echo "Updated ./packages/nvim-completion/version.txt to $VERSION_NVIM_COMP"
   fi
 fi
 
@@ -636,8 +636,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY RUN: would commit version bumps to package.json and version.txt files"
 else
   VERSION_FILES=(./packages/server/package.json ./packages/tui/package.json ./packages/git/package.json)
-  [[ -n "$VERSION_NVIM" ]] && VERSION_FILES+=(./sdks/nvim/version.txt)
-  [[ -n "$VERSION_NVIM_COMP" ]] && VERSION_FILES+=(./sdks/nvim-completion/version.txt)
+  [[ -n "$VERSION_NVIM" ]] && VERSION_FILES+=(./packages/nvim/version.txt)
+  [[ -n "$VERSION_NVIM_COMP" ]] && VERSION_FILES+=(./packages/nvim-completion/version.txt)
 
   if ! git diff --quiet "${VERSION_FILES[@]}" 2>/dev/null; then
     git add "${VERSION_FILES[@]}"

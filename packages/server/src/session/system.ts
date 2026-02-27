@@ -1,4 +1,4 @@
-import { Config } from "@/config/config"
+import { Config } from "@/core/config/config"
 
 export namespace SystemPrompt {
   export async function instructions() {

@@ -2,7 +2,7 @@ import z from "zod"
 import path from "path"
 import { Tool } from "./tool"
 import DESCRIPTION from "./search.txt"
-import { Ripgrep } from "../file/ripgrep"
+import { Ripgrep } from "@/workspace/file/ripgrep"
 import { Instance } from "../project/instance"
 import { assertExternalDirectory } from "./external-directory"
 

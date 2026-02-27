@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { z } from "zod"
-import { Config } from "@anonymous-dev/0x0-server/config/config"
+import { Config } from "@anonymous-dev/0x0-server/core/config/config"
 
 const file = process.argv[2]
 console.log(file)

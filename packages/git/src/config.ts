@@ -5,6 +5,7 @@ export interface Config {
   model: string
   url: string
   auth?: { username: string; password: string }
+  verbose: boolean
 }
 
 const DEFAULT_MODELS: Record<Provider, string> = {
@@ -18,6 +19,7 @@ const DEFAULT_MODELS: Record<Provider, string> = {
 export function resolveConfig(flags?: {
   provider?: string
   model?: string
+  verbose?: boolean
 }): Config {
   const provider = resolveProvider(flags?.provider)
   const model =
@@ -34,7 +36,9 @@ export function resolveConfig(flags?: {
       })()
     : undefined
 
-  return { provider, model, url, auth }
+  const verbose = flags?.verbose || process.env.GIT_AI_DEBUG === "1"
+
+  return { provider, model, url, auth, verbose }
 }
 
 function resolveProvider(flag?: string): Provider {

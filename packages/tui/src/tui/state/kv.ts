@@ -1,4 +1,4 @@
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 import { createSignal, type Setter } from "solid-js"
 import { createStore } from "solid-js/store"
 import path from "path"

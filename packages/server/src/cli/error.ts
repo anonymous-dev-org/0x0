@@ -1,6 +1,6 @@
-import { ConfigMarkdown } from "@/config/markdown"
-import { Config } from "../config/config"
-import { MCP } from "../mcp"
+import { ConfigMarkdown } from "@/core/config/markdown"
+import { Config } from "@/core/config/config"
+import { MCP } from "@/integration/mcp"
 import { Provider } from "../provider/provider"
 import { UI } from "./ui"
 

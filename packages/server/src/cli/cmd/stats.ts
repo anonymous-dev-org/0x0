@@ -2,7 +2,7 @@ import type { Argv } from "yargs"
 import { cmd } from "./cmd"
 import { Session } from "../../session"
 import { bootstrap } from "../bootstrap"
-import { Storage } from "../../storage/storage"
+import { Storage } from "@/core/storage/storage"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 

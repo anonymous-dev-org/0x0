@@ -1,6 +1,6 @@
 import z from "zod"
 import { EOL } from "os"
-import { NamedError } from "@anonymous-dev/0x0-util/error"
+import { NamedError } from "@/util/error"
 import { logo as glyphs } from "./logo"
 
 export namespace UI {

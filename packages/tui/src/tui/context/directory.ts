@@ -1,6 +1,6 @@
 import { createMemo } from "solid-js"
 import { sync } from "@tui/state/sync"
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 
 export function useDirectory() {
   return createMemo(() => {

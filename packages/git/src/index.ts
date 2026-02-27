@@ -7,13 +7,15 @@ import { installHook, uninstallHook } from "./hook"
 const args = process.argv.slice(2)
 const command = args[0]
 
-function parseFlags(args: string[]): Record<string, string | undefined> {
-  const flags: Record<string, string | undefined> = {}
+function parseFlags(args: string[]): { provider?: string; model?: string; verbose?: boolean } {
+  const flags: { provider?: string; model?: string; verbose?: boolean } = {}
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && args[i + 1]) {
       flags.provider = args[++i]
     } else if (args[i] === "--model" && args[i + 1]) {
       flags.model = args[++i]
+    } else if (args[i] === "--verbose") {
+      flags.verbose = true
     }
   }
   return flags
@@ -59,7 +61,7 @@ async function main() {
       default:
         console.error(
           `Usage:
-  0x0-git commit-msg [--provider claude|codex] [--model <model>]
+  0x0-git commit-msg [--provider claude|codex] [--model <model>] [--verbose]
   0x0-git hook install
   0x0-git hook uninstall`,
         )

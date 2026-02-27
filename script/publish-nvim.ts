@@ -25,8 +25,8 @@ if (flag("help")) {
       "  ./script/publish-nvim.ts --plugin nvim --version 1.2.3",
       "",
       "Options:",
-      "  --plugin <name>       Plugin directory under sdks/ (required)",
-      "  --version <semver>    Release version without v prefix (reads sdks/<plugin>/version.txt if omitted)",
+      "  --plugin <name>       Plugin directory under packages/ (required)",
+      "  --version <semver>    Release version without v prefix (reads packages/<plugin>/version.txt if omitted)",
       "  --repo <org/repo>     Target repo (default: derived from plugin name)",
       "  --no-push             Do not push commit or tag",
       "  --help                Show this help",
@@ -47,7 +47,7 @@ if (!plugin) {
 const noPush = flag("no-push")
 
 const root = new URL("..", import.meta.url).pathname
-const sourceDir = path.join(root, "sdks", plugin)
+const sourceDir = path.join(root, "packages", plugin)
 
 try {
   await fs.access(sourceDir)

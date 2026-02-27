@@ -1,9 +1,9 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { File } from "../../file"
-import { Ripgrep } from "../../file/ripgrep"
-import { LSP } from "../../lsp"
+import { File } from "@/workspace/file"
+import { Ripgrep } from "@/workspace/file/ripgrep"
+import { LSP } from "@/integration/lsp"
 import { Instance } from "../../project/instance"
 import { lazy } from "../../util/lazy"
 

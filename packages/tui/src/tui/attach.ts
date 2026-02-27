@@ -1,6 +1,6 @@
 import { cmd } from "@anonymous-dev/0x0-server/cli/cmd/cmd"
 import { tui } from "./app"
-import { Config } from "@anonymous-dev/0x0-server/config/config"
+import { Config } from "@anonymous-dev/0x0-server/core/config/config"
 
 export const AttachCommand = cmd({
   command: "attach <url>",

@@ -1,6 +1,6 @@
 import z from "zod"
 import type { MessageV2 } from "../session/message-v2"
-import type { Agent } from "../agent/agent"
+import type { Agent } from "@/runtime/agent/agent"
 import type { PermissionNext } from "../permission/next"
 import { Truncate } from "./truncation"
 

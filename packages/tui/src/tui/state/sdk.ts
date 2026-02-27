@@ -1,5 +1,5 @@
 import { hcWithType, type Client } from "@anonymous-dev/0x0-server/server/client"
-import type { Event } from "@anonymous-dev/0x0-server/bus/bus-event"
+import type { Event } from "@anonymous-dev/0x0-server/core/bus/bus-event"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, onCleanup, onMount } from "solid-js"
 
@@ -22,9 +22,16 @@ export function createSDK(props: {
   headers?: RequestInit["headers"]
   events?: EventSource
 }) {
+  const headers: Record<string, string> = {
+    ...(props.headers as Record<string, string> | undefined),
+  }
+  if (props.directory) {
+    headers["x-zeroxzero-directory"] = props.directory
+  }
+
   const client = hcWithType(props.url, {
     fetch: props.fetch,
-    headers: props.headers as Record<string, string> | undefined,
+    headers,
   })
 
   const emitter = createGlobalEmitter<{

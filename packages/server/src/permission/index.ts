@@ -1,8 +1,8 @@
-import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Bus } from "@/core/bus"
 import z from "zod"
 import { Log } from "../util/log"
-import { Identifier } from "../id/id"
+import { Identifier } from "@/core/id/id"
 import { Instance } from "../project/instance"
 import { Wildcard } from "../util/wildcard"
 

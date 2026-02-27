@@ -1,6 +1,6 @@
 import path from "path"
-import { LANGUAGE_EXTENSIONS } from "@anonymous-dev/0x0-server/lsp/language"
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { LANGUAGE_EXTENSIONS } from "@anonymous-dev/0x0-server/integration/lsp/language"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 
 export function normalizePath(input?: string) {
   if (!input) return ""

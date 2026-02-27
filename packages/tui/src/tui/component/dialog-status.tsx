@@ -1,7 +1,7 @@
 import { theme } from "@tui/state/theme"
 import { sync } from "@tui/state/sync"
 import { For, Match, Switch, Show, createMemo } from "solid-js"
-import { Installation } from "@anonymous-dev/0x0-server/installation"
+import { Installation } from "@anonymous-dev/0x0-server/core/installation"
 
 export type DialogStatusProps = {}
 

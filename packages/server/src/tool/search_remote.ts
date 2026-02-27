@@ -3,7 +3,7 @@ import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./search_remote.txt"
 import { abortAfterAny } from "../util/abort"
-import { Config } from "@/config/config"
+import { Config } from "@/core/config/config"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 30 * 1000

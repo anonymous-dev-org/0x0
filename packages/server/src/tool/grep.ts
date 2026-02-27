@@ -1,6 +1,6 @@
 import z from "zod"
 import { Tool } from "./tool"
-import { Ripgrep } from "../file/ripgrep"
+import { Ripgrep } from "@/workspace/file/ripgrep"
 
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"

@@ -1,5 +1,5 @@
 import { EOL } from "os"
-import { Config } from "../../../config/config"
+import { Config } from "@/core/config/config"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 

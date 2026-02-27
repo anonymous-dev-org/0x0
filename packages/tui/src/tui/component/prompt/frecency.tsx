@@ -1,5 +1,5 @@
 import path from "path"
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 import { onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"

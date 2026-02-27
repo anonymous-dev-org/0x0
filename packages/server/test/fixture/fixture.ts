@@ -2,7 +2,7 @@ import { $ } from "bun"
 import * as fs from "fs/promises"
 import os from "os"
 import path from "path"
-import type { Config } from "../../src/config/config"
+import type { Config } from "../../src/core/config/config"
 import YAML from "yaml"
 
 // Strip null bytes from paths (defensive fix for CI environment issues)

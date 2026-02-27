@@ -31,7 +31,7 @@ import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { TodoItem } from "../../component/todo-item"
 import { Locale } from "@anonymous-dev/0x0-server/util/locale"
-import { Global } from "@anonymous-dev/0x0-server/global"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
 import { Filesystem } from "@anonymous-dev/0x0-server/util/filesystem"
 import { normalizePath, toolInput, filetype } from "./session-tool-format"
 

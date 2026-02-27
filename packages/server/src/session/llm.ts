@@ -1,7 +1,7 @@
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import type { ModelMessage } from "ai"
-import type { Agent } from "@/agent/agent"
+import type { Agent } from "@/runtime/agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
 import { claudeStream } from "@/provider/sdk/claude-code"

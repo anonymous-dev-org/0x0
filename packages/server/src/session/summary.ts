@@ -5,17 +5,17 @@ import z from "zod"
 import { Session } from "."
 
 import { MessageV2 } from "./message-v2"
-import { Identifier } from "@/id/id"
-import { Snapshot } from "@/snapshot"
+import { Identifier } from "@/core/id/id"
+import { Snapshot } from "@/workspace/snapshot"
 
 import { Log } from "@/util/log"
 import path from "path"
 import { Instance } from "@/project/instance"
-import { Storage } from "@/storage/storage"
-import { Bus } from "@/bus"
+import { Storage } from "@/core/storage/storage"
+import { Bus } from "@/core/bus"
 
 import { LLM } from "./llm"
-import { Agent } from "@/agent/agent"
+import { Agent } from "@/runtime/agent/agent"
 
 export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })

@@ -10,11 +10,13 @@ import { SessionRevert } from "../../session/revert"
 import { SessionStatus } from "@/session/status"
 import { SessionSummary } from "@/session/summary"
 import { Todo } from "../../session/todo"
-import { Agent } from "../../agent/agent"
-import { Snapshot } from "@/snapshot"
+import { Agent } from "@/runtime/agent/agent"
+import { Snapshot } from "@/workspace/snapshot"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
-import { Caffeinate } from "@/caffeinate"
+import { Caffeinate } from "@/runtime/caffeinate"
+import { Bus } from "@/core/bus"
+import { NamedError } from "@/util/error"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -798,7 +800,15 @@ export const SessionRoutes = lazy(() =>
         return stream(c, async () => {
           const sessionID = c.req.valid("param").sessionID
           const body = c.req.valid("json")
-          SessionPrompt.prompt({ ...body, sessionID })
+          SessionPrompt.prompt({ ...body, sessionID }).catch((e) => {
+            log.error("prompt_async error", { sessionID, error: e })
+            Bus.publish(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: e instanceof Error ? e.message : String(e),
+              }).toObject(),
+            })
+          })
         })
       },
     )
