@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "4.9.0",
+  "version": "5.0.0",
   "name": "@anonymous-dev/0x0-server",
   "type": "module",
   "license": "MIT",
@@ -43,7 +43,6 @@
     "@actions/github": "6.0.1",
     "@agentclientprotocol/sdk": "0.14.1",
     "@anonymous-dev/0x0-script": "workspace:*",
-    "@anonymous-dev/0x0-util": "workspace:*",
     "@anthropic-ai/claude-agent-sdk": "0.2.50",
     "@clack/prompts": "1.0.0-alpha.1",
     "@modelcontextprotocol/sdk": "1.25.2",
