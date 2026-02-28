@@ -15,6 +15,7 @@ Prompts for version per package, then publishes everything.
 
 Packages:
   0x0              → npm + brew (zeroxzero)
+  0x0-server       → npm + brew (zeroxzero-server)
   0x0-git          → npm + brew (zeroxzero-git)
   nvim             → git repo push
   nvim-completion  → git repo push
@@ -242,6 +243,82 @@ prepare_npm_dist() {
   '
 }
 
+prepare_server_npm_dist() {
+  local version="$1"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: prepare scoped server dist package metadata"
+    return
+  fi
+
+  run rm -rf ./packages/server/dist/0x0-server
+  run mkdir -p ./packages/server/dist/0x0-server
+  run cp -r ./packages/server/bin ./packages/server/dist/0x0-server/bin
+  run cp ./packages/server/script/postinstall.mjs ./packages/server/dist/0x0-server/postinstall.mjs
+  run cp ./LICENSE ./packages/server/dist/0x0-server/LICENSE
+
+  SCOPE="$SCOPE" VERSION="$version" bun -e '
+    const scope = process.env.SCOPE
+    if (!scope) throw new Error("Missing SCOPE")
+
+    const dist = "./packages/server/dist"
+    const release = process.env.VERSION
+    if (!release) throw new Error("Missing VERSION")
+    const binaries = {}
+    const dirs = []
+
+    for await (const filepath of new Bun.Glob("*/package.json").scan({ cwd: dist })) {
+      const dir = filepath.split("/")[0]
+      if (!dir || dir === "0x0-server") continue
+
+      const file = `${dist}/${filepath}`
+      const info = await Bun.file(file).json()
+      binaries[dir] = release
+      dirs.push(dir)
+      await Bun.write(
+        file,
+        JSON.stringify(
+          {
+            ...info,
+            name: `${scope}/${dir}`,
+            version: release,
+          },
+          null,
+          2,
+        ) + "\n",
+      )
+    }
+
+    const version = Object.values(binaries)[0]
+    if (!version) throw new Error("No built binaries found in ./packages/server/dist")
+
+    const optionalDependencies = Object.fromEntries(
+      Object.entries(binaries).map(([name, value]) => [`${scope}/${name}`, value]),
+    )
+
+    await Bun.write(
+      `${dist}/0x0-server/package.json`,
+      JSON.stringify(
+        {
+          name: `${scope}/0x0-server`,
+          bin: {
+            "0x0-server": "./bin/0x0-server",
+          },
+          scripts: {
+            postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+          },
+          version,
+          license: "MIT",
+          optionalDependencies,
+        },
+        null,
+        2,
+      ) + "\n",
+    )
+
+    console.log(`Prepared server dist metadata for ${dirs.length} binaries at version ${version}`)
+  '
+}
+
 prepare_git_npm_dist() {
   local version="$1"
   if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -348,17 +425,45 @@ if [[ -z "${latest_tag}" ]]; then
 fi
 latest_version="$(semver_from_tag "$latest_tag")"
 
-echo "── 0x0 (server/TUI) ──"
+echo "── 0x0 (TUI) ──"
 echo "Latest tag: ${latest_tag}"
 echo "Select release type:"
-select release_type in major minor patch; do
+select release_type in major minor patch skip; do
   [[ -n "${release_type:-}" ]] && break
-  echo "Choose 1, 2, or 3."
+  echo "Choose 1, 2, 3, or 4."
 done
-next_version="$(bump_version "$latest_version" "$release_type")"
-read -r -p "0x0 version [${next_version}]: " override
-VERSION_0X0="${override:-$next_version}"
-is_semver "$VERSION_0X0" || { echo "Invalid version: $VERSION_0X0"; exit 1; }
+if [[ "$release_type" == "skip" ]]; then
+  VERSION_0X0=""
+else
+  next_version="$(bump_version "$latest_version" "$release_type")"
+  read -r -p "0x0 version [${next_version}]: " override
+  VERSION_0X0="${override:-$next_version}"
+  is_semver "$VERSION_0X0" || { echo "Invalid version: $VERSION_0X0"; exit 1; }
+fi
+
+# 0x0-server version — from package.json
+SERVER_PKG_VERSION="$(bun -e 'const p = await Bun.file("./packages/server/package.json").json(); console.log(p.version)')"
+echo
+echo "── 0x0-server ──"
+echo "Current package.json version: ${SERVER_PKG_VERSION}"
+echo "Select release type:"
+select server_release_type in major minor patch same skip; do
+  [[ -n "${server_release_type:-}" ]] && break
+  echo "Choose 1, 2, 3, 4, or 5."
+done
+if [[ "$server_release_type" == "skip" ]]; then
+  VERSION_SERVER=""
+elif [[ "$server_release_type" == "same" ]]; then
+  next_server_version="$SERVER_PKG_VERSION"
+  read -r -p "0x0-server version [${next_server_version}]: " server_override
+  VERSION_SERVER="${server_override:-$next_server_version}"
+  is_semver "$VERSION_SERVER" || { echo "Invalid version: $VERSION_SERVER"; exit 1; }
+else
+  next_server_version="$(bump_version "$SERVER_PKG_VERSION" "$server_release_type")"
+  read -r -p "0x0-server version [${next_server_version}]: " server_override
+  VERSION_SERVER="${server_override:-$next_server_version}"
+  is_semver "$VERSION_SERVER" || { echo "Invalid version: $VERSION_SERVER"; exit 1; }
+fi
 
 # 0x0-git version — from package.json
 GIT_PKG_VERSION="$(bun -e 'const p = await Bun.file("./packages/git/package.json").json(); console.log(p.version)')"
@@ -366,18 +471,23 @@ echo
 echo "── 0x0-git ──"
 echo "Current package.json version: ${GIT_PKG_VERSION}"
 echo "Select release type:"
-select git_release_type in major minor patch same; do
+select git_release_type in major minor patch same skip; do
   [[ -n "${git_release_type:-}" ]] && break
-  echo "Choose 1, 2, 3, or 4."
+  echo "Choose 1, 2, 3, 4, or 5."
 done
-if [[ "$git_release_type" == "same" ]]; then
+if [[ "$git_release_type" == "skip" ]]; then
+  VERSION_GIT=""
+elif [[ "$git_release_type" == "same" ]]; then
   next_git_version="$GIT_PKG_VERSION"
+  read -r -p "0x0-git version [${next_git_version}]: " git_override
+  VERSION_GIT="${git_override:-$next_git_version}"
+  is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 else
   next_git_version="$(bump_version "$GIT_PKG_VERSION" "$git_release_type")"
+  read -r -p "0x0-git version [${next_git_version}]: " git_override
+  VERSION_GIT="${git_override:-$next_git_version}"
+  is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 fi
-read -r -p "0x0-git version [${next_git_version}]: " git_override
-VERSION_GIT="${git_override:-$next_git_version}"
-is_semver "$VERSION_GIT" || { echo "Invalid version: $VERSION_GIT"; exit 1; }
 
 # nvim versions — read from local version.txt files
 
@@ -427,36 +537,48 @@ prompt_nvim_version() {
 prompt_nvim_version "nvim" "./packages/nvim/version.txt" VERSION_NVIM
 prompt_nvim_version "nvim-completion" "./packages/nvim-completion/version.txt" VERSION_NVIM_COMP
 
-# ── NPM auth ──────────────────────────────────────────────────────
+# ── Check at least one package selected ────────────────────────────
 
-TOKEN="${ZEROXZERO_NPM_TOKEN:-${NPM_TOKEN:-${NODE_AUTH_TOKEN:-}}}"
-if [[ -z "$TOKEN" ]]; then
-  read -r -s -p "Enter NPM token: " TOKEN
-  echo
+if [[ -z "$VERSION_0X0" && -z "$VERSION_SERVER" && -z "$VERSION_GIT" && -z "$VERSION_NVIM" && -z "$VERSION_NVIM_COMP" ]]; then
+  echo "All packages skipped. Nothing to publish."
+  exit 0
 fi
 
-[[ -n "$TOKEN" ]] || {
-  echo "NPM token is required."
-  exit 1
-}
+# ── NPM auth ──────────────────────────────────────────────────────
 
-TMP_NPMRC="$(mktemp)"
-cleanup() { rm -f "$TMP_NPMRC"; }
-trap cleanup EXIT
+TOKEN=""
+TMP_NPMRC=""
 
-{
-  printf '%s:registry=https://registry.npmjs.org/\n' "$SCOPE"
-  printf '//registry.npmjs.org/:_authToken=%s\n' "$TOKEN"
-} > "$TMP_NPMRC"
-chmod 600 "$TMP_NPMRC"
+if [[ -n "$VERSION_0X0" || -n "$VERSION_SERVER" || -n "$VERSION_GIT" ]]; then
+  TOKEN="${ZEROXZERO_NPM_TOKEN:-${NPM_TOKEN:-${NODE_AUTH_TOKEN:-}}}"
+  if [[ -z "$TOKEN" ]]; then
+    read -r -s -p "Enter NPM token: " TOKEN
+    echo
+  fi
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "DRY RUN: skipping npm whoami auth check"
-else
-  npm_config_userconfig="$TMP_NPMRC" command npm whoami >/dev/null || {
-    echo "npm auth failed. Check token scope/validity."
+  [[ -n "$TOKEN" ]] || {
+    echo "NPM token is required."
     exit 1
   }
+
+  TMP_NPMRC="$(mktemp)"
+  cleanup() { rm -f "$TMP_NPMRC"; }
+  trap cleanup EXIT
+
+  {
+    printf '%s:registry=https://registry.npmjs.org/\n' "$SCOPE"
+    printf '//registry.npmjs.org/:_authToken=%s\n' "$TOKEN"
+  } > "$TMP_NPMRC"
+  chmod 600 "$TMP_NPMRC"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "DRY RUN: skipping npm whoami auth check"
+  else
+    npm_config_userconfig="$TMP_NPMRC" command npm whoami >/dev/null || {
+      echo "npm auth failed. Check token scope/validity."
+      exit 1
+    }
+  fi
 fi
 
 # ── Release plan ───────────────────────────────────────────────────
@@ -468,18 +590,21 @@ echo "  Scope:             $SCOPE"
 echo "  NPM tag:           $NPM_TAG"
 echo "  Dry run:           $([[ "$DRY_RUN" -eq 1 ]] && echo yes || echo no)"
 echo
-echo "  0x0:               v$VERSION_0X0"
-echo "  0x0-git:           v$VERSION_GIT"
-echo "  nvim:              ${VERSION_NVIM:-skip}"
-echo "  nvim-completion:   ${VERSION_NVIM_COMP:-skip}"
+echo "  0x0:               $( [[ -n "$VERSION_0X0" ]] && echo "v$VERSION_0X0" || echo "skip" )"
+echo "  0x0-server:        $( [[ -n "$VERSION_SERVER" ]] && echo "v$VERSION_SERVER" || echo "skip" )"
+echo "  0x0-git:           $( [[ -n "$VERSION_GIT" ]] && echo "v$VERSION_GIT" || echo "skip" )"
+echo "  nvim:              $( [[ -n "$VERSION_NVIM" ]] && echo "v$VERSION_NVIM" || echo "skip" )"
+echo "  nvim-completion:   $( [[ -n "$VERSION_NVIM_COMP" ]] && echo "v$VERSION_NVIM_COMP" || echo "skip" )"
 echo
 
 read -r -p "Proceed with publish? [y/N] " ok
 [[ "$ok" == "y" || "$ok" == "Y" ]] || exit 1
 
 # ══════════════════════════════════════════════════════════════════
-#  0x0 (server/TUI)
+#  0x0 (TUI)
 # ══════════════════════════════════════════════════════════════════
+
+if [[ -n "$VERSION_0X0" ]]; then
 
 echo
 echo "════ 0x0 v$VERSION_0X0 ════"
@@ -536,13 +661,80 @@ fi
 echo "8) Publish Homebrew tap (zeroxzero)"
 run bun ./script/publish-tap.ts --version "$VERSION_0X0" --repo "$REPO"
 
-echo "8b) Update source package.json versions"
-set_pkg_version "./packages/server/package.json" "$VERSION_0X0"
+echo "8b) Update TUI source package.json version"
 set_pkg_version "./packages/tui/package.json" "$VERSION_0X0"
+
+fi # 0x0
+
+# ══════════════════════════════════════════════════════════════════
+#  0x0-server
+# ══════════════════════════════════════════════════════════════════
+
+if [[ -n "$VERSION_SERVER" ]]; then
+
+echo
+echo "════ 0x0-server v$VERSION_SERVER ════"
+
+SERVER_TAG="0x0-server-v${VERSION_SERVER}"
+
+echo "1) Build server artifacts"
+run env ZEROXZERO_VERSION="$VERSION_SERVER" bun ./packages/server/script/build.ts
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "2) DRY RUN: skipping server packaging"
+else
+  echo "2) Package server artifacts"
+  package_if_needed "0x0-server-darwin-arm64" "zip" "./packages/server"
+  package_if_needed "0x0-server-darwin-x64" "zip" "./packages/server"
+  package_if_needed "0x0-server-linux-arm64" "tgz" "./packages/server"
+  package_if_needed "0x0-server-linux-x64" "tgz" "./packages/server"
+fi
+
+echo "3) Ensure GitHub release for server"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  run gh release view "$SERVER_TAG" --repo "$REPO"
+  run gh release create "$SERVER_TAG" --repo "$REPO" --title "$SERVER_TAG" --notes "Release $SERVER_TAG"
+else
+  gh release view "$SERVER_TAG" --repo "$REPO" >/dev/null 2>&1 || \
+    gh release create "$SERVER_TAG" --repo "$REPO" --title "$SERVER_TAG" --notes "Release $SERVER_TAG"
+fi
+
+echo "4) Upload server release assets"
+run gh release upload "$SERVER_TAG" ./packages/server/dist/*.zip ./packages/server/dist/*.tar.gz --repo "$REPO" --clobber
+
+echo "5) Prepare server npm metadata"
+prepare_server_npm_dist "$VERSION_SERVER"
+
+echo "6) Publish server npm packages"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  run NPM_TOKEN="$TOKEN" bun ./packages/server/script/publish-npm.ts --scope "$SCOPE" --tag "$NPM_TAG" --version "$VERSION_SERVER"
+else
+  NPM_TOKEN="$TOKEN" \
+    bun ./packages/server/script/publish-npm.ts \
+      --scope "$SCOPE" \
+      --tag "$NPM_TAG" \
+      --version "$VERSION_SERVER"
+fi
+
+echo "7) Publish Homebrew tap (zeroxzero-server)"
+run bun ./script/publish-tap.ts \
+  --version "$VERSION_SERVER" \
+  --repo "$REPO" \
+  --prefix 0x0-server \
+  --formula-name zeroxzero-server \
+  --tag "$SERVER_TAG" \
+  --desc "The AI coding agent daemon."
+
+echo "7b) Update server source package.json version"
+set_pkg_version "./packages/server/package.json" "$VERSION_SERVER"
+
+fi # 0x0-server
 
 # ══════════════════════════════════════════════════════════════════
 #  0x0-git
 # ══════════════════════════════════════════════════════════════════
+
+if [[ -n "$VERSION_GIT" ]]; then
 
 echo
 echo "════ 0x0-git v$VERSION_GIT ════"
@@ -594,6 +786,8 @@ run bun ./script/publish-tap.ts --version "$VERSION_GIT" --repo "$REPO" --prefix
 echo "15b) Update git source package.json version"
 set_pkg_version "./packages/git/package.json" "$VERSION_GIT"
 
+fi # 0x0-git
+
 # ══════════════════════════════════════════════════════════════════
 #  Neovim plugins
 # ══════════════════════════════════════════════════════════════════
@@ -635,16 +829,24 @@ echo "════ Commit version bumps ════"
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY RUN: would commit version bumps to package.json and version.txt files"
 else
-  VERSION_FILES=(./packages/server/package.json ./packages/tui/package.json ./packages/git/package.json)
+  VERSION_FILES=()
+  [[ -n "$VERSION_0X0" ]] && VERSION_FILES+=(./packages/tui/package.json)
+  [[ -n "$VERSION_SERVER" ]] && VERSION_FILES+=(./packages/server/package.json)
+  [[ -n "$VERSION_GIT" ]] && VERSION_FILES+=(./packages/git/package.json)
   [[ -n "$VERSION_NVIM" ]] && VERSION_FILES+=(./packages/nvim/version.txt)
   [[ -n "$VERSION_NVIM_COMP" ]] && VERSION_FILES+=(./packages/nvim-completion/version.txt)
 
-  if ! git diff --quiet "${VERSION_FILES[@]}" 2>/dev/null; then
+  if [[ ${#VERSION_FILES[@]} -gt 0 ]] && ! git diff --quiet "${VERSION_FILES[@]}" 2>/dev/null; then
     git add "${VERSION_FILES[@]}"
 
-    COMMIT_MSG="chore: bump versions — 0x0@${VERSION_0X0}, 0x0-git@${VERSION_GIT}"
-    [[ -n "$VERSION_NVIM" ]] && COMMIT_MSG+=", nvim@${VERSION_NVIM}"
-    [[ -n "$VERSION_NVIM_COMP" ]] && COMMIT_MSG+=", nvim-completion@${VERSION_NVIM_COMP}"
+    COMMIT_PARTS=()
+    [[ -n "$VERSION_0X0" ]] && COMMIT_PARTS+=("0x0@${VERSION_0X0}")
+    [[ -n "$VERSION_SERVER" ]] && COMMIT_PARTS+=("0x0-server@${VERSION_SERVER}")
+    [[ -n "$VERSION_GIT" ]] && COMMIT_PARTS+=("0x0-git@${VERSION_GIT}")
+    [[ -n "$VERSION_NVIM" ]] && COMMIT_PARTS+=("nvim@${VERSION_NVIM}")
+    [[ -n "$VERSION_NVIM_COMP" ]] && COMMIT_PARTS+=("nvim-completion@${VERSION_NVIM_COMP}")
+
+    COMMIT_MSG="chore: bump versions — $(IFS=', '; echo "${COMMIT_PARTS[*]}")"
 
     git commit -m "$COMMIT_MSG"
     echo "Committed version bumps"
@@ -659,18 +861,21 @@ fi
 
 echo
 echo "════ Verify ════"
-run curl -fL -I "https://github.com/$REPO/releases/download/v$VERSION_0X0/0x0-darwin-arm64.zip"
-run command npm view "$SCOPE/0x0@$VERSION_0X0" version
-run command npm view "$SCOPE/0x0-git@$VERSION_GIT" version
+[[ -n "$VERSION_0X0" ]] && run curl -fL -I "https://github.com/$REPO/releases/download/v$VERSION_0X0/0x0-darwin-arm64.zip"
+[[ -n "$VERSION_0X0" ]] && run command npm view "$SCOPE/0x0@$VERSION_0X0" version
+[[ -n "$VERSION_SERVER" ]] && run command npm view "$SCOPE/0x0-server@$VERSION_SERVER" version
+[[ -n "$VERSION_GIT" ]] && run command npm view "$SCOPE/0x0-git@$VERSION_GIT" version
 
 echo
 echo "Done!"
-echo "  0x0:             v$VERSION_0X0"
-echo "  0x0-git:         v$VERSION_GIT"
-echo "  nvim:            ${VERSION_NVIM:-skipped}"
-echo "  nvim-completion: ${VERSION_NVIM_COMP:-skipped}"
+echo "  0x0:             $( [[ -n "$VERSION_0X0" ]] && echo "v$VERSION_0X0" || echo "skipped" )"
+echo "  0x0-server:      $( [[ -n "$VERSION_SERVER" ]] && echo "v$VERSION_SERVER" || echo "skipped" )"
+echo "  0x0-git:         $( [[ -n "$VERSION_GIT" ]] && echo "v$VERSION_GIT" || echo "skipped" )"
+echo "  nvim:            $( [[ -n "$VERSION_NVIM" ]] && echo "v$VERSION_NVIM" || echo "skipped" )"
+echo "  nvim-completion: $( [[ -n "$VERSION_NVIM_COMP" ]] && echo "v$VERSION_NVIM_COMP" || echo "skipped" )"
 echo
 echo "Install:"
 echo "  brew tap anonymous-dev-org/tap"
-echo "  brew install 0x0"
-echo "  brew install 0x0-git"
+[[ -n "$VERSION_0X0" ]] && echo "  brew install 0x0" || true
+[[ -n "$VERSION_SERVER" ]] && echo "  brew install 0x0-server" || true
+[[ -n "$VERSION_GIT" ]] && echo "  brew install 0x0-git" || true

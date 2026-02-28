@@ -125,7 +125,6 @@ export namespace Config {
       $schema: configSchemaURL,
       system_prompt: PROMPT_DEFAULT.trim(),
       compaction: {
-        max_words_before_compact: 12_000,
         prompt: COMPACTION_PROMPT_DEFAULT,
       },
       knowledge_base: [],
@@ -1149,12 +1148,6 @@ export namespace Config {
         .optional(),
       compaction: z
         .object({
-          max_words_before_compact: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe("Automatically compact when history word count exceeds this value"),
           provider: z.string().optional().describe("Provider used for compaction model"),
           model: z.string().optional().describe("Model used for compaction"),
           prompt: z.string().optional().describe("Prompt used for session compaction"),

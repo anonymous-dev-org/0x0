@@ -70,6 +70,7 @@ const TOOL_COMPONENTS: Record<string, (props: ToolProps<Tool.Info>) => JSX.Eleme
   apply_patch: ApplyPatch,
   todowrite: TodoWrite,
   question: Question,
+  AskUserQuestion: Question,
   lsp: Lsp,
   skill: Skill,
 }

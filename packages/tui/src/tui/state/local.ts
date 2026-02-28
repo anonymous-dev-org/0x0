@@ -143,12 +143,14 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       modelID: string
     }[]
     variant: Record<string, string | undefined>
+    thinkingEffort: Record<string, string | undefined>
   }>({
     ready: false,
     model: {},
     recent: [],
     favorite: [],
     variant: {},
+    thinkingEffort: {},
   })
 
   const file = Bun.file(path.join(Global.Path.state, "model.json"))
@@ -168,6 +170,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
         recent: modelStore.recent,
         favorite: modelStore.favorite,
         variant: modelStore.variant,
+        thinkingEffort: modelStore.thinkingEffort,
       }),
     )
   }
@@ -178,6 +181,8 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       if (Array.isArray(x.recent)) setModelStore("recent", x.recent)
       if (Array.isArray(x.favorite)) setModelStore("favorite", x.favorite)
       if (typeof x.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
+      if (typeof x.thinkingEffort === "object" && x.thinkingEffort !== null)
+        setModelStore("thinkingEffort", x.thinkingEffort)
     })
     .catch(() => {})
     .finally(() => {
@@ -413,6 +418,22 @@ function createModel(agent: ReturnType<typeof createAgent>) {
           return
         }
         this.set(variants[index + 1])
+      },
+    },
+    thinkingEffort: {
+      current() {
+        return modelStore.thinkingEffort[agent.current().name]
+      },
+      set(value: string | undefined) {
+        setModelStore("thinkingEffort", agent.current().name, value)
+        save()
+      },
+      cycle() {
+        const options = [undefined, "low", "medium", "high"] as const
+        const current = this.current()
+        const idx = options.findIndex((x) => x === current)
+        const next = options[(idx + 1) % options.length]
+        this.set(next)
       },
     },
   }

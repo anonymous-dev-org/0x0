@@ -18,6 +18,9 @@ type SubmitContext = {
       variant: {
         current: () => string | undefined
       }
+      thinkingEffort: {
+        current: () => string | undefined
+      }
     }
     agent: {
       current: () => {
@@ -300,6 +303,7 @@ export async function submitPrompt(props: {
         agent: props.local.agent.current().name,
         model: selectedModel,
         variant,
+        thinkingEffort: props.local.model.thinkingEffort.current(),
         parts,
       },
     } as any)

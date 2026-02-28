@@ -119,6 +119,7 @@ export namespace SessionPrompt {
       ),
     system: z.string().optional(),
     variant: z.string().optional(),
+    thinkingEffort: z.string().optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -525,7 +526,10 @@ export namespace SessionPrompt {
       if (
         lastFinished &&
         lastFinished.summary !== true &&
-        (await SessionCompaction.shouldCompact({ sessionID, messages: msgs }))
+        SessionCompaction.shouldCompact({
+          model: await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID),
+          tokens: lastFinished.tokens,
+        })
       ) {
         await SessionCompaction.create({
           sessionID,
@@ -851,6 +855,7 @@ export namespace SessionPrompt {
       model,
       system: input.system,
       variant,
+      thinkingEffort: input.thinkingEffort,
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 

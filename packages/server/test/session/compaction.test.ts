@@ -1,13 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import path from "path"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Token } from "../../src/util/token"
-import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
-import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { Provider } from "../../src/provider/provider"
-import { Config } from "../../src/core/config/config"
 
 Log.init({ print: false })
 
@@ -31,162 +27,59 @@ function createModel(opts: {
   }
 }
 
-describe("session.compaction.isOverflow", () => {
-  test("returns true when token count exceeds usable context", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 100_000, output: 32_000 })
-        const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
-      },
-    })
+function tokens(input: number, output: number, cacheRead = 0) {
+  return { input, output, reasoning: 0, cache: { read: cacheRead, write: 0 } }
+}
+
+describe("session.compaction.shouldCompact", () => {
+  test("returns true when token usage >= 80% of usable context", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    // usable = 100_000 - 32_000 = 68_000, 80% = 54_400
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(55_000, 0) })).toBe(true)
   })
 
-  test("returns false when token count within usable context", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 200_000, output: 32_000 })
-        const tokens = { input: 100_000, output: 10_000, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-      },
-    })
+  test("returns false when token usage < 80% of usable context", () => {
+    const model = createModel({ context: 200_000, output: 32_000 })
+    // usable = 168_000, 80% = 134_400
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(100_000, 10_000) })).toBe(false)
   })
 
-  test("includes cache.read in token count", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 100_000, output: 32_000 })
-        const tokens = { input: 50_000, output: 10_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
-      },
-    })
+  test("includes cache.read in token count", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    // usable = 68_000, 80% = 54_400
+    // used = 40_000 + 5_000 + 10_000 = 55_000 >= 54_400
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(40_000, 5_000, 10_000) })).toBe(true)
   })
 
-  test("respects input limit for input caps", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
-        const tokens = { input: 271_000, output: 1_000, reasoning: 0, cache: { read: 2_000, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
-      },
-    })
+  test("respects input limit when set", () => {
+    const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
+    // usable = min(400_000 - 128_000, 272_000) = min(272_000, 272_000) = 272_000
+    // 80% = 217_600; used = 220_000 >= 217_600
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(218_000, 1_000, 1_000) })).toBe(true)
   })
 
-  test("returns false when input/output are within input caps", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
-        const tokens = { input: 200_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-      },
-    })
+  test("returns false when within input limit", () => {
+    const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
+    // usable = 272_000, 80% = 217_600; used = 200_000 + 10_000 + 5_000 = 215_000 < 217_600
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(200_000, 10_000, 5_000) })).toBe(false)
   })
 
-  test("returns false when output within limit with input caps", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 200_000, input: 120_000, output: 10_000 })
-        const tokens = { input: 50_000, output: 9_999, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-      },
-    })
+  test("returns false when model context limit is 0", () => {
+    const model = createModel({ context: 0, output: 32_000 })
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(100_000, 10_000) })).toBe(false)
   })
 
-  test("returns false when model context limit is 0", async () => {
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await Bun.write(
-          path.join(dir, ".0x0", "config.yaml"),
-          JSON.stringify({ compaction: { max_words_before_compact: 12_000 } }),
-        )
-      },
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = createModel({ context: 0, output: 32_000 })
-        const tokens = { input: 100_000, output: 10_000, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-      },
-    })
+  test("exact 80% boundary — just under returns false", () => {
+    const model = createModel({ context: 100_000, output: 20_000 })
+    // usable = 80_000, 80% = 64_000
+    // used = 63_999 < 64_000
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(63_999, 0) })).toBe(false)
   })
 
-  test("returns false when max_words_before_compact is not set", async () => {
-    const get = Config.get
-    Config.get = async () => ({ compaction: {} })
-    try {
-      const model = createModel({ context: 100_000, output: 32_000 })
-      const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
-      expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-    } finally {
-      Config.get = get
-    }
-  })
-
-  test("returns false when compaction is not configured", async () => {
-    const get = Config.get
-    Config.get = async () => ({})
-    try {
-      const model = createModel({ context: 100_000, output: 32_000 })
-      const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
-      expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
-    } finally {
-      Config.get = get
-    }
+  test("exact 80% boundary — at threshold returns true", () => {
+    const model = createModel({ context: 100_000, output: 20_000 })
+    // usable = 80_000, 80% = 64_000
+    expect(SessionCompaction.shouldCompact({ model, tokens: tokens(64_000, 0) })).toBe(true)
   })
 })
 

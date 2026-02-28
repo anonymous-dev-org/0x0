@@ -24,12 +24,6 @@ export namespace SessionCompaction {
     ),
   }
 
-  function words(text: string) {
-    const normalized = text.trim()
-    if (!normalized) return 0
-    return normalized.split(/\s+/).length
-  }
-
   function text(part: MessageV2.Part) {
     if (part.type === "text" && !part.ignored) return part.text
     if (part.type === "reasoning") return part.text
@@ -51,47 +45,18 @@ export namespace SessionCompaction {
       })
       .filter(Boolean)
 
-    const formatted = lines.join("\n\n")
-    return {
-      formatted,
-      totalWords: words(formatted),
-    }
+    return lines.join("\n\n")
   }
 
-  export async function shouldCompact(input: { sessionID: string; messages?: MessageV2.WithParts[] }) {
-    const config = await Config.get()
-    const threshold = config.compaction?.max_words_before_compact
-    if (!threshold) return false
-    const messages = input.messages ?? (await MessageV2.filterCompacted(MessageV2.stream(input.sessionID)))
-    const count = history(messages).totalWords
-    if (count <= threshold) return false
-    log.info("compaction threshold exceeded", {
-      sessionID: input.sessionID,
-      words: count,
-      threshold,
-    })
-    return true
-  }
-
-  export async function isOverflow(input: {
-    sessionID?: string
-    messages?: MessageV2.WithParts[]
-    tokens: MessageV2.Assistant["tokens"]
+  export function shouldCompact(input: {
     model: Provider.Model
-  }) {
-    const config = await Config.get()
-    if (!config.compaction?.max_words_before_compact) return false
+    tokens: MessageV2.Assistant["tokens"]
+  }): boolean {
     const limit = input.model.limit
-    if (limit.context > 0) {
-      const usable = Math.min(limit.context - limit.output, limit.input ?? Infinity)
-      const used = input.tokens.input + input.tokens.output + input.tokens.cache.read
-      if (used >= usable) return true
-    }
-    if (!input.sessionID) return false
-    return shouldCompact({
-      sessionID: input.sessionID,
-      messages: input.messages,
-    })
+    if (limit.context <= 0) return false
+    const usable = Math.min(limit.context - limit.output, limit.input ?? Infinity)
+    const used = input.tokens.input + input.tokens.output + input.tokens.cache.read
+    return used >= usable * 0.8
   }
 
   export async function process(input: {
@@ -116,7 +81,7 @@ export namespace SessionCompaction {
       log.info("skipping compaction, missing compaction.prompt")
       return "stop"
     }
-    const context = history(input.messages).formatted
+    const context = history(input.messages)
 
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),

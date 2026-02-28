@@ -333,6 +333,19 @@ export function useSessionCommands(props: {
       },
     },
     {
+      title: `Thinking effort: ${local.model.thinkingEffort.current() ?? "off"}`,
+      value: "session.thinking.effort",
+      category: "Model",
+      slash: {
+        name: "think",
+        aliases: ["thinking-effort"],
+      },
+      onSelect: (dialog) => {
+        local.model.thinkingEffort.cycle()
+        dialog.clear()
+      },
+    },
+    {
       title: settings.showDetails() ? "Hide tool details" : "Show tool details",
       value: "session.toggle.actions",
       keybind: "tool_details",

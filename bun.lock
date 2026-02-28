@@ -18,7 +18,7 @@
     },
     "packages/git": {
       "name": "@anonymous-dev/0x0-git",
-      "version": "2.0.0",
+      "version": "2.2.0",
       "bin": {
         "0x0-git": "./bin/0x0-git",
       },
@@ -48,7 +48,7 @@
     },
     "packages/server": {
       "name": "@anonymous-dev/0x0-server",
-      "version": "5.0.0",
+      "version": "1.1.2",
       "bin": {
         "0x0-server": "./bin/0x0-server",
       },
@@ -111,7 +111,7 @@
     },
     "packages/tui": {
       "name": "0x0",
-      "version": "5.0.0",
+      "version": "5.5.0",
       "bin": {
         "0x0": "./bin/0x0",
       },

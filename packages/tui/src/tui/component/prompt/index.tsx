@@ -761,6 +761,14 @@ export function Prompt(props: PromptProps) {
                       {local.model.variant.current()}
                     </text>
                   </Show>
+                  <Show when={local.model.thinkingEffort.current()}>
+                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                      ·
+                    </text>
+                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                      think:{local.model.thinkingEffort.current()}
+                    </text>
+                  </Show>
                 </box>
               </Show>
             </box>

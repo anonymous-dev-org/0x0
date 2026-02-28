@@ -22,7 +22,7 @@ export namespace Question {
     .object({
       question: z.string().describe("Complete question"),
       header: z.string().describe("Very short label (max 30 chars)"),
-      options: z.array(Option).describe("Available choices"),
+      options: z.array(Option).min(2).describe("Available answer choices (provide 2-4 specific options)"),
       multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
       custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
     })

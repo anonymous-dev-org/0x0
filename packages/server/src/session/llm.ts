@@ -18,6 +18,7 @@ export namespace LLM {
   export type CliEvent =
     | { type: "text-delta"; text: string }
     | { type: "reasoning-delta"; id: string; text: string }
+    | { type: "message-boundary" }
     | { type: "tool-start"; id: string; tool: string; command?: string }
     | { type: "tool-input-delta"; id: string; partial: string }
     | { type: "tool-end"; id: string; output: string; exitCode?: number }
@@ -223,6 +224,7 @@ export namespace LLM {
       cliSessionId: input.cliSessionId,
       abort: input.abort,
       canUseTool: input.canUseTool,
+      thinkingEffort: input.user.thinkingEffort,
     })) {
       switch (event.type) {
         case "text-delta":
@@ -230,6 +232,9 @@ export namespace LLM {
           break
         case "reasoning-delta":
           yield { type: "reasoning-delta", id: event.id, text: event.text }
+          break
+        case "message-boundary":
+          yield { type: "message-boundary" }
           break
         case "tool-start":
           yield { type: "tool-start", id: event.id, tool: event.name }

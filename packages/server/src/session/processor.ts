@@ -9,6 +9,7 @@ import { SessionStatus } from "./status"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { PermissionNext } from "@/permission/next"
+import { Question } from "@/runtime/question"
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
 
 function providerToolPermission(toolName: string): string {
@@ -118,7 +119,57 @@ export namespace SessionProcessor {
         const canUseTool = async (
           toolName: string,
           toolInput: Record<string, unknown>,
+          options?: { signal?: AbortSignal; toolUseID?: string; agentID?: string },
         ): Promise<PermissionResult> => {
+          // Intercept AskUserQuestion: the Claude Code subprocess has no terminal,
+          // so route questions through the 0x0 question system to display in the TUI.
+          if (toolName === "AskUserQuestion") {
+            const rawQuestions = toolInput.questions as
+              | Array<{
+                  question: string
+                  header: string
+                  options: Array<{ label: string; description: string }>
+                  multiSelect?: boolean
+                }>
+              | undefined
+            if (!rawQuestions?.length) {
+              return { behavior: "deny", message: "No questions provided." }
+            }
+
+            try {
+              const answers = await Question.ask({
+                sessionID: input.sessionID,
+                questions: rawQuestions.map((q) => ({
+                  question: q.question,
+                  header: q.header,
+                  options: q.options,
+                  multiple: q.multiSelect,
+                })),
+                tool: options?.toolUseID
+                  ? { messageID: input.assistantMessage.id, callID: options.toolUseID }
+                  : undefined,
+              })
+
+              const answerMap: Record<string, string> = {}
+              for (let i = 0; i < rawQuestions.length; i++) {
+                answerMap[rawQuestions[i]!.question] = (answers[i] ?? []).join(", ")
+              }
+
+              return {
+                behavior: "deny",
+                message: `The user answered your questions: ${JSON.stringify(answerMap)}. Continue with these answers in mind.`,
+              }
+            } catch (e) {
+              if (e instanceof Question.RejectedError) {
+                return { behavior: "deny", message: "The user dismissed this question without answering." }
+              }
+              return {
+                behavior: "deny",
+                message: e instanceof Error ? e.message : "Failed to ask question.",
+              }
+            }
+          }
+
           const policy = agentActions[toolName]
           if (policy === "allow") return { behavior: "allow", updatedInput: toolInput }
           if (policy === "deny")
@@ -219,6 +270,14 @@ export namespace SessionProcessor {
             input.abort.throwIfAborted()
 
             switch (event.type) {
+              // ── Message boundary (new API response round) ─────────────────
+
+              case "message-boundary": {
+                finalizeText()
+                finalizeReasoning()
+                break
+              }
+
               // ── Text ───────────────────────────────────────────────────────
 
               case "text-delta": {
@@ -313,10 +372,19 @@ export namespace SessionProcessor {
                       : Date.now()
 
                   // Transition pending → running → completed in one shot
-                  const currentInput =
+                  let currentInput =
                     toolPart.state.status === "running" || toolPart.state.status === "pending"
                       ? toolPart.state.input
                       : {}
+
+                  // Parse accumulated raw input JSON for richer tool display
+                  const raw = "metadata" in toolPart.state ? toolPart.state.metadata?.raw : undefined
+                  if (raw && typeof raw === "string" && Object.keys(currentInput).length === 0) {
+                    try {
+                      const parsed = JSON.parse(raw)
+                      if (typeof parsed === "object" && parsed !== null) currentInput = parsed
+                    } catch {}
+                  }
 
                   await Session.updatePart({
                     ...toolPart,

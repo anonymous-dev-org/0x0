@@ -33,6 +33,7 @@ if (flag("help")) {
       "  --bin-name <name>       Binary name inside archive (default: zeroxzero for 0x0, prefix otherwise)",
       "  --bin-alias <name>      Installed binary name (default: 0x0 for 0x0 prefix, bin-name otherwise)",
       "  --tag <tag>             Release tag override (default: v<version>)",
+      "  --desc <text>           Formula description (default: The AI coding agent built for the terminal.)",
       "  --formula <path>        Formula path in tap (default: Formula/<formula-name>.rb)",
       "  --no-push               Do not push commit",
       "",
@@ -60,6 +61,7 @@ const formulaName = read("formula-name") ?? "zeroxzero"
 const formula = read("formula") ?? `Formula/${formulaName}.rb`
 const tagOverride = read("tag")
 const noPush = flag("no-push")
+const desc = read("desc") ?? "The AI coding agent built for the terminal."
 const prefix = read("prefix") ?? "0x0"
 const binName = read("bin-name") ?? (prefix === "0x0" ? "zeroxzero" : prefix)
 const binAlias = read("bin-alias") ?? (prefix === "0x0" ? "0x0" : binName)
@@ -176,7 +178,7 @@ const formulaText = [
   "# frozen_string_literal: true",
   "",
   `class ${formulaClass} < Formula`,
-  '  desc "The AI coding agent built for the terminal."',
+  `  desc "${desc}"`,
   `  homepage "https://github.com/${repo}"`,
   `  version "${version.split("-")[0]}"`,
   "",

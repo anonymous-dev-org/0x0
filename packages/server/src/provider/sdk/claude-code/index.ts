@@ -7,6 +7,7 @@ const log = Log.create({ service: "claude-code" })
 export type ClaudeEvent =
   | { type: "text-delta"; text: string }
   | { type: "reasoning-delta"; id: string; text: string }
+  | { type: "message-boundary" }
   | { type: "tool-start"; id: string; name: string }
   | { type: "tool-input-delta"; id: string; partial: string }
   | { type: "tool-end"; id: string }
@@ -26,6 +27,7 @@ export type ClaudeStreamInput = {
   allowedTools?: string[]
   permissionMode?: PermissionMode
   canUseTool?: CanUseTool
+  thinkingEffort?: string
 }
 
 export async function* claudeStream(input: ClaudeStreamInput): AsyncGenerator<ClaudeEvent> {
@@ -69,6 +71,9 @@ export async function* claudeStream(input: ClaudeStreamInput): AsyncGenerator<Cl
         allowDangerouslySkipPermissions: effectivePermissionMode === "bypassPermissions",
         canUseTool: input.canUseTool,
         includePartialMessages: true,
+        ...(toThinkingOption(input.thinkingEffort) !== undefined
+          ? { thinking: toThinkingOption(input.thinkingEffort) }
+          : {}),
       },
     })
 
@@ -211,6 +216,18 @@ export async function* completionStream(input: {
   }
 }
 
+function toThinkingOption(
+  effort: string | undefined,
+): { type: "disabled" } | { type: "enabled"; budgetTokens: number } | undefined {
+  switch (effort) {
+    case "low":    return { type: "enabled", budgetTokens: 2000 }
+    case "medium": return { type: "enabled", budgetTokens: 8000 }
+    case "high":   return { type: "enabled", budgetTokens: 20000 }
+    case "off":    return { type: "disabled" }
+    default:       return undefined
+  }
+}
+
 function* parseClaudeApiEvent(
   event: Record<string, unknown>,
   toolBlocks: Record<number, { id: string; name: string }>,
@@ -218,6 +235,14 @@ function* parseClaudeApiEvent(
   if (!event || typeof event !== "object") return
 
   switch (event["type"]) {
+    case "message_start": {
+      for (const key of Object.keys(toolBlocks)) {
+        delete toolBlocks[Number(key)]
+      }
+      yield { type: "message-boundary" }
+      break
+    }
+
     case "content_block_start": {
       const index = (event["index"] as number) ?? 0
       const block = event["content_block"] as Record<string, unknown> | undefined

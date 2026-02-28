@@ -1,9 +1,9 @@
 import { createStore } from "solid-js/store"
-import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { batch, createMemo, For, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
-import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
+import type { TextareaRenderable } from "@opentui/core"
 import { keybind } from "@tui/state/keybind"
-import { selectedForeground, tint, theme } from "@tui/state/theme"
+import { tint, theme } from "@tui/state/theme"
 import type { QuestionAnswer, QuestionRequest } from "@anonymous-dev/0x0-server/server/types"
 import { sdk } from "@tui/state/sdk"
 import { SplitBorder } from "../../component/border"
@@ -16,9 +16,6 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   const bindings = useTextareaKeybindings()
 
   const questions = createMemo(() => props.request.questions)
-  const single = createMemo(() => questions().length === 1 && questions()[0]?.multiple !== true)
-  const tabs = createMemo(() => (single() ? 1 : questions().length + 1)) // questions + confirm tab (no confirm for single select)
-  const [tabHover, setTabHover] = createSignal<number | "confirm" | null>(null)
   const [store, setStore] = createStore({
     tab: 0,
     answers: [] as QuestionAnswer[],
@@ -28,7 +25,6 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   })
 
   let textarea: TextareaRenderable | undefined
-  let tabsScroll: ScrollBoxRenderable | undefined
 
   const issuingAgent = createMemo(() => {
     const messageID = props.request.tool?.messageID
@@ -43,30 +39,13 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   })
   const accent = createMemo(() => local.agent.color(issuingAgent()))
 
-  const tabID = (index: number | "confirm") => (index === "confirm" ? "question-tab-confirm" : `question-tab-${index}`)
-
-  function ensureTabVisible(index: number | "confirm") {
-    if (!tabsScroll) return
-    const target = tabsScroll.getChildren().find((child) => child.id === tabID(index))
-    if (!target) return
-    const x = target.x - tabsScroll.x
-    const overflowRight = x + target.width - tabsScroll.width
-    if (x < 0) {
-      tabsScroll.scrollBy({ x, y: 0 })
-      return
-    }
-    if (overflowRight > 0) {
-      tabsScroll.scrollBy({ x: overflowRight, y: 0 })
-    }
-  }
-
   const question = createMemo(() => questions()[store.tab])
-  const confirm = createMemo(() => !single() && store.tab === questions().length)
   const options = createMemo(() => question()?.options ?? [])
   const custom = createMemo(() => question()?.custom !== false)
   const other = createMemo(() => custom() && store.selected === options().length)
   const input = createMemo(() => store.custom[store.tab] ?? "")
   const multi = createMemo(() => question()?.multiple === true)
+  const isLastQuestion = createMemo(() => store.tab === questions().length - 1)
   const customPicked = createMemo(() => {
     const value = input()
     if (!value) return false
@@ -87,22 +66,22 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     } as any)
   }
 
-  function pick(answer: string, custom: boolean = false) {
+  function pick(answer: string, isCustom: boolean = false) {
+    const currentTab = store.tab
     batch(() => {
-      setStore("answers", store.tab, [answer])
-      if (custom) {
-        setStore("custom", store.tab, answer)
-      }
+      setStore("answers", currentTab, [answer])
+      if (isCustom) setStore("custom", currentTab, answer)
     })
-    if (single()) {
+    if (currentTab === questions().length - 1) {
+      const answers = questions().map((_, i) => (i === currentTab ? [answer] : store.answers[i] ?? []))
       sdk.client.question[":requestID"].reply.$post({
         param: { requestID: props.request.id },
-        json: { answers: [[answer]] },
+        json: { answers },
       } as any)
       return
     }
     batch(() => {
-      setStore("tab", store.tab + 1)
+      setStore("tab", currentTab + 1)
       setStore("selected", 0)
     })
   }
@@ -124,14 +103,6 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       setStore("selected", 0)
     })
   }
-
-  createEffect(() => {
-    if (single()) return
-    const index = confirm() ? "confirm" : store.tab
-    queueMicrotask(() => {
-      ensureTabVisible(index)
-    })
-  })
 
   function selectOption() {
     if (other()) {
@@ -163,7 +134,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     if (dialog.visible) return
 
     // When editing custom answer textarea
-    if (store.editing && !confirm()) {
+    if (store.editing) {
       if (evt.name === "escape") {
         evt.preventDefault()
         setStore("editing", false)
@@ -221,62 +192,59 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
     if (evt.name === "left" || evt.name === "h") {
       evt.preventDefault()
-      selectTab((store.tab - 1 + tabs()) % tabs())
+      if (store.tab > 0) selectTab(store.tab - 1)
+      return
     }
 
     if (evt.name === "right" || evt.name === "l") {
       evt.preventDefault()
-      selectTab((store.tab + 1) % tabs())
+      if (!isLastQuestion()) {
+        selectTab(store.tab + 1)
+      } else if (multi()) {
+        submit()
+      }
+      return
     }
 
     if (evt.name === "tab") {
       evt.preventDefault()
       const direction = evt.shift ? -1 : 1
-      selectTab((store.tab + direction + tabs()) % tabs())
+      const next = store.tab + direction
+      if (next >= 0 && next < questions().length) selectTab(next)
+      return
     }
 
-    if (confirm()) {
-      if (evt.name === "return") {
-        evt.preventDefault()
-        submit()
-      }
-      if (evt.name === "escape" || keybind.match("app_exit", evt)) {
-        evt.preventDefault()
-        reject()
-      }
-    } else {
-      const opts = options()
-      const total = opts.length + (custom() ? 1 : 0)
-      const max = Math.min(total, 9)
-      const digit = Number(evt.name)
+    const opts = options()
+    const total = opts.length + (custom() ? 1 : 0)
+    const max = Math.min(total, 9)
+    const digit = Number(evt.name)
 
-      if (!Number.isNaN(digit) && digit >= 1 && digit <= max) {
-        evt.preventDefault()
-        const index = digit - 1
-        moveTo(index)
-        selectOption()
-        return
-      }
+    if (!Number.isNaN(digit) && digit >= 1 && digit <= max) {
+      evt.preventDefault()
+      const index = digit - 1
+      moveTo(index)
+      selectOption()
+      return
+    }
 
-      if (evt.name === "up" || evt.name === "k") {
-        evt.preventDefault()
-        moveTo((store.selected - 1 + total) % total)
-      }
+    if (evt.name === "up" || evt.name === "k") {
+      evt.preventDefault()
+      moveTo((store.selected - 1 + total) % total)
+    }
 
-      if (evt.name === "down" || evt.name === "j") {
-        evt.preventDefault()
-        moveTo((store.selected + 1) % total)
-      }
+    if (evt.name === "down" || evt.name === "j") {
+      evt.preventDefault()
+      moveTo((store.selected + 1) % total)
+    }
 
-      if (evt.name === "return") {
-        evt.preventDefault()
-        selectOption()
-      }
+    if (evt.name === "return") {
+      evt.preventDefault()
+      selectOption()
+    }
 
-      if (evt.name === "escape" || keybind.match("app_exit", evt)) {
-        evt.preventDefault()
-        reject()
-      }
+    if (evt.name === "escape" || keybind.match("app_exit", evt)) {
+      evt.preventDefault()
+      reject()
     }
   })
 
@@ -288,72 +256,18 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       customBorderChars={SplitBorder.customBorderChars}
     >
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1}>
-        <Show when={!single()}>
-          <scrollbox
-            ref={(r) => {
-              tabsScroll = r
-            }}
-            scrollX={true}
-            scrollY={false}
-            scrollbarOptions={{ visible: false }}
-            horizontalScrollbarOptions={{ visible: false }}
-            paddingLeft={1}
-          >
-            <box flexDirection="row" gap={1}>
-              <For each={questions()}>
-                {(q, index) => {
-                  const isActive = () => index() === store.tab
-                  const isAnswered = () => {
-                    return (store.answers[index()]?.length ?? 0) > 0
-                  }
-                  return (
-                    <box
-                      id={tabID(index())}
-                      paddingLeft={1}
-                      paddingRight={1}
-                      backgroundColor={
-                        isActive() ? accent() : tabHover() === index() ? theme.backgroundElement : theme.backgroundPanel
-                      }
-                      onMouseOver={() => setTabHover(index())}
-                      onMouseOut={() => setTabHover(null)}
-                      onMouseUp={() => selectTab(index())}
-                    >
-                      <text
-                        fg={
-                          isActive() ? selectedForeground(theme, accent()) : isAnswered() ? theme.text : theme.textMuted
-                        }
-                      >
-                        {q.header}
-                      </text>
-                    </box>
-                  )
-                }}
-              </For>
-              <box
-                id={tabID("confirm")}
-                paddingLeft={1}
-                paddingRight={1}
-                backgroundColor={
-                  confirm() ? accent() : tabHover() === "confirm" ? theme.backgroundElement : theme.backgroundPanel
-                }
-                onMouseOver={() => setTabHover("confirm")}
-                onMouseOut={() => setTabHover(null)}
-                onMouseUp={() => selectTab(questions().length)}
-              >
-                <text fg={confirm() ? selectedForeground(theme, accent()) : theme.textMuted}>Confirm</text>
-              </box>
-            </box>
-          </scrollbox>
-        </Show>
-
-        <Show when={!confirm()}>
-          <box paddingLeft={1} gap={1}>
-            <box>
-              <text fg={theme.text}>
-                {question()?.question}
-                {multi() ? " (select all that apply)" : ""}
-              </text>
-            </box>
+        <box paddingLeft={1} gap={1}>
+          <Show when={questions().length > 1}>
+            <text fg={theme.textMuted}>
+              {store.tab + 1} / {questions().length}
+            </text>
+          </Show>
+          <box>
+            <text fg={theme.text}>
+              {question()?.question}
+              {multi() ? " (select all that apply)" : ""}
+            </text>
+          </box>
             <box>
               <For each={options()}>
                 {(opt, i) => {
@@ -439,30 +353,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                 </box>
               </Show>
             </box>
-          </box>
-        </Show>
-
-        <Show when={confirm() && !single()}>
-          <box paddingLeft={1}>
-            <text fg={theme.text}>Review</text>
-          </box>
-          <For each={questions()}>
-            {(q, index) => {
-              const value = () => store.answers[index()]?.join(", ") ?? ""
-              const answered = () => Boolean(value())
-              return (
-                <box paddingLeft={1}>
-                  <text>
-                    <span style={{ fg: theme.textMuted }}>{q.header}:</span>{" "}
-                    <span style={{ fg: answered() ? theme.text : theme.error }}>
-                      {answered() ? value() : "(not answered)"}
-                    </span>
-                  </text>
-                </box>
-              )
-            }}
-          </For>
-        </Show>
+        </box>
       </box>
       <box
         flexDirection="row"
@@ -474,23 +365,25 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         justifyContent="space-between"
       >
         <box flexDirection="row" gap={2}>
-          <Show when={!single()}>
+          <Show when={questions().length > 1}>
             <text fg={theme.text}>
-              {"⇆"} <span style={{ fg: theme.textMuted }}>tab</span>
-            </text>
-          </Show>
-          <Show when={!confirm()}>
-            <text fg={theme.text}>
-              {"↑↓"} <span style={{ fg: theme.textMuted }}>select</span>
+              {"←→"} <span style={{ fg: theme.textMuted }}>navigate</span>
             </text>
           </Show>
           <text fg={theme.text}>
+            {"↑↓"} <span style={{ fg: theme.textMuted }}>select</span>
+          </text>
+          <text fg={theme.text}>
             enter{" "}
             <span style={{ fg: theme.textMuted }}>
-              {confirm() ? "submit" : multi() ? "toggle" : single() ? "submit" : "confirm"}
+              {multi() ? "toggle" : isLastQuestion() ? "submit" : "next"}
             </span>
           </text>
-
+          <Show when={multi()}>
+            <text fg={theme.text}>
+              → <span style={{ fg: theme.textMuted }}>{isLastQuestion() ? "submit" : "next"}</span>
+            </text>
+          </Show>
           <text fg={theme.text}>
             esc <span style={{ fg: theme.textMuted }}>dismiss</span>
           </text>

@@ -38,6 +38,9 @@ function props(input = "hello") {
         variant: {
           current: () => "default",
         },
+        thinkingEffort: {
+          current: () => undefined,
+        },
       },
       agent: {
         current: () => ({ name: "build" }),
