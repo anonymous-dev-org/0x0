@@ -137,9 +137,10 @@ export namespace Config {
           actions: {
             "claude-code": {
               Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
-              MultiEdit: "allow", NotebookEdit: "allow", Glob: "allow", Grep: "allow",
+              Glob: "allow", Grep: "allow",
               WebFetch: "allow", WebSearch: "allow", Task: "allow",
               TodoWrite: "allow", AskUserQuestion: "allow",
+              ApplyPatch: "allow", Docs: "allow",
             },
             codex: { commandExecution: "allow", fileChange: "allow" },
           },
@@ -183,7 +184,7 @@ export namespace Config {
             "claude-code": {
               Read: "allow", Glob: "allow", Grep: "allow",
               WebFetch: "allow", WebSearch: "allow", Task: "allow",
-              AskUserQuestion: "allow",
+              AskUserQuestion: "allow", TodoWrite: "allow", Docs: "allow",
             },
           },
           prompt: [
@@ -1185,6 +1186,7 @@ export namespace Config {
           disable_filewatcher: z.boolean().optional().describe("Disable the file watcher"),
           icon_discovery: z.boolean().optional().describe("Enable icon discovery for projects"),
           exa: z.boolean().optional().describe("Enable Exa search integration"),
+          context7_api_key: z.string().optional().describe("Context7 API key — enables the docs tool for library documentation search"),
           bash_default_timeout_ms: z
             .number()
             .int()

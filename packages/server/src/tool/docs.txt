@@ -1,0 +1,15 @@
+Search library documentation via Context7. Retrieves up-to-date, version-specific documentation and code examples.
+
+Use mode="search" to find a library by name and get its ID.
+Use mode="context" to retrieve LLM-optimized documentation snippets for a specific library and query.
+
+Workflow:
+1. Call with mode="search", query describing what you want to do, and libraryName (e.g., "react")
+2. Pick the best library ID from the results (e.g., "/facebook/react")
+3. Call with mode="context", the same query, and the libraryId from step 2
+
+Examples:
+- mode="search", query="how to use hooks", libraryName="react"
+- mode="context", query="how to use hooks", libraryId="/facebook/react"
+- mode="search", query="database migrations", libraryName="prisma"
+- mode="context", query="database migrations", libraryId="/prisma/prisma", tokens=10000

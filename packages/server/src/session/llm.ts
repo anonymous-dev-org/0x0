@@ -4,9 +4,11 @@ import type { ModelMessage } from "ai"
 import type { Agent } from "@/runtime/agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
-import { claudeStream } from "@/provider/sdk/claude-code"
+import { claudeStream, type ExecutableTool } from "@/provider/sdk/claude-code"
 import { codexAppServerStream, type CodexApprovalDecision } from "@/provider/sdk/codex-app-server"
 import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
+import { ToolRegistry } from "@/tool/registry"
+import z from "zod"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -217,14 +219,33 @@ export namespace LLM {
     userPrompt: string,
     systemPrompt: string,
   ): AsyncGenerator<CliEvent> {
+    // Build executable tools from the registry for this model+agent
+    const rawTools = await ToolRegistry.tools(
+      { providerID: input.model.providerID, modelID: input.model.id },
+      input.agent,
+    )
+    const executableTools: ExecutableTool[] = rawTools.map((t) => {
+      const schema = z.toJSONSchema(t.parameters) as Record<string, unknown>
+      return {
+        id: t.id,
+        description: t.description,
+        inputSchema: schema,
+        execute: (args, ctx) => t.execute(args as Parameters<typeof t.execute>[0], ctx),
+      }
+    })
+
     for await (const event of claudeStream({
       modelId: input.model.id,
       prompt: userPrompt,
       systemPrompt: systemPrompt || undefined,
       cliSessionId: input.cliSessionId,
       abort: input.abort,
-      canUseTool: input.canUseTool,
       thinkingEffort: input.user.thinkingEffort,
+      sessionID: input.sessionID,
+      agentName: input.agent.name,
+      agentPermission: input.agent.permission ?? [],
+      tools: executableTools,
+      canUseTool: input.canUseTool,
     })) {
       switch (event.type) {
         case "text-delta":

@@ -3,6 +3,8 @@ import { BashTool } from "./bash"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TodoWriteTool } from "./todo"
+import { WriteTool } from "./write"
+import { EditTool } from "./edit"
 import type { Agent } from "@/runtime/agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -16,6 +18,7 @@ import { Truncate } from "./truncation"
 import { ApplyPatchTool } from "./apply_patch"
 import { SearchTool } from "./search"
 import { SearchRemoteTool } from "./search_remote"
+import { DocsTool } from "./docs"
 
 interface ToolDefinition {
   description: string
@@ -87,6 +90,8 @@ export namespace ToolRegistry {
       ...(["app", "cli", "desktop"].includes(Flag.ZEROXZERO_CLIENT) ? [QuestionTool] : []),
       BashTool,
       ReadTool,
+      WriteTool,
+      EditTool,
       SearchTool,
       TaskTool,
       SearchRemoteTool,
@@ -94,6 +99,7 @@ export namespace ToolRegistry {
       // TodoReadTool,
       ApplyPatchTool,
       ...(config.experimental?.lsp_tool ? [LspTool] : []),
+      ...(config.experimental?.context7_api_key ? [DocsTool] : []),
       ...custom,
     ]
   }
@@ -102,16 +108,49 @@ export namespace ToolRegistry {
     return all().then((x) => x.map((t) => t.id))
   }
 
+  const SDK_NAME_TO_REGISTRY_ID: Record<string, string> = {
+    Bash: "bash",
+    Read: "read",
+    Write: "write",
+    Edit: "edit",
+    Glob: "search",
+    Grep: "search",
+    Task: "task",
+    WebFetch: "search_remote",
+    WebSearch: "search_remote",
+    TodoWrite: "todo_write",
+    AskUserQuestion: "question",
+    ApplyPatch: "apply_patch",
+    Lsp: "lsp",
+    Docs: "docs",
+  }
+
+  // Returns null if no actions config → pass all tools.
+  // Returns a Set of registry IDs → only those tools are allowed.
+  function deriveAllowed(providerID: string, agent?: Agent.Info): Set<string> | null {
+    const providerActions = agent?.actions?.[providerID]
+    if (!providerActions) return null
+    const allowed = new Set<string>()
+    for (const [toolName, policy] of Object.entries(providerActions)) {
+      if (policy === "allow" || policy === "ask") {
+        allowed.add(SDK_NAME_TO_REGISTRY_ID[toolName] ?? toolName.toLowerCase())
+      }
+    }
+    return allowed
+  }
+
   export async function tools(
-    model: {
-      providerID: string
-      modelID: string
-    },
+    model: { providerID: string; modelID: string },
     agent?: Agent.Info,
     excluded?: Set<string>,
   ) {
-    const tools = await all()
-    const filtered = excluded?.size ? tools.filter((t) => !excluded.has(t.id)) : tools
+    const allowedSet = deriveAllowed(model.providerID, agent)
+    const list = await all()
+    const filtered = list.filter((t) => {
+      if (allowedSet !== null && !allowedSet.has(t.id)) return false
+      if (excluded?.has(t.id)) return false
+      return true
+    })
     const result = await Promise.all(
       filtered.map(async (t) => {
         using _ = log.time(t.id)

@@ -1,8 +1,8 @@
 import { resolveConfig } from "./config"
-import { generate } from "./llm"
 import { getStagedContext } from "./git"
-import { buildPrompt } from "./prompt"
 import { installHook, uninstallHook } from "./hook"
+import { generate } from "./llm"
+import { buildPrompt } from "./prompt"
 
 const args = process.argv.slice(2)
 const command = args[0]
@@ -63,7 +63,7 @@ async function main() {
           `Usage:
   0x0-git commit-msg [--provider claude|codex] [--model <model>] [--verbose]
   0x0-git hook install
-  0x0-git hook uninstall`,
+  0x0-git hook uninstall`
         )
         process.exit(1)
     }
