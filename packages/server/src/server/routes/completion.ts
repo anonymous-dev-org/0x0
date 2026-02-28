@@ -85,11 +85,14 @@ export const CompletionRoutes = lazy(() =>
         })
 
         return streamSSE(c, async (stream) => {
+          const ac = new AbortController()
+          stream.onAbort(() => ac.abort())
           for await (const event of completionStream({
             model,
             prompt: buildCodeCompletionPrompt(input),
             systemPrompt: SYSTEM_PROMPT,
             stopSequences: ["\n\n\n"],
+            abort: ac.signal,
           })) {
             await stream.writeSSE({ data: JSON.stringify(event) })
             if (event.type === "done" || event.type === "error") break
@@ -123,10 +126,13 @@ export const CompletionRoutes = lazy(() =>
         })
 
         return streamSSE(c, async (stream) => {
+          const ac = new AbortController()
+          stream.onAbort(() => ac.abort())
           for await (const event of completionStream({
             model,
             prompt: input.prompt,
             systemPrompt: input.system,
+            abort: ac.signal,
           })) {
             await stream.writeSSE({ data: JSON.stringify(event) })
             if (event.type === "done" || event.type === "error") break

@@ -197,4 +197,9 @@ export interface SessionOptions {
    * completions). Defaults to false (thinking enabled).
    */
   disableThinking?: boolean;
+  /**
+   * Set to true to skip the billing header block in system messages.
+   * Useful for non-CLI callers (server completions, etc).
+   */
+  skipBillingHeader?: boolean;
 }

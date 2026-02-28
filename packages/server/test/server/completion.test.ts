@@ -88,7 +88,7 @@ describe("completion routes", () => {
 
         // Verify the context was correctly constructed in the prompt
         expect(streamCalls).toHaveLength(1)
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toContain("<code_before_cursor>")
         expect(call.prompt).toContain("function greet() {\n  ")
         expect(call.prompt).toContain("</code_before_cursor>")
@@ -124,7 +124,7 @@ describe("completion routes", () => {
         })
 
         expect(streamCalls).toHaveLength(1)
-        expect(streamCalls[0].model).toBe("claude-haiku-4-5-20251001")
+        expect(streamCalls[0]!.model).toBe("claude-haiku-4-5-20251001")
       },
     })
   })
@@ -149,7 +149,7 @@ describe("completion routes", () => {
         })
 
         expect(streamCalls).toHaveLength(1)
-        expect(streamCalls[0].model).toBe("claude-sonnet-4-6")
+        expect(streamCalls[0]!.model).toBe("claude-sonnet-4-6")
       },
     })
   })
@@ -173,8 +173,8 @@ describe("completion routes", () => {
         })
 
         expect(streamCalls).toHaveLength(1)
-        expect(streamCalls[0].prompt).toContain("Language: text")
-        expect(streamCalls[0].prompt).toContain("File: untitled")
+        expect(streamCalls[0]!.prompt).toContain("Language: text")
+        expect(streamCalls[0]!.prompt).toContain("File: untitled")
       },
     })
   })
@@ -232,7 +232,7 @@ describe("completion routes", () => {
         ])
 
         expect(streamCalls).toHaveLength(1)
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toBe("What is the meaning of life?")
         expect(call.systemPrompt).toBe("You are a philosopher.")
         expect(call.model).toBe("claude-haiku-4-5-20251001")
@@ -295,7 +295,7 @@ export async function loadConfig(path: string): Promise<Config> {
         ])
 
         // Verify full prompt structure
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toContain("Language: typescript")
         expect(call.prompt).toContain("File: src/config/loader.ts")
         // prefix is inside <code_before_cursor>
@@ -358,7 +358,7 @@ export async function loadConfig(path: string): Promise<Config> {
         expect(completed).toContain("SELECT * FROM users WHERE email")
         expect(completed).toContain("return User(**result) if result else None")
 
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toContain("Language: python")
         expect(call.prompt).toContain("File: app/repositories/user.py")
         expect(call.prompt).toContain("async def find_by_email")
@@ -436,7 +436,7 @@ fn execute(cmd: Command) -> Result<String, io::Error> {
         expect(completed).toContain("store.get(&key)")
         expect(completed).toContain("Ok(value.clone())")
 
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toContain("Language: rust")
         expect(call.prompt).toContain("File: src/store/handler.rs")
         // Both prefix and suffix context is in the prompt
@@ -508,7 +508,7 @@ func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
         expect(completed).toContain("http.StatusBadRequest)")
         expect(completed).toContain("return")
 
-        const call = streamCalls[0]
+        const call = streamCalls[0]!
         expect(call.prompt).toContain("Language: go")
         expect(call.prompt).toContain("File: internal/api/handler.go")
         expect(call.prompt).toContain("json.NewDecoder(r.Body).Decode(&req)")
@@ -601,7 +601,7 @@ func (s *Server) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
           const deltas = events.filter((e: any) => e.type === "delta") as { type: "delta"; text: string }[]
           const completed = deltas.map((e) => e.text).join("")
 
-          const call = streamCalls[0]
+          const call = streamCalls[0]!
 
           console.log(`  ${scenario.name}`)
           console.log(`    status=200  events=${events.length}  deltas=${deltas.length}`)

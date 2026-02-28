@@ -75,6 +75,7 @@ export class ClaudeCodeSession {
   private readonly systemBlocks: TextBlock[];
   private readonly userId: string;
   private readonly thinkingDisabled: boolean;
+  private readonly skipBillingHeader: boolean;
   readonly sessionId: string;
   private history: ConversationMessage[] = [];
 
@@ -84,6 +85,7 @@ export class ClaudeCodeSession {
     this.maxTokens = opts.maxTokens ?? 32000;
     this.tools = opts.tools ?? [];
     this.thinkingDisabled = opts.disableThinking ?? false;
+    this.skipBillingHeader = opts.skipBillingHeader ?? false;
 
     if (opts.systemBlocks) {
       this.systemBlocks = opts.systemBlocks;
@@ -225,7 +227,7 @@ export class ClaudeCodeSession {
   > {
     const response = await this.client.postMessagesStream(
       this.buildRequestBody(),
-      abort
+      abort,
     );
     if (!response.body) throw new Error("Empty response body from /v1/messages");
 
@@ -398,7 +400,9 @@ export class ClaudeCodeSession {
       ...(this.thinkingDisabled
         ? {}
         : { context_management: { edits: [{ type: "clear_thinking_20251015", keep: "all" }] } }),
-      system: [makeBillingBlock(), ...this.systemBlocks],
+      system: this.skipBillingHeader
+        ? this.systemBlocks.length > 0 ? this.systemBlocks : undefined
+        : [makeBillingBlock(), ...this.systemBlocks],
       tools: this.tools.length > 0 ? this.tools : undefined,
       messages: this.history,
       metadata: { user_id: this.userId },

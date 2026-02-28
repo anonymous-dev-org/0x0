@@ -72,11 +72,11 @@ export class ClaudeCodeClient {
    * POST to the messages endpoint with streaming SSE.
    * Returns the raw Response so the caller can read the body as a stream.
    */
-  async postMessagesStream(body: unknown, abort?: AbortSignal): Promise<Response> {
+  async postMessagesStream(body: unknown, abort?: AbortSignal, betas?: string): Promise<Response> {
     const res = await fetch(`${this.baseUrl}/v1/messages?beta=true`, {
       method: "POST",
       headers: {
-        ...this.authHeaders(INFERENCE_BETAS),
+        ...this.authHeaders(betas ?? INFERENCE_BETAS),
         Accept: "application/json",
         "anthropic-dangerous-direct-browser-access": "true",
         "x-app": "cli",

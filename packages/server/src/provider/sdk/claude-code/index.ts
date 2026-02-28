@@ -249,6 +249,7 @@ export async function* completionStream(input: {
     model: input.model,
     systemPrompt: input.systemPrompt,
     disableThinking: true,
+    skipBillingHeader: true,
   })
 
   log.info("starting completion stream", { model: input.model })
