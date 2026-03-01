@@ -2,14 +2,31 @@
 
 Inline ghost text code suggestions powered by Claude, similar to GitHub Copilot or Supermaven.
 
-Routes completions through the [0x0](https://github.com/anonymous-dev-org/0x0) server, which calls the Anthropic API on your behalf. Uses `claude-haiku-4-5-20251001` by default for fast time-to-first-token (~200-400ms).
+Routes completions through the `0x0-server` daemon (started by [0x0.nvim](https://github.com/anonymous-dev-org/0x0.nvim)), which calls the Anthropic API on your behalf. Uses `claude-haiku-4-5-20251001` by default for fast time-to-first-token (~200-400ms).
 
 ## Requirements
 
 - Neovim >= 0.10
 - `curl` in PATH
 - [0x0.nvim](https://github.com/anonymous-dev-org/0x0.nvim) plugin installed and configured
-- `ANTHROPIC_API_KEY` environment variable (or configured in 0x0 config)
+- `ANTHROPIC_API_KEY` environment variable (or configured in `~/.config/0x0/config.yaml`)
+
+## Quick Start
+
+1. Make sure [0x0.nvim](https://github.com/anonymous-dev-org/0x0.nvim) is set up and `ANTHROPIC_API_KEY` is exported.
+
+2. Add the plugin (lazy.nvim):
+
+```lua
+{
+  "anonymous-dev-org/0x0-completion.nvim",
+  dependencies = { "0x0.nvim" },
+  event = "InsertEnter",
+  opts = {},
+}
+```
+
+3. Open a file and start typing. Ghost text suggestions appear automatically. Press `<Tab>` to accept.
 
 ## Installation
 

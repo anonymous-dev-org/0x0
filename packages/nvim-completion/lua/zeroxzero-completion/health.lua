@@ -28,11 +28,12 @@ function M.check()
     vim.health.info("Server URL: http://127.0.0.1:4096 (default)")
   end
 
-  -- Check server connectivity via curl
+  -- Check server connectivity via /global/health
   local url = env_url or config.current.server_url or "http://127.0.0.1:4096"
-  local result = vim.system({ "curl", "--silent", "--max-time", "2", "-o", "/dev/null", "-w", "%{http_code}", url }, { text = true }):wait()
+  local health_url = url .. "/global/health"
+  local result = vim.system({ "curl", "--silent", "--max-time", "2", "-o", "/dev/null", "-w", "%{http_code}", health_url }, { text = true }):wait()
   if result.code == 0 and result.stdout and result.stdout:match("^2") then
-    vim.health.ok("0x0 server is reachable")
+    vim.health.ok("0x0 server is reachable at " .. url)
   else
     vim.health.warn("0x0 server not reachable at " .. url .. " (is it running?)")
   end

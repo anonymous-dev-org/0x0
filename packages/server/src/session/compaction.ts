@@ -77,10 +77,13 @@ export namespace SessionCompaction {
         : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
     const compacting = { context: [] as string[], prompt: undefined }
     const prompt = config.compaction?.prompt?.trim()
-    if (!prompt) {
+    if (!prompt && input.auto) {
       log.info("skipping compaction, missing compaction.prompt")
       return "stop"
     }
+    const effectivePrompt =
+      prompt ||
+      "Provide a detailed prompt for continuing our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next considering new session will not have access to our conversation."
     const context = history(input.messages)
 
     const msg = (await Session.updateMessage({
@@ -124,7 +127,7 @@ export namespace SessionCompaction {
       abort: input.abort,
       sessionID: input.sessionID,
       tools: {},
-      system: [prompt],
+      system: [effectivePrompt],
       messages: [
         {
           role: "user",

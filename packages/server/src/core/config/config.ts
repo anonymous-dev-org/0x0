@@ -135,14 +135,11 @@ export namespace Config {
           thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
           actions: {
-            "claude-code": {
-              Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
-              Glob: "allow", Grep: "allow",
-              WebFetch: "allow", WebSearch: "allow", Task: "allow",
-              TodoWrite: "allow", AskUserQuestion: "allow",
-              ApplyPatch: "allow", Docs: "allow",
-            },
-            codex: { commandExecution: "allow", fileChange: "allow" },
+            Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
+            Glob: "allow", Grep: "allow",
+            WebFetch: "allow", WebSearch: "allow", Task: "allow",
+            TodoWrite: "allow", AskUserQuestion: "allow",
+            ApplyPatch: "allow", Docs: "allow",
           },
           prompt: [
             "You are the executioner. You take the plan and ship it. No thinking in circles, no second-guessing, no over-engineering.",
@@ -181,11 +178,9 @@ export namespace Config {
           thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
           actions: {
-            "claude-code": {
-              Read: "allow", Glob: "allow", Grep: "allow",
-              WebFetch: "allow", WebSearch: "allow", Task: "allow",
-              AskUserQuestion: "allow", TodoWrite: "allow", Docs: "allow",
-            },
+            Read: "allow", Glob: "allow", Grep: "allow",
+            WebFetch: "allow", WebSearch: "allow", Task: "allow",
+            AskUserQuestion: "allow", TodoWrite: "allow", Docs: "allow",
           },
           prompt: [
             "You are the architect. You don't write code. You write the battle plan that makes code inevitable.",
@@ -744,10 +739,14 @@ export namespace Config {
       actions: z
         .record(
           z.string(),
-          z.record(z.string(), z.enum(["allow", "deny", "ask"])),
+          z.union([
+            z.enum(["allow", "deny", "ask"]),
+            // Backward-compat: nested per-provider format (migrated to flat in agent.ts)
+            z.record(z.string(), z.enum(["allow", "deny", "ask"])),
+          ]),
         )
         .optional()
-        .describe("Per-provider tool action policies using SDK tool names (e.g. claude-code: { Bash: allow, Edit: ask })"),
+        .describe("Tool action policies (e.g. Bash: allow, Edit: ask)"),
       maxSteps: z.number().int().positive().optional().describe("Alias for steps"),
     })
     .passthrough()

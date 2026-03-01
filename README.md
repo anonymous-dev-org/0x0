@@ -28,12 +28,37 @@
 
 ---
 
-### Installation
+### Quick Start
+
+1. **Install**
 
 ```bash
 npm i -g @anonymous-dev/0x0@latest # or bun/pnpm/yarn
 brew install 0x0                   # macOS and Linux
 ```
+
+2. **Set your API key**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+Or add it to `~/.config/0x0/config.yaml`:
+
+```yaml
+provider:
+  claude-code:
+    options:
+      apiKey: "sk-ant-..."
+```
+
+3. **Run**
+
+```bash
+0x0
+```
+
+That's it. The TUI launches, a background server starts automatically on port 4096, and you can start coding.
 
 ### Agents
 
@@ -53,6 +78,21 @@ Learn more about [agents](https://docs.anonymous.dev/packages/0x0/agents).
 ### Documentation
 
 For more info on configuration, [**head over to the docs**](https://docs.anonymous.dev/packages/0x0).
+
+### Packages
+
+This is a monorepo. The main packages are:
+
+| Package | Description |
+|---------|-------------|
+| [`packages/tui`](packages/tui/) | Terminal UI — the `0x0` binary you install and run |
+| [`packages/server`](packages/server/) | Core daemon — HTTP API, sessions, providers, tools |
+| [`packages/git`](packages/git/) | Git hook for AI-generated commit messages (`0x0-git`) |
+| [`packages/sdk/js`](packages/sdk/js/) | TypeScript SDK for embedding 0x0 programmatically |
+| [`packages/claude-code-sdk`](packages/claude-code-sdk/) | Internal wrapper around `@anthropic-ai/claude-agent-sdk` |
+| [`packages/vscode`](packages/vscode/) | VS Code extension |
+| [`packages/nvim`](packages/nvim/) | Neovim plugin |
+| [`packages/nvim-completion`](packages/nvim-completion/) | Neovim inline completions plugin |
 
 ### Contributing
 

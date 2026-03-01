@@ -42,10 +42,7 @@ export namespace Agent {
       options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
       actions: z
-        .record(
-          z.string(),
-          z.record(z.string(), z.enum(["allow", "deny", "ask"])),
-        )
+        .record(z.string(), z.enum(["allow", "deny", "ask"]))
         .default({}),
       thinkingEffort: z.string().optional(),
       knowledgeBase: z.array(z.string()).default([]),
@@ -56,42 +53,65 @@ export namespace Agent {
   export type Info = z.input<typeof Info>
 
   // Backward-compat: convert legacy tools_allowed IDs to actions
-  const LEGACY_TOOL_TO_ACTIONS: Record<string, Record<string, string[]>> = {
-    bash:          { "claude-code": ["Bash"],                     codex: ["commandExecution"] },
-    read:          { "claude-code": ["Read"] },
-    search:        { "claude-code": ["Glob", "Grep"] },
-    search_remote: { "claude-code": ["WebFetch", "WebSearch"] },
-    apply_patch:   { "claude-code": ["Edit", "Write", "MultiEdit", "NotebookEdit"], codex: ["fileChange"] },
-    task:          { "claude-code": ["Task"] },
-    todowrite:     { "claude-code": ["TodoWrite"] },
-    question:      { "claude-code": ["AskUserQuestion"] },
+  const LEGACY_TOOL_TO_ACTIONS: Record<string, string[]> = {
+    bash:          ["Bash"],
+    read:          ["Read"],
+    search:        ["Glob", "Grep"],
+    search_remote: ["WebFetch", "WebSearch"],
+    apply_patch:   ["Edit", "Write", "MultiEdit", "NotebookEdit"],
+    task:          ["Task"],
+    todowrite:     ["TodoWrite"],
+    question:      ["AskUserQuestion"],
   }
 
-  function convertToolsAllowedToActions(toolsAllowed: string[]): Record<string, Record<string, "allow">> {
-    const result: Record<string, Record<string, "allow">> = {}
+  function convertToolsAllowedToActions(toolsAllowed: string[]): Record<string, "allow"> {
+    const result: Record<string, "allow"> = {}
     for (const tool of toolsAllowed) {
       const mapping = LEGACY_TOOL_TO_ACTIONS[tool]
       if (!mapping) continue
-      for (const [provider, sdkTools] of Object.entries(mapping)) {
-        if (!result[provider]) result[provider] = {}
-        for (const sdkTool of sdkTools) {
-          result[provider]![sdkTool] = "allow"
-        }
+      for (const name of mapping) {
+        result[name] = "allow"
       }
     }
     return result
   }
 
-  // Map SDK tool names → permission keys (same as processor.ts)
-  function sdkToolToPermission(toolName: string): string {
+  /**
+   * If actions still uses the legacy nested `{ providerID: { tool: policy } }` format,
+   * flatten it to `{ tool: policy }` and warn.
+   */
+  function migrateNestedActions(
+    agentKey: string,
+    actions: Record<string, unknown>,
+  ): Record<string, "allow" | "deny" | "ask"> {
+    const flat: Record<string, "allow" | "deny" | "ask"> = {}
+    let migrated = false
+    for (const [key, val] of Object.entries(actions)) {
+      if (typeof val === "string") {
+        // Already flat
+        flat[key] = val as "allow" | "deny" | "ask"
+      } else if (typeof val === "object" && val !== null) {
+        // Nested: val is a provider's tool map
+        migrated = true
+        for (const [tool, policy] of Object.entries(val as Record<string, string>)) {
+          flat[tool] = policy as "allow" | "deny" | "ask"
+        }
+      }
+    }
+    if (migrated) {
+      log.warn(`agent "${agentKey}": nested per-provider actions format is deprecated — use flat format instead`)
+    }
+    return flat
+  }
+
+  // Map tool names → permission keys
+  function toolToPermission(toolName: string): string {
     switch (toolName) {
-      case "Bash":
-      case "commandExecution": return "bash"
+      case "Bash": return "bash"
       case "Edit":
       case "Write":
       case "MultiEdit":
-      case "NotebookEdit":
-      case "fileChange": return "edit"
+      case "NotebookEdit": return "edit"
       case "Read": return "read"
       case "Glob":
       case "Grep": return "search"
@@ -104,12 +124,10 @@ export namespace Agent {
     }
   }
 
-  function derivePermissionKeysFromActions(actions: Record<string, Record<string, string>>): string[] {
+  function derivePermissionKeysFromActions(actions: Record<string, string>): string[] {
     const keys = new Set<string>()
-    for (const tools of Object.values(actions)) {
-      for (const [tool, policy] of Object.entries(tools)) {
-        if (policy === "allow") keys.add(sdkToolToPermission(tool))
-      }
+    for (const [tool, policy] of Object.entries(actions)) {
+      if (policy === "allow") keys.add(toolToPermission(tool))
     }
     return [...keys]
   }
@@ -217,6 +235,11 @@ export namespace Agent {
         value.actions = convertToolsAllowedToActions(value.tools_allowed)
       }
 
+      // Backward-compat: migrate nested per-provider actions to flat format
+      if (value.actions) {
+        value.actions = migrateNestedActions(key, value.actions as Record<string, unknown>)
+      }
+
       if (key === "explore" && !value.prompt) item.prompt = PROMPT_EXPLORE
 
       if (value.model) item.model = Provider.parseModel(value.model)
@@ -229,7 +252,7 @@ export namespace Agent {
       item.hidden = value.hidden ?? item.hidden
       item.displayName = value.name ?? item.displayName
       item.steps = value.steps ?? value.maxSteps ?? item.steps
-      item.actions = value.actions ?? item.actions ?? {}
+      item.actions = (value.actions as Record<string, "allow" | "deny" | "ask"> | undefined) ?? item.actions ?? {}
       item.thinkingEffort = value.thinking_effort ?? item.thinkingEffort
       item.knowledgeBase = Array.from(new Set([...(cfg.knowledge_base ?? []), ...(value.knowledge_base ?? [])]))
       item.options = mergeDeep(item.options, value.options ?? {})
@@ -237,7 +260,7 @@ export namespace Agent {
       if (native.has(key)) {
         item.permission = PermissionNext.merge(defaults, user)
       } else {
-        const permKeys = derivePermissionKeysFromActions(item.actions)
+        const permKeys = derivePermissionKeysFromActions(item.actions ?? {})
         item.permission = PermissionNext.merge(
           defaults,
           user,
@@ -291,7 +314,7 @@ export namespace Agent {
       }
 
       if (key === "planner") {
-        const plannerPermKeys = derivePermissionKeysFromActions(item.actions)
+        const plannerPermKeys = derivePermissionKeysFromActions(item.actions ?? {})
         item.permission = PermissionNext.merge(
           item.permission,
           PermissionNext.fromConfig({ "*": "deny" }),

@@ -142,15 +142,13 @@ const AgentCreateCommand = cmd({
         const frontmatter: {
           name: string
           color: string
-          actions: { "claude-code": Record<string, "allow"> }
+          actions: Record<string, "allow">
           thinking_effort: string
           description: string
         } = {
           name: generated.identifier,
           color: "#2563EB",
-          actions: {
-            "claude-code": Object.fromEntries(selectedTools.map((t) => [t, "allow" as const])),
-          },
+          actions: Object.fromEntries(selectedTools.map((t) => [t, "allow" as const])),
           thinking_effort: "medium",
           description: generated.whenToUse,
         }

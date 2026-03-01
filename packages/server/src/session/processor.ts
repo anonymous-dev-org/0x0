@@ -113,7 +113,7 @@ export namespace SessionProcessor {
             : undefined)
 
         const providerID = streamInput.model.providerID
-        const agentActions = streamInput.agent.actions?.[providerID] ?? {}
+        const agentActions = streamInput.agent.actions ?? {}
         const agentName = streamInput.agent.name
 
         const canUseTool = async (
@@ -193,7 +193,7 @@ export namespace SessionProcessor {
 
         const codexApproval = {
           async onCommand(params: { command: string; cwd: string; reason?: string }) {
-            const policy = agentActions.commandExecution
+            const policy = agentActions.Bash
             if (policy === "allow") return "accept" as const
             if (policy === "deny") return "decline" as const
 
@@ -220,7 +220,7 @@ export namespace SessionProcessor {
             }
           },
           async onFileChange(params: { reason?: string }) {
-            const policy = agentActions.fileChange
+            const policy = agentActions.Edit
             if (policy === "allow") return "accept" as const
             if (policy === "deny") return "decline" as const
 

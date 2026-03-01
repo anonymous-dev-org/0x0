@@ -9,40 +9,8 @@ local next_request_id = 0
 ---@field id number
 ---@field process vim.SystemObj?
 
----Read the server discovery file written by `0x0 serve`
----@return string?
-local function read_discovery_file()
-  local home = os.getenv("HOME") or os.getenv("USERPROFILE")
-  if not home then
-    return nil
-  end
-  local filepath = home .. "/.0x0/server.json"
-  local f = io.open(filepath, "r")
-  if not f then
-    return nil
-  end
-  local content = f:read("*a")
-  f:close()
-  local parse_ok, data = pcall(vim.json.decode, content)
-  if not parse_ok or not data or not data.url then
-    return nil
-  end
-  -- Verify PID is alive via /proc or kill -0
-  if data.pid then
-    local handle = io.popen("kill -0 " .. tostring(data.pid) .. " 2>/dev/null; echo $?")
-    if handle then
-      local result = handle:read("*a")
-      handle:close()
-      if vim.trim(result) ~= "0" then
-        return nil
-      end
-    end
-  end
-  return data.url
-end
-
 ---Get the 0x0 server URL base.
----Priority: env var > discovery file > plugin config > default
+---Priority: env var > plugin config > 0x0.nvim config > default
 ---@return string
 local function get_server_url()
   -- 1. Env var (any plugin/tool can set this)
@@ -50,14 +18,14 @@ local function get_server_url()
   if env_url and env_url ~= "" then
     return env_url
   end
-  -- 2. Discovery file written by `0x0 serve`
-  local discovered = read_discovery_file()
-  if discovered then
-    return discovered
-  end
-  -- 3. Plugin setup() config
+  -- 2. Plugin setup() config
   if config.current.server_url then
     return config.current.server_url
+  end
+  -- 3. Read from 0x0.nvim plugin (shares the running server's host/port)
+  local ok, nvim_config = pcall(require, "zeroxzero.config")
+  if ok and nvim_config.current and nvim_config.current.port > 0 then
+    return string.format("http://%s:%d", nvim_config.current.hostname, nvim_config.current.port)
   end
   -- 4. Default
   return "http://127.0.0.1:4096"
@@ -93,6 +61,7 @@ function M.stream(ctx, on_delta, on_done, on_error)
     "--no-buffer",
     "--max-time", "10",
     "-H", "Content-Type: application/json",
+    "-H", "x-zeroxzero-directory: " .. vim.fn.getcwd(),
     "-d", body,
     url,
   }

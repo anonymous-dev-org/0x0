@@ -56,6 +56,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const agent = await Agent.get(params.agent)
       if (!agent) throw new Error(`Unknown agent: ${params.agent} is not a valid agent`)
+      if (agent.hidden && !ctx.extra?.bypassAgentCheck)
+        throw new Error(`Unknown agent: ${params.agent} is not a valid agent`)
 
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
@@ -146,43 +148,23 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       }
 
-      const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+      const hasTaskPermission = PermissionNext.evaluate("task", "*", agent.permission).action !== "deny"
 
       const session = await iife(async () => {
         if (params.task_id) {
           const found = await Session.get(params.task_id).catch((e) => { log.warn("failed to lookup task session", { error: e, taskId: params.task_id }); return undefined })
-          if (found) return found
+          if (found) {
+            if (found.parentID !== ctx.sessionID) {
+              log.warn("task_id does not belong to this session", { taskId: params.task_id, parentID: found.parentID, sessionID: ctx.sessionID })
+              throw new Error(`Task ${params.task_id} does not belong to this session`)
+            }
+            return found
+          }
         }
 
         return await Session.create({
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} agent)`,
-          permission: [
-            {
-              permission: "todowrite",
-              pattern: "*",
-              action: "deny",
-            },
-            {
-              permission: "todoread",
-              pattern: "*",
-              action: "deny",
-            },
-            ...(hasTaskPermission
-              ? []
-              : [
-                  {
-                    permission: "task" as const,
-                    pattern: "*" as const,
-                    action: "deny" as const,
-                  },
-                ]),
-            ...(config.experimental?.primary_tools?.map((t) => ({
-              pattern: "*",
-              action: "allow" as const,
-              permission: t,
-            })) ?? []),
-          ],
         })
       })
 
@@ -196,12 +178,18 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const messageID = Identifier.ascending("message")
 
+      if (ctx.abort.aborted) throw new Error("Task aborted")
+
       function cancel() {
         SessionPrompt.cancel(session.id)
       }
       ctx.abort.addEventListener("abort", cancel)
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
       const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+
+      // Re-check abort after async work — covers the race window between
+      // listener registration and SessionPrompt.start() populating state
+      if (ctx.abort.aborted) throw new Error("Task aborted")
 
       const result = await SessionPrompt.prompt({
         messageID,

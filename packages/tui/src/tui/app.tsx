@@ -22,7 +22,6 @@ import { Installation } from "@anonymous-dev/0x0-server/core/installation"
 import { Session as SessionApi } from "@anonymous-dev/0x0-server/session"
 import { useAppEventHandlers } from "./app/use-app-event-handlers"
 import { useStartupNavigation } from "./app/use-startup-navigation"
-import { DialogOnboarding } from "./component/dialog-onboarding"
 import { Logo } from "./component/logo"
 import { Prompt } from "./component/prompt"
 import { FrecencyProvider } from "./component/prompt/frecency"
@@ -137,7 +136,6 @@ function App(props: {
     renderer.clearSelection()
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
-  const onboardingDone = () => kv.get("onboarding_v1_done", false)
   let terminalModeResolved = false
 
   // Update terminal window title based on current route and session
@@ -225,11 +223,6 @@ function App(props: {
           </box>
         }>
         <Session />
-      </Show>
-
-      {/* Onboarding: only show when at least one CLI is installed */}
-      <Show when={sync.ready && kv.ready && !onboardingDone() && sync.data.provider_connected.length > 0}>
-        <DialogMount title="Welcome to 0x0" body={() => <DialogOnboarding />} />
       </Show>
 
       {/* Auto-show provider dialog when no CLI tool is detected */}

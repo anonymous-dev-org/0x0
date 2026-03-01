@@ -1,11 +1,11 @@
-import { Log } from "@/util/log"
+import type { ToolDefinition } from "@anonymous/claude-code-sdk"
+import { ClaudeCodeClient, ClaudeCodeSession } from "@anonymous/claude-code-sdk"
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
 import { Config } from "@/core/config/config"
 import { PermissionNext } from "@/permission/next"
 import { Session } from "@/session"
 import type { Tool } from "@/tool/tool"
-import { ClaudeCodeClient, ClaudeCodeSession } from "@anonymous/claude-code-sdk"
-import type { ToolDefinition } from "@anonymous/claude-code-sdk"
-import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
+import { Log } from "@/util/log"
 
 const log = Log.create({ service: "claude-code" })
 
@@ -19,16 +19,12 @@ const sessions = new Map<string, SessionEntry>()
 
 async function getClient(): Promise<ClaudeCodeClient> {
   const config = await Config.get()
-  const configKey = (config.provider?.["claude-code"] as { options?: { apiKey?: string } } | undefined)
-    ?.options?.apiKey
-  const token =
-    configKey ??
-    process.env.ANTHROPIC_OAUTH_TOKEN ??
-    process.env.ANTHROPIC_API_KEY
+  const configKey = (config.provider?.["claude-code"] as { options?: { apiKey?: string } } | undefined)?.options?.apiKey
+  const token = configKey ?? process.env.ANTHROPIC_OAUTH_TOKEN ?? process.env.ANTHROPIC_API_KEY
   if (!token) {
     throw new Error(
       "claude-code provider requires ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN, " +
-        "or configure provider.claude-code.options.apiKey in your config",
+        "or configure provider.claude-code.options.apiKey in your config"
     )
   }
   return new ClaudeCodeClient({ oauthToken: token })
@@ -73,9 +69,7 @@ export type ClaudeStreamInput = {
 
 // ─── Main stream function ─────────────────────────────────────────────────────
 
-export async function* claudeStream(
-  input: ClaudeStreamInput,
-): AsyncGenerator<ClaudeEvent> {
+export async function* claudeStream(input: ClaudeStreamInput): AsyncGenerator<ClaudeEvent> {
   let client: ClaudeCodeClient
   try {
     client = await getClient()
@@ -91,7 +85,7 @@ export async function* claudeStream(
   const activeTools = stored?.tools ?? input.tools
 
   if (!session) {
-    const toolDefs: ToolDefinition[] = input.tools.map((t) => ({
+    const toolDefs: ToolDefinition[] = input.tools.map(t => ({
       name: t.id,
       description: t.description,
       input_schema: t.inputSchema as ToolDefinition["input_schema"],
@@ -106,7 +100,7 @@ export async function* claudeStream(
     log.info("new session", {
       model: input.modelId,
       sessionId: session.sessionId,
-      tools: input.tools.map((t) => t.id),
+      tools: input.tools.map(t => t.id),
     })
   } else {
     log.info("resumed session", {
@@ -174,7 +168,7 @@ export async function* claudeStream(
 function buildExecutor(
   input: ClaudeStreamInput,
   session: ClaudeCodeSession,
-  tools: ExecutableTool[],
+  tools: ExecutableTool[]
 ): (toolName: string, toolInput: Record<string, unknown>) => Promise<string> {
   const messageID = `bridge-${session.sessionId}`
   return async (toolName: string, toolInput: Record<string, unknown>) => {
@@ -192,9 +186,9 @@ function buildExecutor(
     }
 
     // 2. Find the tool
-    const toolInfo = tools.find((t) => t.id === toolName)
+    const toolInfo = tools.find(t => t.id === toolName)
     if (!toolInfo) {
-      throw new Error(`Tool "${toolName}" not found. Available: ${tools.map((t) => t.id).join(", ")}`)
+      throw new Error(`Tool "${toolName}" not found. Available: ${tools.map(t => t.id).join(", ")}`)
     }
 
     // 3. Build Tool.Context for this call (reuse callID from permission gate)
@@ -206,7 +200,7 @@ function buildExecutor(
       callID,
       messages: [],
       metadata: () => {},
-      ask: async (req) => {
+      ask: async req => {
         const session = await Session.get(input.sessionID).catch(() => null)
         await PermissionNext.ask({
           ...req,
@@ -225,10 +219,7 @@ function buildExecutor(
 
 // ─── Completion stream (non-agentic, single turn) ─────────────────────────────
 
-export type CompletionEvent =
-  | { type: "delta"; text: string }
-  | { type: "error"; error: string }
-  | { type: "done" }
+export type CompletionEvent = { type: "delta"; text: string } | { type: "error"; error: string } | { type: "done" }
 
 export async function* completionStream(input: {
   model: string

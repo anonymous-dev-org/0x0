@@ -79,14 +79,7 @@ export namespace LLM {
     const actionsEntries = Object.entries(actions)
     const actionsStr =
       actionsEntries.length > 0
-        ? actionsEntries
-            .map(
-              ([provider, tools]) =>
-                `${provider}: ${Object.entries(tools)
-                  .map(([t, p]) => `${t}=${p}`)
-                  .join(", ")}`,
-            )
-            .join("; ")
+        ? actionsEntries.map(([tool, policy]) => `${tool}=${policy}`).join(", ")
         : "(default: ask for all)"
     const knowledgeBase = agent.knowledgeBase ?? []
     const knowledge = knowledgeBase.length > 0 ? knowledgeBase.join("\n- ") : "(none)"

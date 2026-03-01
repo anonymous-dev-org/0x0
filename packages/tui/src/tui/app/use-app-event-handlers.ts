@@ -71,15 +71,29 @@ export function useAppEventHandlers() {
       if (!running) return
       const session = sync.session.get(sessionID)
       if (session?.parentID) return
-      notify("Task complete")
+      const parts = ["Task complete"]
+      if (session?.title) parts.push(session.title)
+      if (session?.summary) {
+        const s = session.summary
+        const stats = [
+          s.files && `${s.files} file${s.files === 1 ? "" : "s"}`,
+          s.additions && `+${s.additions}`,
+          s.deletions && `-${s.deletions}`,
+        ].filter(Boolean)
+        if (stats.length) parts.push(`(${stats.join(", ")})`)
+      }
+      notify(parts.join(" — "))
     }),
     sdk.event.on("permission.asked", (evt) => {
       if (!mark(`permission:${evt.properties.id}`)) return
-      notify("Permission needed")
+      const { permission, patterns } = evt.properties
+      const detail = patterns.length ? `${permission}: ${patterns[0]}` : permission
+      notify(`Permission needed — ${detail}`)
     }),
     sdk.event.on("question.asked", (evt) => {
       if (!mark(`question:${evt.properties.id}`)) return
-      notify("Input required")
+      const header = evt.properties.questions?.[0]?.header
+      notify(header ? `Input required — ${header}` : "Input required")
     }),
     sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
       toast.show({
@@ -97,6 +111,7 @@ export function useAppEventHandlers() {
     }),
     sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
       if (route.data.type !== "session" || route.data.sessionID !== evt.properties.info.id) return
+      const title = evt.properties.info.title
       sdk.client.session
         .$post({ json: {} } as any)
         .then((res: any) => res.json())
@@ -110,20 +125,35 @@ export function useAppEventHandlers() {
         .finally(() => {
           toast.show({
             variant: "info",
-            message: "The current session was deleted",
+            title: "Session Deleted",
+            message: title ? `"${title}" was deleted` : "The current session was deleted",
           })
         })
     }),
     sdk.event.on(SessionApi.Event.Error.type, (evt) => {
       const error = evt.properties.error
       if (error && typeof error === "object" && error.name === "MessageAbortedError") return
+
+      const errorTitle: Record<string, string> = {
+        ProviderAuthError: "Authentication Error",
+        APIError: "API Error",
+        MessageOutputLengthError: "Output Too Long",
+        Unknown: "Error",
+      }
+
+      const title = error && typeof error === "object"
+        ? errorTitle[error.name] ?? "Error"
+        : "Error"
+
       const message = (() => {
         if (!error) return "An error occurred"
-
         if (typeof error === "object") {
           const data = error.data
           if ("message" in data && typeof data.message === "string") {
             return data.message
+          }
+          if (error.name === "MessageOutputLengthError") {
+            return "The response exceeded the maximum output length"
           }
         }
         return String(error)
@@ -131,6 +161,7 @@ export function useAppEventHandlers() {
 
       toast.show({
         variant: "error",
+        title,
         message,
         duration: 5000,
       })

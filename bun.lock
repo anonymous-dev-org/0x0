@@ -116,7 +116,7 @@
     },
     "packages/tui": {
       "name": "0x0",
-      "version": "5.6.0",
+      "version": "5.7.0",
       "bin": {
         "0x0": "./bin/0x0",
       },

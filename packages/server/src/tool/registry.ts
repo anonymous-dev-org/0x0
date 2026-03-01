@@ -127,11 +127,11 @@ export namespace ToolRegistry {
 
   // Returns null if no actions config → pass all tools.
   // Returns a Set of registry IDs → only those tools are allowed.
-  function deriveAllowed(providerID: string, agent?: Agent.Info): Set<string> | null {
-    const providerActions = agent?.actions?.[providerID]
-    if (!providerActions) return null
+  function deriveAllowed(agent?: Agent.Info): Set<string> | null {
+    const actions = agent?.actions
+    if (!actions || Object.keys(actions).length === 0) return null
     const allowed = new Set<string>()
-    for (const [toolName, policy] of Object.entries(providerActions)) {
+    for (const [toolName, policy] of Object.entries(actions)) {
       if (policy === "allow" || policy === "ask") {
         allowed.add(SDK_NAME_TO_REGISTRY_ID[toolName] ?? toolName.toLowerCase())
       }
@@ -144,7 +144,7 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
     excluded?: Set<string>,
   ) {
-    const allowedSet = deriveAllowed(model.providerID, agent)
+    const allowedSet = deriveAllowed(agent)
     const list = await all()
     const filtered = list.filter((t) => {
       if (allowedSet !== null && !allowedSet.has(t.id)) return false

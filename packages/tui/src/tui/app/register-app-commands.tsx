@@ -263,22 +263,6 @@ export function registerAppCommands(props: {
       category: "System",
     },
     {
-      title: "Show onboarding",
-      value: "onboarding.show",
-      slash: {
-        name: "onboarding",
-        aliases: ["welcome", "intro", "tutorial"],
-      },
-      onSelect: async () => {
-        const { DialogOnboarding } = await import("@tui/component/dialog-onboarding")
-        props.dialog.show({
-          title: "Welcome to 0x0",
-          body: () => <DialogOnboarding />,
-        })
-      },
-      category: "System",
-    },
-    {
       title: "Open docs",
       value: "docs.open",
       onSelect: async () => {
