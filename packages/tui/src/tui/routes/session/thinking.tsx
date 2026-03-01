@@ -11,7 +11,7 @@ export function Thinking(props: {
   textMuted: RGBA
   primary: RGBA
 }) {
-  const [dots, setDots] = createSignal(Array.from({ length: 9 }, () => 0.45))
+  const [dots, setDots] = createSignal(Array.from({ length: 18 }, () => 0.45))
   const animationDurationMs = 550
 
   const dot = (opacity: number) => {
@@ -36,7 +36,7 @@ export function Thinking(props: {
       return Math.max(0.18, Math.min(0.82, value + step))
     }
 
-    let current = Array.from({ length: 9 }, () => 0.45)
+    let current = Array.from({ length: 18 }, () => 0.45)
     let start = [...current]
     let target = current.map(random)
     let started = Date.now()
@@ -63,17 +63,17 @@ export function Thinking(props: {
 
   return (
     <Show when={props.visible()}>
-      <box paddingLeft={3} paddingRight={3} flexDirection="row" justifyContent="space-between" alignItems="flex-end">
-        <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="flex-end">
-          <box flexDirection="column" flexShrink={0}>
+      <box paddingRight={3} flexDirection="row" justifyContent="space-between" alignItems="center">
+        <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} overflow="hidden" alignItems="center">
+          <box flexDirection="column" flexShrink={0} gap={0}>
             <text>
-              <For each={[0, 1, 2]}>
-                {(col) => <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 3] ?? 0.45) }}>▀</span>}
+              <For each={[0, 1, 2, 3, 4, 5]}>
+                {(col) => <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>}
               </For>
             </text>
             <text>
-              <For each={[0, 1, 2]}>
-                {(col) => <span style={{ fg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>}
+              <For each={[0, 1, 2, 3, 4, 5]}>
+                {(col) => <span style={{ fg: dot(dots()[col + 12] ?? 0.45) }}>▀</span>}
               </For>
             </text>
           </box>

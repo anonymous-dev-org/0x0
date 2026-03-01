@@ -209,7 +209,7 @@ function App(props: {
       <Show
         when={route.data.sessionID}
         fallback={
-          <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} paddingBottom={1}>
+          <box flexDirection="column" flexGrow={1}>
             <box flexGrow={1} justifyContent="center" alignItems="center">
               <Logo />
             </box>

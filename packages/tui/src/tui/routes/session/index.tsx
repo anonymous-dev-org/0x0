@@ -336,7 +336,7 @@ function SessionInner() {
               scrollAcceleration={scrollAcceleration()}
             >
               <Show when={messages().length === 0}>
-                <box flexGrow={1} justifyContent="center" alignItems="center">
+                <box flexGrow={1} justifyContent="center" alignItems="center" paddingLeft={1}>
                   <Logo />
                 </box>
               </Show>

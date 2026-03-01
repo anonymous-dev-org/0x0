@@ -3,6 +3,7 @@ import { Hono } from "hono"
 import { basicAuth } from "hono/basic-auth"
 import { websocket } from "hono/bun"
 import { cors } from "hono/cors"
+import { trimTrailingSlash } from "hono/trailing-slash"
 import { HTTPException } from "hono/http-exception"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { describeRoute, generateSpecs, openAPIRouteHandler, resolver, validator } from "hono-openapi"
@@ -47,6 +48,7 @@ export namespace Server {
   const app = new Hono()
   export const App = lazy(() =>
     app
+      .use(trimTrailingSlash())
       .onError((err, c) => {
         log.error("failed", {
           error: err,
