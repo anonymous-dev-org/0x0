@@ -6,7 +6,7 @@ import { cors } from "hono/cors"
 import { trimTrailingSlash } from "hono/trailing-slash"
 import { HTTPException } from "hono/http-exception"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import { describeRoute, generateSpecs, openAPIRouteHandler, resolver, validator } from "hono-openapi"
+import { generateSpecs, openAPIRouteHandler, validator } from "hono-openapi"
 import z from "zod"
 import { Config } from "@/core/config/config"
 import { InstanceBootstrap } from "../project/bootstrap"
@@ -15,7 +15,6 @@ import { Provider } from "../provider/provider"
 import { Storage } from "@/core/storage/storage"
 import { lazy } from "../util/lazy"
 import { Log } from "../util/log"
-import { errors } from "./error"
 import { MDNS } from "./mdns"
 import { AppRoutes } from "./routes/app"
 import { ConfigRoutes } from "./routes/config"
@@ -31,6 +30,7 @@ import { QuestionRoutes } from "./routes/question"
 import { SessionRoutes } from "./routes/session"
 import { TuiRoutes } from "./routes/tui"
 import { CompletionRoutes } from "./routes/completion"
+import { ToolBridgeRoutes } from "./routes/tool-bridge"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -156,6 +156,7 @@ export namespace Server {
       .route("/provider", ProviderRoutes())
       .route("/", FileRoutes())
       .route("/mcp", McpRoutes())
+      .route("/tool-bridge", ToolBridgeRoutes())
       .route("/tui", TuiRoutes())
       .route("/completion", CompletionRoutes())
       .route("/", AppRoutes())

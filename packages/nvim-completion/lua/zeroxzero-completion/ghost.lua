@@ -69,6 +69,15 @@ end
 ---@param delta string
 function M.append(delta)
   M._text = M._text .. delta
+
+  -- Initialize position on first append (streaming path)
+  if not M._bufnr then
+    M._bufnr = vim.api.nvim_get_current_buf()
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    M._row = cursor[1] - 1 -- 0-indexed
+    M._col = cursor[2]
+  end
+
   if M._bufnr and M._row and M._col then
     -- Re-render at original position
     local old_id = M._extmark_id
@@ -160,10 +169,8 @@ function M.accept_word()
     return M.accept()
   end
 
-  -- Include the delimiter if it's whitespace
-  if M._text:sub(word_end, word_end):match("%s") then
-    word_end = word_end
-  else
+  -- Include the delimiter if it's whitespace, otherwise stop before punctuation
+  if not M._text:sub(word_end, word_end):match("%s") then
     word_end = word_end - 1
   end
 

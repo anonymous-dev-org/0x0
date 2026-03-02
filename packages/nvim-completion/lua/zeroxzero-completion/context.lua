@@ -63,10 +63,6 @@ function M.get_context()
   end
   local prefix = table.concat(prefix_lines, "\n")
 
-  if prefix == "" then
-    return nil
-  end
-
   -- Suffix: rest of current line after cursor + lines after cursor
   local suffix_end = math.min(total_lines, row + cfg.max_suffix_lines)
   local suffix_lines = vim.api.nvim_buf_get_lines(bufnr, row - 1, suffix_end, false)
@@ -76,6 +72,10 @@ function M.get_context()
     suffix_lines[1] = first:sub(col + 1)
   end
   local suffix = table.concat(suffix_lines, "\n")
+
+  if prefix == "" and suffix == "" then
+    return nil
+  end
 
   local ft = vim.bo[bufnr].filetype
   local language = ft_to_lang[ft] or ft

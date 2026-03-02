@@ -89,7 +89,6 @@ This is a monorepo. The main packages are:
 | [`packages/server`](packages/server/) | Core daemon — HTTP API, sessions, providers, tools |
 | [`packages/git`](packages/git/) | Git hook for AI-generated commit messages (`0x0-git`) |
 | [`packages/sdk/js`](packages/sdk/js/) | TypeScript SDK for embedding 0x0 programmatically |
-| [`packages/claude-code-sdk`](packages/claude-code-sdk/) | Internal wrapper around `@anthropic-ai/claude-agent-sdk` |
 | [`packages/vscode`](packages/vscode/) | VS Code extension |
 | [`packages/nvim`](packages/nvim/) | Neovim plugin |
 | [`packages/nvim-completion`](packages/nvim-completion/) | Neovim inline completions plugin |

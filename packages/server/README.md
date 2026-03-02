@@ -60,7 +60,7 @@ src/
 
 ## Providers
 
-- **claude-code** — Claude via `@anthropic-ai/claude-agent-sdk`
+- **claude-code** — Claude via `claude` CLI
   - Models: `claude-sonnet-4-6` (default), `claude-opus-4-6`, `claude-haiku-4-5-20251001`
 - **codex** — OpenAI Codex via `@openai/codex-sdk`
   - Models: `gpt-5-codex`, `o3`, `o4-mini`

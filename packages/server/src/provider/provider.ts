@@ -131,7 +131,7 @@ export namespace Provider {
     return ALL_PROVIDERS
   }
 
-  /** Returns only providers whose CLI binary is on PATH. */
+  /** Returns only providers that are available (claude-code requires `claude` CLI on PATH; codex requires `codex` CLI on PATH). */
   export async function list(): Promise<Record<string, Info>> {
     const [claudeAvailable, codexAvailable] = await Promise.all([
       ProviderAuth.isAvailable("claude-code"),
@@ -232,7 +232,7 @@ export namespace Provider {
     }
 
     const entries = Object.values(providers)
-    if (entries.length === 0) throw new Error("No CLI providers found. Install claude or codex.")
+    if (entries.length === 0) throw new Error("No providers found.")
     const provider = entries[0]!
     const [model] = sort(Object.values(provider.models))
     if (!model) throw new Error("No models found")

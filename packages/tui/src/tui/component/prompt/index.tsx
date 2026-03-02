@@ -31,7 +31,6 @@ import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@anonymous-dev/0x0-server/server/types"
 import { TuiEvent } from "@anonymous-dev/0x0-server/core/bus/tui-event"
 import { useDialog } from "@tui/ui/dialog"
-import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { useToast } from "../../ui/toast"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
@@ -80,12 +79,9 @@ export function Prompt(props: PromptProps) {
   function promptModelWarning() {
     toast.show({
       variant: "warning",
-      message: "Connect a provider to send prompts",
+      message: "Select a model to send prompts",
       duration: 3000,
     })
-    if (sync.data.provider_connected.length === 0) {
-      dialog.show({ title: "Connect a provider", body: () => <DialogProviderConnect /> })
-    }
   }
 
   const textareaKeybindings = useTextareaKeybindings()

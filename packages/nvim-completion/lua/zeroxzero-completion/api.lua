@@ -60,18 +60,22 @@ function M.stream(ctx, on_delta, on_done, on_error)
     "--silent",
     "--no-buffer",
     "--max-time", "10",
-    "-H", "Content-Type: application/json",
-    "-H", "x-zeroxzero-directory: " .. vim.fn.getcwd(),
-    "-d", body,
-    url,
   }
 
-  -- Add basic auth if configured
+  -- Add basic auth before other headers so index arithmetic is unnecessary
   local auth = config.current.auth
   if auth then
-    table.insert(cmd, 5, "-u")
-    table.insert(cmd, 6, auth.username .. ":" .. auth.password)
+    cmd[#cmd + 1] = "-u"
+    cmd[#cmd + 1] = auth.username .. ":" .. auth.password
   end
+
+  cmd[#cmd + 1] = "-H"
+  cmd[#cmd + 1] = "Content-Type: application/json"
+  cmd[#cmd + 1] = "-H"
+  cmd[#cmd + 1] = "x-zeroxzero-directory: " .. vim.fn.getcwd()
+  cmd[#cmd + 1] = "-d"
+  cmd[#cmd + 1] = body
+  cmd[#cmd + 1] = url
 
   local buffer = ""
 
@@ -96,7 +100,7 @@ function M.stream(ctx, on_delta, on_done, on_error)
             break
           end
 
-          local line = buffer:sub(1, newline_pos - 1)
+          local line = buffer:sub(1, newline_pos - 1):gsub("\r$", "")
           buffer = buffer:sub(newline_pos + 1)
 
           -- SSE format: "data: {...}"
@@ -122,11 +126,8 @@ function M.stream(ctx, on_delta, on_done, on_error)
       end
 
       if result.code ~= 0 and result.code ~= 28 then
-        local stderr = result.stderr or ""
-        if stderr ~= "" then
-          on_error("curl error (exit " .. result.code .. "): " .. stderr, request_id)
-          return
-        end
+        on_error("curl error (exit " .. result.code .. "): " .. (result.stderr or ""), request_id)
+        return
       end
 
       on_done(request_id)
@@ -139,6 +140,7 @@ end
 ---Cancel an in-flight request
 ---@param request zeroxzero_completion.Request?
 function M.cancel(request)
+  next_request_id = next_request_id + 1
   if request and request.process then
     request.process:kill("sigterm")
     request.process = nil

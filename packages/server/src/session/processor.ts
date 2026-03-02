@@ -8,26 +8,6 @@ import { Bus } from "@/core/bus"
 import { SessionStatus } from "./status"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
-import { PermissionNext } from "@/permission/next"
-import { Question } from "@/runtime/question"
-import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk"
-
-function providerToolPermission(toolName: string): string {
-  switch (toolName) {
-    case "Bash": return "bash"
-    case "Edit":
-    case "Write":
-    case "MultiEdit":
-    case "NotebookEdit": return "edit"
-    case "Read": return "read"
-    case "Glob":
-    case "Grep": return "search"
-    case "Task": return "task"
-    case "WebFetch":
-    case "WebSearch": return "web"
-    default: return toolName.toLowerCase()
-  }
-}
 
 function providerToolPattern(toolName: string, input: Record<string, unknown>): string {
   function field(...keys: string[]): string {
@@ -112,146 +92,10 @@ export namespace SessionProcessor {
             ? sessionInfo?.codexThreadId
             : undefined)
 
-        const providerID = streamInput.model.providerID
-        const agentActions = streamInput.agent.actions ?? {}
-        const agentName = streamInput.agent.name
-
-        const canUseTool = async (
-          toolName: string,
-          toolInput: Record<string, unknown>,
-          options?: { signal?: AbortSignal; toolUseID?: string; agentID?: string },
-        ): Promise<PermissionResult> => {
-          // Intercept AskUserQuestion: the Claude Code subprocess has no terminal,
-          // so route questions through the 0x0 question system to display in the TUI.
-          if (toolName === "AskUserQuestion") {
-            const rawQuestions = toolInput.questions as
-              | Array<{
-                  question: string
-                  header: string
-                  options: Array<{ label: string; description: string }>
-                  multiSelect?: boolean
-                }>
-              | undefined
-            if (!rawQuestions?.length) {
-              return { behavior: "deny", message: "No questions provided." }
-            }
-
-            try {
-              const answers = await Question.ask({
-                sessionID: input.sessionID,
-                questions: rawQuestions.map((q) => ({
-                  question: q.question,
-                  header: q.header,
-                  options: q.options,
-                  multiple: q.multiSelect,
-                })),
-                tool: options?.toolUseID
-                  ? { messageID: input.assistantMessage.id, callID: options.toolUseID }
-                  : undefined,
-              })
-
-              const answerMap: Record<string, string> = {}
-              for (let i = 0; i < rawQuestions.length; i++) {
-                answerMap[rawQuestions[i]!.question] = (answers[i] ?? []).join(", ")
-              }
-
-              return {
-                behavior: "deny",
-                message: `The user answered your questions: ${JSON.stringify(answerMap)}. Continue with these answers in mind.`,
-              }
-            } catch (e) {
-              if (e instanceof Question.RejectedError) {
-                return { behavior: "deny", message: "The user dismissed this question without answering." }
-              }
-              return {
-                behavior: "deny",
-                message: e instanceof Error ? e.message : "Failed to ask question.",
-              }
-            }
-          }
-
-          const policy = agentActions[toolName]
-          if (policy === "allow") return { behavior: "allow", updatedInput: toolInput }
-          if (policy === "deny")
-            return { behavior: "deny", message: `Tool "${toolName}" is denied by agent action policy.` }
-
-          const session = await Session.get(input.sessionID).catch(() => null)
-          try {
-            await PermissionNext.ask({
-              sessionID: input.sessionID,
-              permission: providerToolPermission(toolName),
-              patterns: [providerToolPattern(toolName, toolInput)],
-              metadata: { tool: toolName, provider: providerID, agent: agentName },
-              always: ["*"],
-              ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
-            })
-            return { behavior: "allow", updatedInput: toolInput }
-          } catch (e) {
-            return { behavior: "deny", message: e instanceof Error ? e.message : "Permission denied." }
-          }
-        }
-
-        const codexApproval = {
-          async onCommand(params: { command: string; cwd: string; reason?: string }) {
-            const policy = agentActions.Bash
-            if (policy === "allow") return "accept" as const
-            if (policy === "deny") return "decline" as const
-
-            const session = await Session.get(input.sessionID).catch(() => null)
-            try {
-              await PermissionNext.ask({
-                sessionID: input.sessionID,
-                permission: "bash",
-                patterns: [params.command],
-                metadata: {
-                  tool: "commandExecution",
-                  provider: providerID,
-                  agent: agentName,
-                  command: params.command,
-                  cwd: params.cwd,
-                  reason: params.reason,
-                },
-                always: ["*"],
-                ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
-              })
-              return "accept" as const
-            } catch {
-              return "decline" as const
-            }
-          },
-          async onFileChange(params: { reason?: string }) {
-            const policy = agentActions.Edit
-            if (policy === "allow") return "accept" as const
-            if (policy === "deny") return "decline" as const
-
-            const session = await Session.get(input.sessionID).catch(() => null)
-            try {
-              await PermissionNext.ask({
-                sessionID: input.sessionID,
-                permission: "edit",
-                patterns: ["*"],
-                metadata: {
-                  tool: "fileChange",
-                  provider: providerID,
-                  agent: agentName,
-                  reason: params.reason,
-                },
-                always: ["*"],
-                ruleset: PermissionNext.merge(streamInput.agent.permission, session?.permission ?? []),
-              })
-              return "accept" as const
-            } catch {
-              return "decline" as const
-            }
-          },
-        }
-
         const enrichedInput: LLM.StreamInput = {
           ...streamInput,
           cliSessionId,
           codexThreadId,
-          canUseTool,
-          codexApproval,
         }
 
         try {

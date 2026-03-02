@@ -2,7 +2,6 @@ import { TextAttributes } from "@opentui/core"
 import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { useConnected } from "@tui/component/dialog-model"
-import { DialogProvider as DialogProviderConnect } from "@tui/component/dialog-provider"
 import { Session } from "@tui/routes/session"
 import { type Args, setArgs } from "@tui/state/args"
 import { createExit, exit } from "@tui/state/exit"
@@ -14,7 +13,7 @@ import { createRoute, route } from "@tui/state/route"
 import { createSDK, type EventSource, sdk } from "@tui/state/sdk"
 import { createSync, sync } from "@tui/state/sync"
 import { createTheme, theme, themeState } from "@tui/state/theme"
-import { DialogMount, DialogProvider, useDialog } from "@tui/ui/dialog"
+import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { Clipboard } from "@tui/util/clipboard"
 import { Terminal } from "@tui/util/terminal"
 import { createEffect, createSignal, ErrorBoundary, onMount, Show } from "solid-js"
@@ -225,10 +224,6 @@ function App(props: {
         <Session />
       </Show>
 
-      {/* Auto-show provider dialog when no CLI tool is detected */}
-      <Show when={sync.ready && sync.data.provider_connected.length === 0}>
-        <DialogMount title="Connect a provider" body={() => <DialogProviderConnect />} />
-      </Show>
     </box>
   )
 }

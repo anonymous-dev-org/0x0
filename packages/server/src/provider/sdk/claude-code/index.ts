@@ -1,33 +1,16 @@
-import type { ToolDefinition } from "@anonymous/claude-code-sdk"
-import { ClaudeCodeClient, ClaudeCodeSession } from "@anonymous/claude-code-sdk"
-import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
-import { Config } from "@/core/config/config"
-import { PermissionNext } from "@/permission/next"
-import { Session } from "@/session"
-import type { Tool } from "@/tool/tool"
 import { Log } from "@/util/log"
+import { Server } from "@/server/server"
+import { registerBridge, unregisterBridge, type BridgeContext } from "@/server/routes/tool-bridge"
+import { ToolRegistry } from "@/tool/registry"
+import type { Agent } from "@/runtime/agent/agent"
 
 const log = Log.create({ service: "claude-code" })
 
-// ─── Session store ────────────────────────────────────────────────────────────
-// Maps sessionId → { session, tools }. In-memory; lost on server restart.
-// Storing tools avoids recomputing them on every resumed turn.
-type SessionEntry = { session: ClaudeCodeSession; tools: ExecutableTool[] }
-const sessions = new Map<string, SessionEntry>()
+// MCP tool prefix used by Claude CLI for our MCP server named "tools"
+const MCP_PREFIX = "mcp__tools__"
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
-async function getClient(): Promise<ClaudeCodeClient> {
-  const config = await Config.get()
-  const configKey = (config.provider?.["claude-code"] as { options?: { apiKey?: string } } | undefined)?.options?.apiKey
-  const token = configKey ?? process.env.ANTHROPIC_OAUTH_TOKEN ?? process.env.ANTHROPIC_API_KEY
-  if (!token) {
-    throw new Error(
-      "claude-code provider requires ANTHROPIC_API_KEY or ANTHROPIC_OAUTH_TOKEN, " +
-        "or configure provider.claude-code.options.apiKey in your config"
-    )
-  }
-  return new ClaudeCodeClient({ oauthToken: token })
+function stripMcpPrefix(name: string): string {
+  return name.startsWith(MCP_PREFIX) ? name.slice(MCP_PREFIX.length) : name
 }
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -44,14 +27,6 @@ export type ClaudeEvent =
   | { type: "done"; sessionId: string }
   | { type: "error"; message: string }
 
-export type ExecutableTool = {
-  id: string
-  description: string
-  /** Already-converted JSON Schema object for the tool's input. */
-  inputSchema: Record<string, unknown>
-  execute: (args: Record<string, unknown>, ctx: Tool.Context) => Promise<{ output: string }>
-}
-
 export type ClaudeStreamInput = {
   modelId: string
   prompt: string
@@ -59,161 +34,355 @@ export type ClaudeStreamInput = {
   cliSessionId?: string
   abort: AbortSignal
   thinkingEffort?: string
-  // Tool execution context (required when tools is non-empty)
   sessionID: string
   agentName: string
-  agentPermission: PermissionNext.Ruleset
-  tools: ExecutableTool[]
-  canUseTool?: CanUseTool
+  agent: Agent.Info
+  cwd?: string
+}
+
+// ─── Bridge management ───────────────────────────────────────────────────────
+
+async function createBridge(input: ClaudeStreamInput): Promise<{ bridgeId: string; cleanup: () => void }> {
+  const bridgeId = crypto.randomUUID()
+
+  const rawTools = await ToolRegistry.tools(
+    { providerID: "claude-code", modelID: input.modelId },
+    input.agent,
+  )
+  const tools: BridgeContext["tools"] = rawTools.map((t) => ({
+    id: t.id,
+    description: t.description,
+    parameters: t.parameters,
+    execute: (args: any, ctx: any) => t.execute(args, ctx),
+  }))
+
+  registerBridge(bridgeId, {
+    sessionID: input.sessionID,
+    agentName: input.agentName,
+    agent: input.agent,
+    abort: input.abort,
+    tools,
+  })
+
+  return {
+    bridgeId,
+    cleanup: () => unregisterBridge(bridgeId),
+  }
+}
+
+// ─── CLI spawning ────────────────────────────────────────────────────────────
+
+function spawnEnv(): Record<string, string | undefined> {
+  const env = { ...process.env }
+  // Prevent Claude CLI's nested-session detection
+  delete env.CLAUDECODE
+  delete env.CLAUDE_CODE_ENTRYPOINT
+  return env
+}
+
+function buildCliArgs(input: ClaudeStreamInput, bridgeId: string): string[] {
+  const serverUrl = Server.url()
+  const dir = input.cwd ?? process.cwd()
+  const mcpUrl = `${serverUrl.origin}/tool-bridge/${bridgeId}?directory=${encodeURIComponent(dir)}`
+
+  const mcpConfig = JSON.stringify({
+    mcpServers: {
+      tools: {
+        type: "http",
+        url: mcpUrl,
+      },
+    },
+  })
+
+  const args = [
+    "-p",
+    "--verbose",
+    "--output-format", "stream-json",
+    "--include-partial-messages",
+    "--model", input.modelId,
+    "--tools", "",
+    "--mcp-config", mcpConfig,
+    "--strict-mcp-config",
+    "--allowedTools", "mcp__tools__*",
+  ]
+
+  if (input.systemPrompt) {
+    args.push("--system-prompt", input.systemPrompt)
+  }
+
+  if (input.thinkingEffort) {
+    args.push("--effort", input.thinkingEffort)
+  }
+
+  if (input.cliSessionId) {
+    args.push("--resume", input.cliSessionId)
+  }
+
+  // Prompt goes last
+  args.push(input.prompt)
+
+  return args
+}
+
+// ─── NDJSON stream parser ────────────────────────────────────────────────────
+
+/**
+ * Parse NDJSON lines from the `claude` CLI's `--output-format stream-json`
+ * into our internal ClaudeEvent stream.
+ *
+ * Key event shapes from the CLI:
+ * - { type: "system", subtype: "init", session_id, ... }
+ * - { type: "stream_event", event: BetaRawMessageStreamEvent, ... }
+ * - { type: "assistant", message: BetaMessage, session_id, ... }
+ * - { type: "result", subtype: "success"|"error_*", session_id, ... }
+ */
+async function* parseNdjson(
+  stdout: ReadableStream<Uint8Array>,
+  abort: AbortSignal,
+): AsyncGenerator<ClaudeEvent> {
+  const decoder = new TextDecoder()
+  let sessionId = ""
+  let buffer = ""
+  let emittedStepStart = false
+  let emittedAnyText = false
+  // Track active content block types by index
+  const blockTypes: Record<number, string> = {}
+  const blockIds: Record<number, string> = {}
+
+  function* handleLine(trimmed: string): Generator<ClaudeEvent> {
+    let msg: any
+    try {
+      msg = JSON.parse(trimmed)
+    } catch {
+      log.warn("failed to parse NDJSON line", { line: trimmed.slice(0, 200) })
+      return
+    }
+
+    if (msg.type === "system" && msg.subtype === "init") {
+      sessionId = msg.session_id ?? ""
+      return
+    }
+
+    if (msg.type === "stream_event") {
+      const event = msg.event
+      if (!event) return
+
+      switch (event.type) {
+        case "message_start": {
+          // Only emit step-start once per claudeStream call
+          if (!emittedStepStart) {
+            yield { type: "step-start" }
+            emittedStepStart = true
+          }
+          yield { type: "message-boundary" }
+          break
+        }
+
+        case "content_block_start": {
+          const idx = event.index ?? 0
+          const block = event.content_block
+          if (!block) break
+
+          if (block.type === "tool_use") {
+            blockTypes[idx] = "tool_use"
+            blockIds[idx] = block.id ?? `tool-${idx}`
+            // Strip MCP prefix so processor sees clean tool names (Bash, Read, etc.)
+            const cleanName = stripMcpPrefix(block.name ?? "")
+            yield { type: "tool-start", id: block.id ?? `tool-${idx}`, name: cleanName }
+          } else if (block.type === "thinking") {
+            blockTypes[idx] = "thinking"
+            blockIds[idx] = `thinking-${idx}`
+          } else if (block.type === "text") {
+            blockTypes[idx] = "text"
+          }
+          break
+        }
+
+        case "content_block_delta": {
+          const idx = event.index ?? 0
+          const delta = event.delta
+          if (!delta) break
+
+          if (delta.type === "text_delta" && delta.text) {
+            emittedAnyText = true
+            yield { type: "text-delta", text: delta.text }
+          } else if (delta.type === "thinking_delta" && delta.thinking) {
+            yield { type: "reasoning-delta", id: blockIds[idx] ?? "thinking", text: delta.thinking }
+          } else if (delta.type === "input_json_delta" && delta.partial_json !== undefined) {
+            const id = blockIds[idx]
+            if (id) {
+              yield { type: "tool-input-delta", id, partial: delta.partial_json }
+            }
+          }
+          break
+        }
+
+        case "content_block_stop": {
+          const idx = event.index ?? 0
+          const blockType = blockTypes[idx]
+          if (blockType === "tool_use") {
+            const id = blockIds[idx]
+            if (id) {
+              yield { type: "tool-end", id }
+            }
+          }
+          delete blockTypes[idx]
+          delete blockIds[idx]
+          break
+        }
+
+        case "message_stop": {
+          yield { type: "message-boundary" }
+          break
+        }
+      }
+      return
+    }
+
+    if (msg.type === "assistant") {
+      if (msg.session_id) sessionId = msg.session_id
+
+      // Fallback: if stream_event didn't produce text deltas, extract from
+      // the full assistant message so the TUI still shows something.
+      if (!emittedAnyText && msg.message?.content) {
+        for (const block of msg.message.content) {
+          if (block.type === "text" && block.text) {
+            yield { type: "text-delta", text: block.text }
+            emittedAnyText = true
+          }
+        }
+      }
+      return
+    }
+
+    if (msg.type === "result") {
+      if (msg.session_id) sessionId = msg.session_id
+
+      // Fallback: extract text from result if we still have nothing
+      if (!emittedAnyText && msg.result && typeof msg.result === "string") {
+        yield { type: "text-delta", text: msg.result }
+      }
+
+      yield { type: "step-end" }
+
+      if (msg.subtype === "success") {
+        yield { type: "done", sessionId }
+      } else {
+        const errors = msg.errors?.join("; ") ?? msg.subtype ?? "unknown error"
+        yield { type: "error", message: errors }
+        yield { type: "done", sessionId }
+      }
+      return
+    }
+  }
+
+  const reader = stdout.getReader()
+  try {
+    while (true) {
+      if (abort.aborted) break
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        yield* handleLine(trimmed)
+      }
+    }
+
+    // Flush decoder and process any remaining data in the buffer
+    buffer += decoder.decode(undefined, { stream: false })
+    if (buffer.trim()) {
+      yield* handleLine(buffer.trim())
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }
 
 // ─── Main stream function ─────────────────────────────────────────────────────
 
 export async function* claudeStream(input: ClaudeStreamInput): AsyncGenerator<ClaudeEvent> {
-  let client: ClaudeCodeClient
+  let bridge: { bridgeId: string; cleanup: () => void } | undefined
+
   try {
-    client = await getClient()
+    bridge = await createBridge(input)
   } catch (err) {
-    yield { type: "error", message: String((err as { message?: string }).message ?? err) }
+    yield { type: "error", message: `Failed to create tool bridge: ${err instanceof Error ? err.message : String(err)}` }
     return
   }
 
-  // Reuse session if cliSessionId was returned from a previous turn
-  const stored = input.cliSessionId ? sessions.get(input.cliSessionId) : undefined
-  let session = stored?.session
-  // On resume use cached tools; on new session use the ones passed in
-  const activeTools = stored?.tools ?? input.tools
+  const args = buildCliArgs(input, bridge.bridgeId)
+  log.info("spawning claude CLI", {
+    model: input.modelId,
+    sessionID: input.sessionID,
+    agent: input.agentName,
+    bridgeId: bridge.bridgeId,
+    cliSessionId: input.cliSessionId,
+  })
 
-  if (!session) {
-    const toolDefs: ToolDefinition[] = input.tools.map(t => ({
-      name: t.id,
-      description: t.description,
-      input_schema: t.inputSchema as ToolDefinition["input_schema"],
-    }))
-
-    session = new ClaudeCodeSession(client, {
-      model: input.modelId,
-      systemPrompt: input.systemPrompt,
-      tools: toolDefs,
-    })
-
-    log.info("new session", {
-      model: input.modelId,
-      sessionId: session.sessionId,
-      tools: input.tools.map(t => t.id),
-    })
-  } else {
-    log.info("resumed session", {
-      model: input.modelId,
-      sessionId: session.sessionId,
-      cliSessionId: input.cliSessionId,
-    })
-  }
-
-  yield { type: "step-start" }
-  yield { type: "message-boundary" }
-
-  const executor = buildExecutor(input, session, activeTools)
+  let proc: ReturnType<typeof Bun.spawn> | undefined
 
   try {
-    for await (const event of session.send(input.prompt, executor, input.abort)) {
-      switch (event.type) {
-        case "text_delta":
-          yield { type: "text-delta", text: event.delta }
-          break
+    proc = Bun.spawn(["claude", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      cwd: input.cwd ?? process.cwd(),
+      env: spawnEnv(),
+    })
 
-        case "thinking_delta":
-          yield { type: "reasoning-delta", id: "thinking", text: event.delta }
-          break
-
-        case "tool_use_start":
-          yield { type: "tool-start", id: event.toolUseId, name: event.toolName }
-          break
-
-        case "tool_use_input_delta":
-          yield { type: "tool-input-delta", id: event.toolUseId, partial: event.partialJson }
-          break
-
-        case "tool_use_done":
-          // Input streaming complete — tool is about to execute (tool-end fires after tool_result)
-          break
-
-        case "tool_result":
-          // Tool executed; signal completion
-          yield { type: "tool-end", id: event.toolUseId }
-          // New inference turn: emit message-boundary so UI finalises previous text
-          yield { type: "message-boundary" }
-          break
-
-        case "done":
-          // Persist session + tools for resumption on the next user turn
-          sessions.set(session.sessionId, { session, tools: activeTools })
-          yield { type: "step-end" }
-          yield { type: "done", sessionId: session.sessionId }
-          break
-      }
+    // Handle abort
+    const abortHandler = () => {
+      proc?.kill()
     }
+    input.abort.addEventListener("abort", abortHandler, { once: true })
+
+    // Consume stderr in background for debugging
+    const stderrChunks: string[] = []
+    ;(async () => {
+      if (!proc?.stderr) return
+      const reader = (proc.stderr as ReadableStream<Uint8Array>).getReader()
+      const dec = new TextDecoder()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const text = dec.decode(value, { stream: true })
+          stderrChunks.push(text)
+          if (text.trim()) log.info("claude stderr", { text: text.trim().slice(0, 500) })
+        }
+      } catch {
+        // stderr closed
+      } finally {
+        reader.releaseLock()
+      }
+    })()
+
+    yield* parseNdjson(proc.stdout as ReadableStream<Uint8Array>, input.abort)
+
+    // Wait for process to exit
+    const exitCode = await proc.exited
+    if (exitCode !== 0 && !input.abort.aborted) {
+      const stderr = stderrChunks.join("")
+      log.error("claude CLI exited with error", { exitCode, stderr: stderr.slice(0, 1000) })
+      yield { type: "error", message: `claude CLI exited with code ${exitCode}: ${stderr.slice(0, 500)}` }
+    }
+
+    input.abort.removeEventListener("abort", abortHandler)
   } catch (err: unknown) {
     const e = err as { name?: string; message?: string }
-    if (e?.name !== "AbortError") {
-      // Remove the session — a mid-turn API error leaves history in an
-      // inconsistent state (tool_use with no matching tool_result). Resuming
-      // it would cause an immediate API error on the next call.
-      sessions.delete(session.sessionId)
+    if (e?.name !== "AbortError" && !input.abort.aborted) {
       yield { type: "error", message: String(e?.message ?? err) }
     }
-  }
-}
-
-function buildExecutor(
-  input: ClaudeStreamInput,
-  session: ClaudeCodeSession,
-  tools: ExecutableTool[]
-): (toolName: string, toolInput: Record<string, unknown>) => Promise<string> {
-  const messageID = `bridge-${session.sessionId}`
-  return async (toolName: string, toolInput: Record<string, unknown>) => {
-    // 1. Permission gate (CanUseTool requires signal + toolUseID)
-    const callID = crypto.randomUUID()
-    if (input.canUseTool) {
-      const perm = await input.canUseTool(toolName, toolInput, {
-        signal: input.abort,
-        toolUseID: callID,
-      })
-      if (perm.behavior === "deny") {
-        throw new Error(perm.message ?? `Tool "${toolName}" denied by permission policy`)
-      }
-      toolInput = perm.updatedInput ?? toolInput
+  } finally {
+    bridge.cleanup()
+    if (proc && !proc.killed) {
+      try { proc.kill() } catch {}
     }
-
-    // 2. Find the tool
-    const toolInfo = tools.find(t => t.id === toolName)
-    if (!toolInfo) {
-      throw new Error(`Tool "${toolName}" not found. Available: ${tools.map(t => t.id).join(", ")}`)
-    }
-
-    // 3. Build Tool.Context for this call (reuse callID from permission gate)
-    const ctx: Tool.Context = {
-      sessionID: input.sessionID,
-      messageID,
-      agent: input.agentName,
-      abort: input.abort,
-      callID,
-      messages: [],
-      metadata: () => {},
-      ask: async req => {
-        const session = await Session.get(input.sessionID).catch(() => null)
-        await PermissionNext.ask({
-          ...req,
-          sessionID: input.sessionID,
-          tool: { messageID, callID },
-          ruleset: PermissionNext.merge(input.agentPermission, session?.permission ?? []),
-        })
-      },
-    }
-
-    // 4. Execute
-    const result = await toolInfo.execute(toolInput, ctx)
-    return result.output
   }
 }
 
@@ -228,51 +397,123 @@ export async function* completionStream(input: {
   stopSequences?: string[]
   abort?: AbortSignal
 }): AsyncGenerator<CompletionEvent> {
-  let client: ClaudeCodeClient
-  try {
-    client = await getClient()
-  } catch (err) {
-    yield { type: "error", error: String((err as { message?: string }).message ?? err) }
-    return
+  const args = [
+    "-p",
+    "--verbose",
+    "--output-format", "stream-json",
+    "--include-partial-messages",
+    "--model", input.model,
+    "--tools", "",
+    "--max-turns", "1",
+    "--no-session-persistence",
+  ]
+
+  if (input.systemPrompt) {
+    args.push("--system-prompt", input.systemPrompt)
   }
 
-  const session = new ClaudeCodeSession(client, {
-    model: input.model,
-    systemPrompt: input.systemPrompt,
-    disableThinking: true,
-    skipBillingHeader: true,
-  })
+  args.push(input.prompt)
 
   log.info("starting completion stream", { model: input.model })
 
-  try {
-    let done = false
-    for await (const event of session.send(input.prompt, undefined, input.abort)) {
-      if (done) break
+  let proc: ReturnType<typeof Bun.spawn> | undefined
 
-      if (event.type === "text_delta") {
-        let text = event.delta
-        if (input.stopSequences?.length) {
-          for (const stop of input.stopSequences) {
-            const idx = text.indexOf(stop)
-            if (idx !== -1) {
-              text = text.slice(0, idx)
+  try {
+    proc = Bun.spawn(["claude", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: spawnEnv(),
+    })
+
+    if (input.abort) {
+      const abortHandler = () => proc?.kill()
+      input.abort.addEventListener("abort", abortHandler, { once: true })
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let done = false
+    const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader()
+
+    try {
+      while (!done) {
+        const { done: streamDone, value } = await reader.read()
+        if (streamDone) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+
+        for (const line of lines) {
+          if (done) break
+          const trimmed = line.trim()
+          if (!trimmed) continue
+
+          let msg: any
+          try {
+            msg = JSON.parse(trimmed)
+          } catch {
+            continue
+          }
+
+          if (msg.type === "stream_event") {
+            const event = msg.event
+            if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
+              let text = event.delta.text
+              if (input.stopSequences?.length) {
+                for (const stop of input.stopSequences) {
+                  const idx = text.indexOf(stop)
+                  if (idx !== -1) {
+                    text = text.slice(0, idx)
+                    if (text) yield { type: "delta", text }
+                    yield { type: "done" }
+                    done = true
+                    break
+                  }
+                }
+                if (done) break
+              }
               if (text) yield { type: "delta", text }
+            }
+          } else if (msg.type === "result") {
+            // Fallback: extract text from result
+            if (!done && msg.result && typeof msg.result === "string") {
+              yield { type: "delta", text: msg.result }
+            }
+            if (!done) {
               yield { type: "done" }
               done = true
-              break
             }
           }
-          if (done) break
         }
-        if (text) yield { type: "delta", text }
       }
+
+      // Process remaining buffer
+      buffer += decoder.decode(undefined, { stream: false })
+      if (!done && buffer.trim()) {
+        try {
+          const msg = JSON.parse(buffer.trim())
+          if (msg.type === "result" && msg.result && typeof msg.result === "string") {
+            yield { type: "delta", text: msg.result }
+          }
+        } catch {}
+        if (!done) yield { type: "done" }
+        done = true
+      }
+    } finally {
+      reader.releaseLock()
     }
+
     if (!done) yield { type: "done" }
+    await proc.exited
   } catch (err: unknown) {
     const e = err as { name?: string; message?: string }
     if (e?.name !== "AbortError") {
       yield { type: "error", error: String(e?.message ?? err) }
+    }
+  } finally {
+    if (proc && !proc.killed) {
+      try { proc.kill() } catch {}
     }
   }
 }

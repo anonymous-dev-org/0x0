@@ -4,11 +4,9 @@ import type { ModelMessage } from "ai"
 import type { Agent } from "@/runtime/agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { SystemPrompt } from "./system"
-import { claudeStream, type ExecutableTool } from "@/provider/sdk/claude-code"
-import { codexAppServerStream, type CodexApprovalDecision } from "@/provider/sdk/codex-app-server"
-import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
-import { ToolRegistry } from "@/tool/registry"
-import z from "zod"
+import { claudeStream } from "@/provider/sdk/claude-code"
+import { codexAppServerStream } from "@/provider/sdk/codex-app-server"
+import { Instance } from "@/project/instance"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -50,13 +48,6 @@ export namespace LLM {
     cliSessionId?: string
     /** Codex thread ID for resuming a Codex session */
     codexThreadId?: string
-    /** Called before each Claude tool execution; return deny to block */
-    canUseTool?: CanUseTool
-    /** Called before Codex executes a command or applies file changes */
-    codexApproval?: {
-      onCommand: (params: { command: string; cwd: string; reason?: string }) => Promise<CodexApprovalDecision>
-      onFileChange: (params: { reason?: string }) => Promise<CodexApprovalDecision>
-    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -212,21 +203,6 @@ export namespace LLM {
     userPrompt: string,
     systemPrompt: string,
   ): AsyncGenerator<CliEvent> {
-    // Build executable tools from the registry for this model+agent
-    const rawTools = await ToolRegistry.tools(
-      { providerID: input.model.providerID, modelID: input.model.id },
-      input.agent,
-    )
-    const executableTools: ExecutableTool[] = rawTools.map((t) => {
-      const schema = z.toJSONSchema(t.parameters) as Record<string, unknown>
-      return {
-        id: t.id,
-        description: t.description,
-        inputSchema: schema,
-        execute: (args, ctx) => t.execute(args as Parameters<typeof t.execute>[0], ctx),
-      }
-    })
-
     for await (const event of claudeStream({
       modelId: input.model.id,
       prompt: userPrompt,
@@ -236,9 +212,8 @@ export namespace LLM {
       thinkingEffort: input.user.thinkingEffort,
       sessionID: input.sessionID,
       agentName: input.agent.name,
-      agentPermission: input.agent.permission ?? [],
-      tools: executableTools,
-      canUseTool: input.canUseTool,
+      agent: input.agent,
+      cwd: Instance.directory,
     })) {
       switch (event.type) {
         case "text-delta":
@@ -286,10 +261,7 @@ export namespace LLM {
       systemPrompt: systemPrompt || undefined,
       threadId: input.codexThreadId,
       abort: input.abort,
-      cwd: typeof input.agent.options?.cwd === "string" ? input.agent.options.cwd : undefined,
-      approvalPolicy: "on-request",
-      onCommandApproval: input.codexApproval?.onCommand,
-      onFileChangeApproval: input.codexApproval?.onFileChange,
+      cwd: Instance.directory,
     })) {
       switch (event.type) {
         case "text-delta":

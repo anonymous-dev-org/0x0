@@ -1,5 +1,5 @@
+import { Codex } from "@openai/codex-sdk"
 import { Log } from "@/util/log"
-import { CodexRpcClient } from "./client"
 
 const log = Log.create({ service: "codex-app-server" })
 
@@ -15,8 +15,6 @@ export type CodexEvent =
   | { type: "done"; threadId: string }
   | { type: "error"; message: string }
 
-export type CodexApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel"
-
 export type CodexStreamInput = {
   modelId: string
   prompt: string
@@ -24,259 +22,256 @@ export type CodexStreamInput = {
   threadId?: string
   abort: AbortSignal
   cwd?: string
-  approvalPolicy?: "never" | "on-request"
-  onCommandApproval?: (params: {
-    command: string
-    cwd: string
-    reason?: string
-  }) => Promise<CodexApprovalDecision>
-  onFileChangeApproval?: (params: {
-    reason?: string
-  }) => Promise<CodexApprovalDecision>
 }
 
-function str(v: unknown): string {
-  return typeof v === "string" ? v : ""
+type StreamEvent = {
+  type?: unknown
+  thread_id?: unknown
+  error?: { message?: unknown } | null
+  message?: unknown
+  item?: {
+    id?: unknown
+    type?: unknown
+    text?: unknown
+    command?: unknown
+    aggregated_output?: unknown
+    exit_code?: unknown
+    changes?: Array<{ path?: unknown; kind?: unknown }>
+    server?: unknown
+    tool?: unknown
+    arguments?: unknown
+    result?: unknown
+    status?: unknown
+    query?: unknown
+    error?: { message?: unknown } | null
+  } | null
 }
 
-function num(v: unknown): number | undefined {
-  return typeof v === "number" ? v : undefined
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : ""
 }
 
-function obj(v: unknown): Record<string, unknown> {
-  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {}
+export function isPolicyRestrictedItem(type: string): boolean {
+  return type === "command_execution" || type === "file_change" || type === "web_search"
 }
 
-function arr(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : []
+function stringifyUnknown(value: unknown): string {
+  if (value === null || value === undefined) return ""
+  if (typeof value === "string") return value
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+export function formatMcpResult(result: unknown): string {
+  if (!result || typeof result !== "object") return ""
+  const rec = result as { content?: unknown; structured_content?: unknown }
+  const content = Array.isArray(rec.content) ? rec.content : []
+  const textBlocks: string[] = []
+
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue
+    const maybeText = (block as { text?: unknown }).text
+    if (typeof maybeText === "string" && maybeText.trim()) {
+      textBlocks.push(maybeText)
+    }
+  }
+
+  if (textBlocks.length > 0) return textBlocks.join("\n")
+  return stringifyUnknown(rec.structured_content ?? result)
+}
+
+function isAuthErrorMessage(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes("unauthorized") ||
+    m.includes("401") ||
+    m.includes("not authenticated") ||
+    m.includes("authentication") ||
+    m.includes("login required")
+  )
+}
+
+export function composeCodexTurnInput(prompt: string, systemPrompt?: string): string {
+  const sys = (systemPrompt ?? "").trim()
+  if (!sys) return prompt
+  return [
+    "<system-instructions>",
+    sys,
+    "</system-instructions>",
+    "",
+    prompt,
+  ].join("\n")
+}
+
+export function normalizeCodexErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : stringifyUnknown(error)
+  const fallback = message || "Unknown Codex error"
+  if (isAuthErrorMessage(fallback)) {
+    return 'Codex CLI is not authenticated. Run "codex login" and retry.'
+  }
+  return fallback
 }
 
 export async function* codexAppServerStream(
   input: CodexStreamInput,
 ): AsyncGenerator<CodexEvent> {
-  const queue: CodexEvent[] = []
-  let wake: (() => void) | null = null
-  let turnDone = false
-
-  function push(event: CodexEvent) {
-    queue.push(event)
-    if (wake) {
-      wake()
-      wake = null
-    }
-  }
-
-  function finish() {
-    turnDone = true
-    if (wake) {
-      wake()
-      wake = null
-    }
-  }
-
-  function waitForEvents(): Promise<void> {
-    if (queue.length > 0 || turnDone) return Promise.resolve()
-    return new Promise((r) => {
-      wake = r
-    })
-  }
-
-  let client: CodexRpcClient | undefined
-
-  const abortHandler = () => {
-    finish()
-    client?.close()
-  }
+  const textByItem = new Map<string, string>()
+  const outputByItem = new Map<string, string>()
+  const mcpArgsSeen = new Set<string>()
+  const abortController = new AbortController()
 
   if (input.abort.aborted) return
-  input.abort.addEventListener("abort", abortHandler, { once: true })
+  const onAbort = () => abortController.abort()
+  input.abort.addEventListener("abort", onAbort, { once: true })
 
   try {
-    client = await CodexRpcClient.create(input.cwd)
-
-    // ── Detect unexpected process exit ─────────────────────────────────
-
-    client.onClose((reason) => {
-      if (!turnDone) {
-        push({ type: "error", message: reason })
-        finish()
-      }
-    })
-
-    // ── Approval handlers ──────────────────────────────────────────────
-
-    client.onServerRequest(
-      "item/commandExecution/requestApproval",
-      async (params) => {
-        const p = obj(params)
-        if (input.onCommandApproval) {
-          const decision = await input.onCommandApproval({
-            command: str(p.command),
-            cwd: str(p.cwd),
-            reason: typeof p.reason === "string" ? p.reason : undefined,
-          })
-          return { decision }
-        }
-        return { decision: "accept" }
+    const codex = new Codex({
+      config: {
+        include_apply_patch_tool: false,
+        tools_web_search: false,
+        tools_view_image: false,
+        web_search: "disabled",
+        features: {
+          shell_tool: false,
+        },
       },
-    )
-
-    client.onServerRequest(
-      "item/fileChange/requestApproval",
-      async (params) => {
-        const p = obj(params)
-        if (input.onFileChangeApproval) {
-          const decision = await input.onFileChangeApproval({
-            reason: typeof p.reason === "string" ? p.reason : undefined,
-          })
-          return { decision }
-        }
-        return { decision: "accept" }
-      },
-    )
-
-    // ── Streaming delta notifications ──────────────────────────────────
-
-    client.onNotification("item/agentMessage/delta", (params) => {
-      const p = obj(params)
-      const delta = str(p.delta)
-      if (delta) push({ type: "text-delta", text: delta })
     })
 
-    client.onNotification("item/commandExecution/outputDelta", (params) => {
-      const p = obj(params)
-      const delta = str(p.delta)
-      if (delta) push({ type: "tool-output", id: str(p.itemId), output: delta })
-    })
+    const threadOpts = {
+      model: input.modelId || undefined,
+      sandboxMode: "workspace-write" as const,
+      workingDirectory: input.cwd,
+      // "never" = auto-approve: built-in tools are disabled by SDK config above,
+      // so this only affects MCP tools whose permissions our bridge already gates.
+      approvalPolicy: "never" as const,
+      webSearchMode: "disabled" as const,
+      webSearchEnabled: false,
+      networkAccessEnabled: false,
+    }
 
-    client.onNotification("item/reasoning/textDelta", (params) => {
-      const p = obj(params)
-      const delta = str(p.delta)
-      if (delta) push({ type: "reasoning-delta", id: str(p.itemId), text: delta })
-    })
+    const thread = input.threadId
+      ? codex.resumeThread(input.threadId, threadOpts)
+      : codex.startThread(threadOpts)
 
-    // ── Item lifecycle notifications ───────────────────────────────────
-
-    client.onNotification("item/started", (params) => {
-      const p = obj(params)
-      const item = obj(p.item)
-
-      if (str(item.type) === "commandExecution") {
-        push({
-          type: "tool-start",
-          id: str(item.id),
-          tool: "bash",
-          command: str(item.command),
-        })
-      }
-    })
-
-    client.onNotification("item/completed", (params) => {
-      const p = obj(params)
-      const item = obj(p.item)
-      const itemType = str(item.type)
-
-      if (itemType === "commandExecution") {
-        push({
-          type: "tool-end",
-          id: str(item.id),
-          output: str(item.aggregatedOutput),
-          exitCode: num(item.exitCode),
-        })
-      } else if (itemType === "fileChange") {
-        const changes = arr(item.changes)
-        if (changes.length > 0) {
-          push({
-            type: "file-change",
-            id: str(item.id),
-            files: changes.map((c) => {
-              const change = obj(c)
-              return { path: str(change.path), kind: str(change.kind) || "modified" }
-            }),
-          })
-        }
-      }
-    })
-
-    // ── Turn lifecycle ─────────────────────────────────────────────────
-
+    const turnInput = composeCodexTurnInput(input.prompt, input.systemPrompt)
+    const { events } = await thread.runStreamed(turnInput, { signal: abortController.signal })
     let resolvedThreadId = input.threadId ?? ""
 
-    client.onNotification("turn/started", () => {
-      push({ type: "step-start" })
-    })
+    for await (const rawEvent of events) {
+      const event = rawEvent as StreamEvent
+      const eventType = asString(event.type)
 
-    client.onNotification("turn/completed", (params) => {
-      const p = obj(params)
-      const threadId = str(p.threadId) || resolvedThreadId
-      push({ type: "step-end" })
-      if (threadId) push({ type: "done", threadId })
-      finish()
-    })
+      if (eventType === "thread.started") {
+        resolvedThreadId = asString(event.thread_id) || resolvedThreadId
+        continue
+      }
 
-    client.onNotification("error", (params) => {
-      const p = obj(params)
-      const error = obj(p.error)
-      push({ type: "error", message: str(error.message) || "Codex error" })
-      finish()
-    })
+      if (eventType === "turn.started") {
+        yield { type: "step-start" }
+        continue
+      }
 
-    // ── Start or resume thread ─────────────────────────────────────────
+      if (eventType === "turn.completed") {
+        yield { type: "step-end" }
+        const threadId = thread.id ?? resolvedThreadId
+        if (threadId) yield { type: "done", threadId }
+        continue
+      }
 
-    const policy = input.approvalPolicy ?? "never"
+      if (eventType === "turn.failed") {
+        yield { type: "error", message: asString(event.error?.message) || "Codex turn failed" }
+        continue
+      }
 
-    log.info("codex thread", {
-      action: input.threadId ? "resume" : "start",
-      model: input.modelId,
-      policy,
-    })
+      if (eventType === "error") {
+        yield { type: "error", message: asString(event.message) || "Codex error" }
+        continue
+      }
 
-    const threadResult = obj(
-      input.threadId
-        ? await client.request("thread/resume", {
-            threadId: input.threadId,
-            approvalPolicy: policy,
-            developerInstructions: input.systemPrompt || undefined,
-          })
-        : await client.request("thread/start", {
-            model: input.modelId || undefined,
-            cwd: input.cwd,
-            approvalPolicy: policy,
-            developerInstructions: input.systemPrompt || undefined,
-          }),
-    )
+      if (eventType !== "item.started" && eventType !== "item.updated" && eventType !== "item.completed") {
+        continue
+      }
 
-    const thread = obj(threadResult.thread)
-    resolvedThreadId = str(thread.id) || resolvedThreadId
+      const item = event.item
+      if (!item) continue
+      const itemType = asString(item.type)
+      const itemId = asString(item.id)
 
-    log.info("codex thread ready", { threadId: resolvedThreadId })
+      if (isPolicyRestrictedItem(itemType)) {
+        const msg = `Codex policy violation: built-in tool "${itemType}" is disabled; only MCP tools are allowed.`
+        log.warn("policy violation", {
+          itemType,
+          itemId,
+          threadId: thread.id ?? resolvedThreadId,
+        })
+        yield { type: "error", message: msg }
+        abortController.abort()
+        return
+      }
 
-    // ── Start turn ─────────────────────────────────────────────────────
+      if (itemType === "agent_message") {
+        const nextText = asString(item.text)
+        const prev = textByItem.get(itemId) ?? ""
+        if (nextText.length >= prev.length) {
+          const delta = nextText.slice(prev.length)
+          if (delta) yield { type: "text-delta", text: delta }
+        } else if (nextText) {
+          yield { type: "text-delta", text: nextText }
+        }
+        textByItem.set(itemId, nextText)
+        continue
+      }
 
-    await client.request("turn/start", {
-      threadId: resolvedThreadId,
-      input: [{ type: "text", text: input.prompt }],
-      cwd: input.cwd,
-      model: input.modelId || undefined,
-      approvalPolicy: policy,
-    })
+      if (itemType === "reasoning") {
+        const nextText = asString(item.text)
+        const prev = textByItem.get(itemId) ?? ""
+        if (nextText.length >= prev.length) {
+          const delta = nextText.slice(prev.length)
+          if (delta) yield { type: "reasoning-delta", id: itemId || "reasoning", text: delta }
+        } else if (nextText) {
+          yield { type: "reasoning-delta", id: itemId || "reasoning", text: nextText }
+        }
+        textByItem.set(itemId, nextText)
+        continue
+      }
 
-    log.info("codex turn started", { threadId: resolvedThreadId })
+      if (itemType !== "mcp_tool_call") continue
 
-    // ── Drain event queue until turn completes ─────────────────────────
+      const status = asString(item.status)
+      const toolName = [asString(item.server), asString(item.tool)].filter(Boolean).join("/")
+      const argsText = stringifyUnknown(item.arguments)
 
-    while (!turnDone || queue.length > 0) {
-      await waitForEvents()
-      while (queue.length > 0) {
-        yield queue.shift()!
+      if (eventType === "item.started") {
+        mcpArgsSeen.add(itemId)
+        yield { type: "tool-start", id: itemId, tool: toolName || "mcp_tool_call" }
+        if (argsText) yield { type: "tool-output", id: itemId, output: argsText }
+        continue
+      }
+
+      if (eventType === "item.updated" && !mcpArgsSeen.has(itemId)) {
+        mcpArgsSeen.add(itemId)
+        yield { type: "tool-start", id: itemId, tool: toolName || "mcp_tool_call" }
+        if (argsText) yield { type: "tool-output", id: itemId, output: argsText }
+      }
+
+      if (eventType === "item.completed" || status === "completed" || status === "failed") {
+        const output = item.error ? asString(item.error.message) : formatMcpResult(item.result)
+        const prevOutput = outputByItem.get(itemId) ?? ""
+        if (output && output !== prevOutput) {
+          yield { type: "tool-output", id: itemId, output }
+          outputByItem.set(itemId, output)
+        }
+        yield { type: "tool-end", id: itemId, output: output || "" }
       }
     }
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") return
-    const msg = err instanceof Error ? err.message : String(err)
-    if (!turnDone) yield { type: "error", message: msg }
+    if (abortController.signal.aborted) return
+    yield { type: "error", message: normalizeCodexErrorMessage(err) }
   } finally {
-    input.abort.removeEventListener("abort", abortHandler)
-    client?.close()
+    input.abort.removeEventListener("abort", onAbort)
   }
 }

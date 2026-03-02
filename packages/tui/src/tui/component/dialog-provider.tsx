@@ -8,10 +8,6 @@ import { Link } from "../ui/link"
 import { DialogModel } from "./dialog-model"
 
 const INSTALL_INFO: Record<string, { cmd: string; url: string }> = {
-  "claude-code": {
-    cmd: "npm install -g @anthropic-ai/claude-code",
-    url: "https://docs.anthropic.com/claude-code",
-  },
   codex: {
     cmd: "npm install -g @openai/codex",
     url: "https://github.com/openai/codex",

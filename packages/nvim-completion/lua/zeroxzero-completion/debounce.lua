@@ -3,7 +3,7 @@ local M = {}
 ---Create a debounced function
 ---@param fn function
 ---@param delay_ms number
----@return fun() trigger, fun() cancel
+---@return fun() trigger, fun() cancel, fun() close
 function M.create(fn, delay_ms)
   local timer = vim.uv.new_timer()
 
@@ -19,7 +19,14 @@ function M.create(fn, delay_ms)
     timer:stop()
   end
 
-  return trigger, cancel
+  local function close()
+    timer:stop()
+    if not timer:is_closing() then
+      timer:close()
+    end
+  end
+
+  return trigger, cancel, close
 end
 
 return M
