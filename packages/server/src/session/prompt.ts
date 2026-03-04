@@ -405,6 +405,7 @@ export namespace SessionPrompt {
           description: task.description,
           agent: task.agent,
           command: task.command,
+          compact: true,
         }
         let executionError: Error | undefined
         const taskAgent = await Agent.get(task.agent)

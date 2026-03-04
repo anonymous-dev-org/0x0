@@ -298,3 +298,87 @@ test("list - returns empty when no pending", async () => {
     },
   })
 })
+
+// rejectBySession tests
+
+test("rejectBySession - rejects all pending questions for a session", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const promise1 = Question.ask({
+        sessionID: "ses_target",
+        questions: [
+          {
+            question: "Q1?",
+            header: "Q1",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      const promise2 = Question.ask({
+        sessionID: "ses_target",
+        questions: [
+          {
+            question: "Q2?",
+            header: "Q2",
+            options: [
+              { label: "C", description: "C" },
+              { label: "D", description: "D" },
+            ],
+          },
+        ],
+      })
+
+      // Different session — should NOT be rejected
+      const promise3 = Question.ask({
+        sessionID: "ses_other",
+        questions: [
+          {
+            question: "Q3?",
+            header: "Q3",
+            options: [
+              { label: "E", description: "E" },
+              { label: "F", description: "F" },
+            ],
+          },
+        ],
+      })
+
+      const pendingBefore = await Question.list()
+      expect(pendingBefore.length).toBe(3)
+
+      await Question.rejectBySession("ses_target")
+
+      // Both target session questions should be rejected
+      await expect(promise1).rejects.toBeInstanceOf(Question.RejectedError)
+      await expect(promise2).rejects.toBeInstanceOf(Question.RejectedError)
+
+      // Other session question should still be pending
+      const pendingAfter = await Question.list()
+      expect(pendingAfter.length).toBe(1)
+      expect(pendingAfter[0]!.sessionID).toBe("ses_other")
+
+      // Clean up
+      await Question.reject(pendingAfter[0]!.id)
+      promise3.catch(() => {})
+    },
+  })
+})
+
+test("rejectBySession - does nothing when no pending questions for session", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Should not throw even with no pending questions
+      await Question.rejectBySession("ses_nonexistent")
+      const pending = await Question.list()
+      expect(pending.length).toBe(0)
+    },
+  })
+})

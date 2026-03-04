@@ -7647,9 +7647,12 @@
             "properties": {
               "sessionID": {
                 "type": "string"
+              },
+              "auto": {
+                "type": "boolean"
               }
             },
-            "required": ["sessionID"]
+            "required": ["sessionID", "auto"]
           }
         },
         "required": ["type", "properties"]

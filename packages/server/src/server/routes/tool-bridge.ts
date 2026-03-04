@@ -1,4 +1,5 @@
 import { Hono } from "hono"
+import { streamSSE } from "hono/streaming"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
 import { PermissionNext } from "@/permission/next"
@@ -96,6 +97,10 @@ export function registerBridge(id: string, ctx: BridgeContext) {
 }
 
 export function unregisterBridge(id: string) {
+  const bridge = bridges.get(id)
+  if (bridge) {
+    Question.rejectBySession(bridge.sessionID)
+  }
   bridges.delete(id)
   log.info("bridge unregistered", { id })
 }
@@ -269,7 +274,7 @@ export const ToolBridgeRoutes = lazy(() =>
 )
 
 async function handleQuestionTool(
-  c: any,
+  c: import("hono").Context,
   rpcId: string | number | undefined,
   bridge: BridgeContext,
   toolArgs: Record<string, unknown>,
@@ -291,32 +296,73 @@ async function handleQuestionTool(
     }))
   }
 
-  try {
-    const answers = await Question.ask({
-      sessionID: bridge.sessionID,
-      questions: rawQuestions.map((q) => ({
-        question: q.question,
-        header: q.header,
-        options: q.options,
-        multiple: q.multiSelect ?? q.multiple,
-      })),
-    })
+  // Use SSE streaming to keep the connection alive while waiting for user input.
+  // The MCP Streamable HTTP spec allows SSE responses to POST requests.
+  // Without this, the MCP client's 60s request timeout kills the connection
+  // before the user has time to answer.
+  return streamSSE(c, async (stream) => {
+    let keepaliveTimer: ReturnType<typeof setInterval> | undefined
 
-    const answerMap: Record<string, string> = {}
-    for (let i = 0; i < rawQuestions.length; i++) {
-      answerMap[rawQuestions[i]!.question] = (answers[i] ?? []).join(", ")
+    const cleanup = () => {
+      if (keepaliveTimer) {
+        clearInterval(keepaliveTimer)
+        keepaliveTimer = undefined
+      }
     }
 
-    return c.json(jsonRpcOk(rpcId, {
-      content: [{ type: "text", text: `The user answered your questions: ${JSON.stringify(answerMap)}. Continue with these answers in mind.` }],
-    }))
-  } catch (e) {
-    const msg = e instanceof Question.RejectedError
-      ? "The user dismissed this question without answering."
-      : e instanceof Error ? e.message : "Failed to ask question."
-    return c.json(jsonRpcOk(rpcId, {
-      content: [{ type: "text", text: msg }],
-      isError: true,
-    }))
-  }
+    stream.onAbort(cleanup)
+
+    // Send keepalive events every 25s to prevent transport-level timeouts
+    keepaliveTimer = setInterval(() => {
+      stream.writeSSE({
+        event: "message",
+        data: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/progress",
+          params: {
+            progressToken: `question-keepalive-${rpcId}`,
+            progress: 0,
+            total: -1,
+          },
+        }),
+      })
+    }, 25_000)
+
+    try {
+      const answers = await Question.ask({
+        sessionID: bridge.sessionID,
+        questions: rawQuestions.map((q) => ({
+          question: q.question,
+          header: q.header,
+          options: q.options,
+          multiple: q.multiSelect ?? q.multiple,
+        })),
+      })
+
+      const answerMap: Record<string, string> = {}
+      for (let i = 0; i < rawQuestions.length; i++) {
+        answerMap[rawQuestions[i]!.question] = (answers[i] ?? []).join(", ")
+      }
+
+      await stream.writeSSE({
+        event: "message",
+        data: JSON.stringify(jsonRpcOk(rpcId, {
+          content: [{ type: "text", text: `The user answered your questions: ${JSON.stringify(answerMap)}. Continue with these answers in mind.` }],
+        })),
+      })
+    } catch (e) {
+      const msg = e instanceof Question.RejectedError
+        ? "The user dismissed this question without answering."
+        : e instanceof Error ? e.message : "Failed to ask question."
+      await stream.writeSSE({
+        event: "message",
+        data: JSON.stringify(jsonRpcOk(rpcId, {
+          content: [{ type: "text", text: msg }],
+          isError: true,
+        })),
+      })
+    } finally {
+      cleanup()
+    }
+  })
 }

@@ -1,12 +1,12 @@
-import { Provider } from "@/provider/provider"
-import { Log } from "@/util/log"
 import type { ModelMessage } from "ai"
-import type { Agent } from "@/runtime/agent/agent"
-import type { MessageV2 } from "./message-v2"
-import { SystemPrompt } from "./system"
+import { Instance } from "@/project/instance"
+import type { Provider } from "@/provider/provider"
 import { claudeStream } from "@/provider/sdk/claude-code"
 import { codexAppServerStream } from "@/provider/sdk/codex-app-server"
-import { Instance } from "@/project/instance"
+import type { Agent } from "@/runtime/agent/agent"
+import { Log } from "@/util/log"
+import type { MessageV2 } from "./message-v2"
+import { SystemPrompt } from "./system"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -60,7 +60,7 @@ export namespace LLM {
     system: string[]
     user: MessageV2.User
   }): Promise<string[]> {
-    const skill = input.system.find((item) => !!item?.trim())
+    const skill = input.system.find(item => !!item?.trim())
     const agentPrompt = [input.agent.prompt, transparencySection(input.agent)].filter(Boolean).join("\n\n")
     return SystemPrompt.compose({ agent: agentPrompt, skill })
   }
@@ -173,12 +173,20 @@ export namespace LLM {
     l.info("stream", { modelID: input.model.id, providerID: input.model.providerID })
 
     const systemParts = await composeSystemParts(input)
-    const systemPrompt = systemParts.filter(Boolean).join("\n\n")
+
+    const contextBlock = [
+      `# Environment`,
+      `- Working Directory: ${Instance.directory}`,
+      `- Workspace Root: ${Instance.worktree}`,
+      `- Platform: ${process.platform}`,
+      `- Date: ${new Date().toISOString().split("T")[0]}`,
+    ].join("\n")
+
+    const systemPrompt = [contextBlock, ...systemParts].filter(Boolean).join("\n\n")
 
     const providerID = input.model.providerID
     const hasExistingSession =
-      (providerID === "claude-code" && !!input.cliSessionId) ||
-      (providerID === "codex" && !!input.codexThreadId)
+      (providerID === "claude-code" && !!input.cliSessionId) || (providerID === "codex" && !!input.codexThreadId)
     const userPrompt = buildPromptWithContext(input.messages, hasExistingSession)
 
     if (!userPrompt.trim()) {
@@ -201,7 +209,7 @@ export namespace LLM {
   async function* claudeCodeBridge(
     input: StreamInput,
     userPrompt: string,
-    systemPrompt: string,
+    systemPrompt: string
   ): AsyncGenerator<CliEvent> {
     for await (const event of claudeStream({
       modelId: input.model.id,
@@ -250,11 +258,7 @@ export namespace LLM {
     }
   }
 
-  async function* codexBridge(
-    input: StreamInput,
-    userPrompt: string,
-    systemPrompt: string,
-  ): AsyncGenerator<CliEvent> {
+  async function* codexBridge(input: StreamInput, userPrompt: string, systemPrompt: string): AsyncGenerator<CliEvent> {
     for await (const event of codexAppServerStream({
       modelId: input.model.id,
       prompt: userPrompt,

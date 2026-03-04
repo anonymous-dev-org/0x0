@@ -31,6 +31,11 @@ const parameters = z.object({
     )
     .optional(),
   command: z.string().describe("The command that triggered this task").optional(),
+  compact: z
+    .boolean()
+    .describe("Whether to run compaction before handoff (default: true, only applies to handoff mode)")
+    .optional()
+    .default(true),
 })
 
 export const TaskTool = Tool.define("task", async (ctx) => {
@@ -68,7 +73,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
 
       if (params.mode === "handoff") {
-        if (!ctx.extra?.bypassAgentCheck && ctx.agent !== params.agent) {
+        if (ctx.agent !== params.agent) {
           await ctx.ask({
             permission: "task_handoff",
             patterns: [params.agent],
@@ -86,15 +91,17 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           throw new Error("Unable to handoff: missing user message context")
         }
 
-        const compacted = await SessionCompaction.process({
-          parentID: lastUser.id,
-          messages: ctx.messages,
-          sessionID: ctx.sessionID,
-          abort: ctx.abort,
-          auto: false,
-        })
-        if (compacted === "stop") {
-          throw new Error("Unable to handoff: compaction failed")
+        if (params.compact !== false) {
+          const compacted = await SessionCompaction.process({
+            parentID: lastUser.id,
+            messages: ctx.messages,
+            sessionID: ctx.sessionID,
+            abort: ctx.abort,
+            auto: false,
+          })
+          if (compacted === "stop") {
+            throw new Error("Unable to handoff: compaction failed")
+          }
         }
 
         const handoffMessage = await Session.updateMessage({

@@ -254,6 +254,32 @@ export function registerAppCommands(props: {
       category: "System",
     },
     {
+      title: "Reset config to defaults",
+      value: "config.reset",
+      category: "System",
+      slash: {
+        name: "reset",
+      },
+      onSelect: async (dialog) => {
+        const { DialogConfirm } = await import("../ui/dialog-confirm")
+        const confirmed = await DialogConfirm.show(
+          dialog,
+          "Reset config",
+          "This will overwrite your global config with defaults. All customizations (MCP servers, providers, keybinds, etc.) will be lost. Continue?",
+        )
+        if (!confirmed) return
+        const result = await props.sdk.client.global.config.reset
+          .$post()
+          .then((res: Response) => res.json())
+          .catch(() => undefined)
+        if (result) {
+          props.toast.show({ variant: "success", message: "Config reset to defaults" })
+        } else {
+          props.toast.show({ variant: "error", message: "Failed to reset config" })
+        }
+      },
+    },
+    {
       title: "Help",
       value: "help.show",
       slash: {

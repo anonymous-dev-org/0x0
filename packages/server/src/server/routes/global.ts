@@ -152,6 +152,29 @@ export const GlobalRoutes = lazy(() =>
       },
     )
     .post(
+      "/config/reset",
+      describeRoute({
+        summary: "Reset global configuration",
+        description:
+          "Reset global configuration to defaults. This overwrites the entire global config file.",
+        operationId: "global.config.reset",
+        responses: {
+          200: {
+            description: "Successfully reset global config to defaults",
+            content: {
+              "application/json": {
+                schema: resolver(Config.Info),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const config = await Config.resetGlobal()
+        return c.json(config)
+      },
+    )
+    .post(
       "/dispose",
       describeRoute({
         summary: "Dispose instance",

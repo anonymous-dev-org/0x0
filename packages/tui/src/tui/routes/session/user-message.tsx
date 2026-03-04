@@ -85,13 +85,15 @@ export function UserMessage(props: {
         </box>
       </Show>
       <Show when={compaction()}>
-        <box
-          marginTop={1}
-          border={["top"]}
-          title=" Compaction "
-          titleAlignment="center"
-          borderColor={theme.borderActive}
-        />
+        {(part) => (
+          <box
+            marginTop={1}
+            border={["top"]}
+            title={part().type === "compaction" && part().auto ? " Auto Compaction " : " Compaction "}
+            titleAlignment="center"
+            borderColor={theme.borderActive}
+          />
+        )}
       </Show>
     </>
   )

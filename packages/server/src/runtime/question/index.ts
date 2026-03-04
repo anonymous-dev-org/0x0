@@ -165,6 +165,20 @@ export namespace Question {
     }
   }
 
+  export async function rejectBySession(sessionID: string): Promise<void> {
+    const s = await state()
+    for (const [id, entry] of Object.entries(s.pending)) {
+      if (entry.info.sessionID !== sessionID) continue
+      delete s.pending[id]
+      log.info("rejected by session cleanup", { requestID: id, sessionID })
+      Bus.publish(Event.Rejected, {
+        sessionID: entry.info.sessionID,
+        requestID: entry.info.id,
+      })
+      entry.reject(new RejectedError())
+    }
+  }
+
   export async function list() {
     return state().then((x) => Object.values(x.pending).map((x) => x.info))
   }

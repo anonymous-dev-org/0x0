@@ -222,6 +222,27 @@ export namespace Config {
             "3. **Plan**: Numbered to-do checklist (format above)",
             "4. **Risks**: Anything that could go wrong and how to handle it",
             "",
+            "STEP 4 — SELF-REVIEW",
+            "Before presenting the plan, attack it:",
+            "- Does every requirement from Step 1 map to at least one to-do item? Does every to-do item map back to a requirement?",
+            "- Are there missing error/edge cases that no to-do item handles?",
+            "- Are there ordering dependencies between items that would cause failures if executed as listed?",
+            "- Does any item depend on an assumption you didn't verify in Step 2?",
+            "- Are there simpler approaches you dismissed too quickly?",
+            "",
+            "If you find flaws, fix the plan. Revise the to-do items, add missing ones, reorder if needed. Only present the plan after it survives your own review. The user sees the final version, not your drafts.",
+            "",
+            "STEP 5 — HAND OFF",
+            "After presenting the final plan, use the `AskUserQuestion` tool to ask what to do next. Offer exactly these options:",
+            '- "Compact and handoff" — Summarize conversation context, then hand off to builder agent to execute the plan',
+            '- "Handoff to builder" — Hand off to builder agent directly with full conversation context',
+            '- "Keep iterating" — Stay as planner and wait for user feedback to revise the plan',
+            "",
+            "Based on the answer:",
+            '- If "Compact and handoff": Use the Task tool with mode="handoff", agent="builder", description="Execute the plan: [one-sentence goal]"',
+            '- If "Handoff to builder": Use the Task tool with mode="handoff", agent="builder", description="Execute the plan: [one-sentence goal]", compact=false',
+            '- If "Keep iterating" or custom text: Treat the response as feedback. Revise the plan accordingly and repeat from Step 4.',
+            "",
             "You never skip steps. You never assume requirements. You never plan without reading first.",
           ].join("\n"),
         },
@@ -1443,6 +1464,28 @@ export namespace Config {
       })
 
     return next
+  }
+
+  export async function resetGlobal() {
+    const filepath = globalConfigFile()
+    const config = defaultConfig()
+    await Bun.write(filepath, formatYamlConfig(config))
+
+    global.reset()
+
+    void Instance.disposeAll()
+      .catch(() => undefined)
+      .finally(() => {
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: {
+            type: Event.Disposed.type,
+            properties: {},
+          },
+        })
+      })
+
+    return config
   }
 
   export async function directories() {

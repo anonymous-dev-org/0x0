@@ -1,6 +1,7 @@
 import { onCleanup } from "solid-js"
 import { Installation } from "@anonymous-dev/0x0-server/core/installation"
 import { Session as SessionApi } from "@anonymous-dev/0x0-server/session"
+import { SessionCompaction } from "@anonymous-dev/0x0-server/session/compaction"
 import { TuiEvent } from "@anonymous-dev/0x0-server/core/bus/tui-event"
 import { route } from "@tui/state/route"
 import { useCommandDialog } from "../component/dialog-command"
@@ -163,6 +164,16 @@ export function useAppEventHandlers() {
         variant: "error",
         title,
         message,
+        duration: 5000,
+      })
+    }),
+    sdk.event.on(SessionCompaction.Event.Compacted.type, (evt) => {
+      if (!evt.properties.auto) return
+      if (route.data.type !== "session" || route.data.sessionID !== evt.properties.sessionID) return
+      toast.show({
+        variant: "info",
+        title: "Auto Compaction",
+        message: "Context was automatically compacted to free up space",
         duration: 5000,
       })
     }),

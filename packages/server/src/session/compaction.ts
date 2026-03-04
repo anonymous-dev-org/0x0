@@ -20,6 +20,7 @@ export namespace SessionCompaction {
       "session.compacted",
       z.object({
         sessionID: z.string(),
+        auto: z.boolean(),
       }),
     ),
   }
@@ -171,7 +172,7 @@ export namespace SessionCompaction {
       })
     }
     if (processor.message.error) return "stop"
-    Bus.publish(Event.Compacted, { sessionID: input.sessionID })
+    Bus.publish(Event.Compacted, { sessionID: input.sessionID, auto: input.auto })
     return "continue"
   }
 

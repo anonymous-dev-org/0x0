@@ -90,6 +90,7 @@ function buildCliArgs(input: ClaudeStreamInput, bridgeId: string): string[] {
       tools: {
         type: "http",
         url: mcpUrl,
+        timeout: 600, // 10 minutes — question tool needs long-lived connections
       },
     },
   })

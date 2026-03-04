@@ -483,6 +483,7 @@ export type EventSessionCompacted = {
   type: "session.compacted"
   properties: {
     sessionID: string
+    auto: boolean
   }
 }
 
