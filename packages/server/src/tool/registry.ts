@@ -19,6 +19,7 @@ import { ApplyPatchTool } from "./apply_patch"
 import { SearchTool } from "./search"
 import { SearchRemoteTool } from "./search_remote"
 import { DocsTool } from "./docs"
+import { PlanTool } from "./plan"
 
 interface ToolDefinition {
   description: string
@@ -98,6 +99,7 @@ export namespace ToolRegistry {
       TodoWriteTool,
       // TodoReadTool,
       ApplyPatchTool,
+      PlanTool,
       ...(config.experimental?.lsp_tool ? [LspTool] : []),
       ...(config.experimental?.context7_api_key ? [DocsTool] : []),
       ...custom,
@@ -123,6 +125,7 @@ export namespace ToolRegistry {
     ApplyPatch: "apply_patch",
     Lsp: "lsp",
     Docs: "docs",
+    Plan: "plan",
   }
 
   // Returns null if no actions config → pass all tools.

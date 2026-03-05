@@ -26,6 +26,7 @@ const REGISTRY_ID_TO_SDK_NAME: Record<string, string> = {
   apply_patch: "ApplyPatch",
   lsp: "Lsp",
   docs: "Docs",
+  plan: "Plan",
 }
 
 const SDK_NAME_TO_REGISTRY_ID: Record<string, string> = {}
@@ -301,32 +302,35 @@ async function handleQuestionTool(
   // Without this, the MCP client's 60s request timeout kills the connection
   // before the user has time to answer.
   return streamSSE(c, async (stream) => {
-    let keepaliveTimer: ReturnType<typeof setInterval> | undefined
+    let keepaliveTimer: ReturnType<typeof setTimeout> | undefined
 
     const cleanup = () => {
-      if (keepaliveTimer) {
-        clearInterval(keepaliveTimer)
+      if (keepaliveTimer !== undefined) {
+        clearTimeout(keepaliveTimer)
         keepaliveTimer = undefined
       }
     }
 
-    stream.onAbort(cleanup)
+    // Reject the pending question immediately when the client disconnects so
+    // the Promise in Question.ask() rejects rather than hanging until
+    // unregisterBridge runs.
+    stream.onAbort(() => {
+      cleanup()
+      Question.rejectBySession(bridge.sessionID).catch(() => {})
+    })
 
-    // Send keepalive events every 25s to prevent transport-level timeouts
-    keepaliveTimer = setInterval(() => {
-      stream.writeSSE({
-        event: "message",
-        data: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "notifications/progress",
-          params: {
-            progressToken: `question-keepalive-${rpcId}`,
-            progress: 0,
-            total: -1,
-          },
-        }),
-      })
-    }, 25_000)
+    // Send SSE comment pings every 25s to keep the transport alive.
+    // Using the comment format (": ping") rather than a JSON-RPC notification
+    // ensures the MCP client never mistakes a keepalive for the actual tool
+    // response — SSE comments are universally ignored by all SSE parsers.
+    const scheduleKeepalive = () => {
+      keepaliveTimer = setTimeout(async () => {
+        if (stream.closed) return
+        await stream.write(": ping\n\n")
+        scheduleKeepalive()
+      }, 25_000)
+    }
+    scheduleKeepalive()
 
     try {
       const answers = await Question.ask({

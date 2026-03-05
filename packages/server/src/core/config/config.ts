@@ -19,15 +19,12 @@ import { Event } from "@/server/event"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
 import PROMPT_DEFAULT from "@/session/prompt/default_system_prompt.txt"
-import YAML from "yaml"
-
 export namespace Config {
   const ModelId = z.string()
 
   const log = Log.create({ service: "config" })
   const configSchemaURL = "https://zeroxzero.ai/config.json"
-  const yamlLanguageServerSchema = `# yaml-language-server: $schema=${configSchemaURL}`
-  const configFiles = ["config.yaml"] as const
+  const configFiles = ["config.json"] as const
   const projectConfigDirs = [".0x0"] as const
   const LEGACY_TOOL_KEYS = {
     patch: "apply_patch",
@@ -83,38 +80,9 @@ export namespace Config {
     return merged
   }
 
-  function isYamlPath(filepath: string) {
-    return filepath.endsWith(".yaml") || filepath.endsWith(".yml")
-  }
-
-  function addYamlSchemaMetadata(original: string) {
-    const hasTrailingNewline = original.endsWith("\n")
-    const lines = original.split("\n")
-
-    if (!lines.some((line) => line.includes("yaml-language-server: $schema="))) {
-      lines.unshift(yamlLanguageServerSchema)
-    }
-
-    if (!lines.some((line) => /^\s*\$schema\s*:/.test(line))) {
-      const insertAt = lines[0]?.includes("yaml-language-server: $schema=") ? 1 : 0
-      lines.splice(insertAt, 0, `$schema: ${configSchemaURL}`)
-    }
-
-    const result = lines.join("\n")
-    return hasTrailingNewline ? `${result}\n` : result
-  }
-
-  function formatYamlConfig(config: Info, original?: string) {
-    const normalized = {
-      ...config,
-      $schema: config.$schema ?? configSchemaURL,
-    }
-
-    let output = YAML.stringify(normalized, { blockQuote: "literal" })
-    if (!original?.includes("yaml-language-server: $schema=")) {
-      output = `${yamlLanguageServerSchema}\n${output}`
-    }
-    return output
+  function formatJsonConfig(config: Info): string {
+    const normalized = { $schema: config.$schema ?? configSchemaURL, ...config }
+    return JSON.stringify(normalized, null, 2) + "\n"
   }
 
   const COMPACTION_PROMPT_DEFAULT =
@@ -180,10 +148,16 @@ export namespace Config {
           actions: {
             Read: "allow", Glob: "allow", Grep: "allow",
             WebFetch: "allow", WebSearch: "allow", Task: "allow",
-            AskUserQuestion: "allow", TodoWrite: "allow", Docs: "allow",
+            AskUserQuestion: "allow", Plan: "allow", Docs: "allow",
           },
           prompt: [
-            "You are the architect. You don't write code. You write the battle plan that makes code inevitable.",
+            "You are the architect. Your sole deliverable is a detailed, verified implementation plan with a structured task list. You do not write code. You do not run commands. You do not execute anything. You research, reason, and produce a plan so precise that a developer — or an automated agent — can execute it without asking a single clarifying question.",
+            "",
+            "Do not hand off to builder until:",
+            "1. Every requirement is confirmed with the user.",
+            "2. Every affected file and API has been read or fetched.",
+            "3. Every implementation detail is backed by code you read or documentation you fetched — not by assumption.",
+            "4. The plan has been saved using the Plan tool.",
             "",
             "STEP 1 — INTERROGATE",
             "Before you plan anything, you extract requirements. Ask the user:",
@@ -199,9 +173,10 @@ export namespace Config {
             "STEP 2 — READ THE CODE AND DOCS",
             "Once requirements are locked:",
             "- Use `search` and `read` to study every file that will be touched or is related.",
-            "- Use `search_remote` to fetch official documentation for any library, API, or framework involved.",
+            "- Use `search_remote` to fetch official documentation for any library, API, or framework involved. For every external library, API, or framework the plan touches, fetch the official docs. Do not plan against an API you have not verified.",
             "- Identify existing patterns, types, schemas, naming conventions, and test patterns in the codebase.",
             "- You NEVER plan based on assumptions about what exists. You verify.",
+            "- If a doc fetch fails or returns no useful content, note it explicitly in the plan's Risks section. Do not proceed as if the API works the way you assume.",
             "",
             "STEP 3 — THE PLAN",
             "Produce a numbered to-do list. Each item MUST include:",
@@ -222,18 +197,36 @@ export namespace Config {
             "3. **Plan**: Numbered to-do checklist (format above)",
             "4. **Risks**: Anything that could go wrong and how to handle it",
             "",
-            "STEP 4 — SELF-REVIEW",
-            "Before presenting the plan, attack it:",
-            "- Does every requirement from Step 1 map to at least one to-do item? Does every to-do item map back to a requirement?",
-            "- Are there missing error/edge cases that no to-do item handles?",
-            "- Are there ordering dependencies between items that would cause failures if executed as listed?",
-            "- Does any item depend on an assumption you didn't verify in Step 2?",
-            "- Are there simpler approaches you dismissed too quickly?",
+            "STEP 4 — SELF-REVIEW AND VERIFICATION",
+            "Before writing a single character of the final plan, run this checklist. Fix every failure before continuing.",
             "",
-            "If you find flaws, fix the plan. Revise the to-do items, add missing ones, reorder if needed. Only present the plan after it survives your own review. The user sees the final version, not your drafts.",
+            "Code & docs coverage:",
+            "- [ ] Every file the plan modifies or creates — have you read it? If not, go back to Step 2.",
+            "- [ ] Every external API, library method, or config key the plan references — have you fetched the official docs for it? If not, go back to Step 2.",
+            '- [ ] Does the plan contain any phrase like "probably", "should work", "I think", or "likely"? If yes, that sentence is an assumption. Go back to Step 2 and verify it or remove it.',
             "",
-            "STEP 5 — HAND OFF",
-            "After presenting the final plan, use the `AskUserQuestion` tool to ask what to do next. Offer exactly these options:",
+            "Plan integrity:",
+            "- [ ] Does every requirement from Step 1 map to at least one to-do item?",
+            "- [ ] Does every to-do item map back to a requirement?",
+            "- [ ] Are there missing error/edge cases that no to-do item handles?",
+            "- [ ] Are there ordering dependencies between items that would cause failures if executed in sequence?",
+            "- [ ] Does any item depend on an assumption you did not verify in Step 2?",
+            "- [ ] Are there simpler approaches you dismissed too quickly?",
+            "",
+            "Fix every failure. Revise the to-do items, add missing ones, reorder if needed. Only proceed to Step 5 after this checklist passes with zero failures.",
+            "",
+            "STEP 5 — SAVE THE PLAN",
+            "Use the Plan tool to save the finalized plan before presenting it or handing off:",
+            '- `filename`: short descriptive name, e.g. "my-feature.md"',
+            "- `content`: the complete markdown plan exactly as it will be presented (goal, requirements, numbered checklist, risks)",
+            '- `todos`: the numbered task items as a structured list, all status="pending", priority derived from the plan',
+            "",
+            "Do not skip this step. The saved file is builder's persistent reference during execution. If you revise the plan later (Step 6 → \"Keep iterating\"), call Plan again to overwrite it.",
+            "",
+            "STEP 6 — HAND OFF",
+            "You may only reach this step after the Plan tool has been called successfully in Step 5.",
+            "",
+            "Use the `AskUserQuestion` tool to ask what to do next. Offer exactly these options:",
             '- "Compact and handoff" — Summarize conversation context, then hand off to builder agent to execute the plan',
             '- "Handoff to builder" — Hand off to builder agent directly with full conversation context',
             '- "Keep iterating" — Stay as planner and wait for user feedback to revise the plan',
@@ -241,7 +234,7 @@ export namespace Config {
             "Based on the answer:",
             '- If "Compact and handoff": Use the Task tool with mode="handoff", agent="builder", description="Execute the plan: [one-sentence goal]"',
             '- If "Handoff to builder": Use the Task tool with mode="handoff", agent="builder", description="Execute the plan: [one-sentence goal]", compact=false',
-            '- If "Keep iterating" or custom text: Treat the response as feedback. Revise the plan accordingly and repeat from Step 4.',
+            '- If "Keep iterating" or custom text: Treat the response as feedback. Revise the plan accordingly. If changes are substantive, repeat from Step 4. Call Plan again to overwrite the saved file before re-presenting.',
             "",
             "You never skip steps. You never assume requirements. You never plan without reading first.",
           ].join("\n"),
@@ -261,8 +254,7 @@ export namespace Config {
     if (existing.length === 1) return
 
     const defaultPath = path.join(Global.Path.config, configFiles[0])
-    const defaultText = formatYamlConfig(defaultConfig())
-    await Bun.write(defaultPath, defaultText)
+    await Bun.write(defaultPath, formatJsonConfig(defaultConfig()))
   }
 
   async function discoverGlobalConfigFiles() {
@@ -312,18 +304,18 @@ export namespace Config {
 
   export const state = Instance.state(async () => {
     // Config loading order (low -> high precedence): https://zeroxzero.ai/docs/config#precedence-order
-    // 1) Global config (~/.config/0x0/config.yaml)
-    // 2) Global provider configs (~/.config/0x0/providers/*.yaml)
-    // 3) Project config (.0x0/config.yaml)
-    // 4) Project provider configs (.0x0/providers/*.yaml)
-    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.yaml)
+    // 1) Global config (~/.config/0x0/config.json)
+    // 2) Global provider configs (~/.config/0x0/providers/*.json)
+    // 3) Project config (.0x0/config.json)
+    // 4) Project provider configs (.0x0/providers/*.json)
+    // 5) .zeroxzero directories (.zeroxzero/agents/, .zeroxzero/commands/, .zeroxzero/plugins/, .zeroxzero/config.json)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
 
     // Global user config.
     result = mergeConfigConcatArrays(result, await global())
 
-    // Global provider configs (~/.config/0x0/providers/*.yaml) override global config.
+    // Global provider configs (~/.config/0x0/providers/*.json) override global config.
     const { loadGlobalProviders, loadProjectProviders } = await import("./providers")
     for (const providerConfig of await loadGlobalProviders()) {
       result = mergeConfigConcatArrays(result, providerConfig)
@@ -1260,13 +1252,6 @@ export namespace Config {
   }
 
   async function load(text: string, configFilepath: string) {
-    if (!isYamlPath(configFilepath)) {
-      throw new InvalidError({
-        path: configFilepath,
-        message: "Only YAML config is supported. Use config.yaml.",
-      })
-    }
-    const original = text
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
       return process.env[varName] || ""
     })
@@ -1278,7 +1263,7 @@ export namespace Config {
 
       for (const match of fileMatches) {
         const lineIndex = lines.findIndex((line) => line.includes(match))
-        if (lineIndex !== -1 && ((lines[lineIndex] ?? "").trim().startsWith("//") || (lines[lineIndex] ?? "").trim().startsWith("#"))) {
+        if (lineIndex !== -1 && (lines[lineIndex] ?? "").trim().startsWith("//")) {
           continue // Skip if line is commented
         }
         let filePath = match.replace(/^\{file:/, "").replace(/\}$/, "")
@@ -1310,11 +1295,11 @@ export namespace Config {
 
     const data = (() => {
       try {
-        return YAML.parse(text) ?? {}
+        return JSON.parse(text) as unknown
       } catch (error) {
         throw new JsonError({
           path: configFilepath,
-          message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
+          message: `JSON parse error: ${error instanceof Error ? error.message : String(error)}`,
         })
       }
     })()
@@ -1323,8 +1308,9 @@ export namespace Config {
     if (parsed.success) {
       if (!parsed.data.$schema) {
         parsed.data.$schema = configSchemaURL
-        const updated = addYamlSchemaMetadata(original)
-        await Bun.write(configFilepath, updated).catch((e) => log.warn("failed to write schema metadata to config", { error: e }))
+        await Bun.write(configFilepath, formatJsonConfig(parsed.data)).catch((e) =>
+          log.warn("failed to write schema metadata to config", { error: e }),
+        )
       }
       return parsed.data
     }
@@ -1382,11 +1368,7 @@ export namespace Config {
     const filepath = path.join(dir, configFiles[0])
     const existing = await loadFile(filepath)
     const merged = mergeDeep(existing, config)
-    const current = await Bun.file(filepath)
-      .text()
-      .catch(() => "")
-    const output = formatYamlConfig(merged, current)
-    await Bun.write(filepath, output)
+    await Bun.write(filepath, formatJsonConfig(merged))
     await Instance.dispose()
   }
 
@@ -1396,10 +1378,7 @@ export namespace Config {
     const filepath = path.join(dir, configFiles[0])
     const existing = await loadFile(filepath)
     const merged = mergeDeep(existing, config)
-    const current = await Bun.file(filepath)
-      .text()
-      .catch(() => "")
-    await Bun.write(filepath, formatYamlConfig(merged, current))
+    await Bun.write(filepath, formatJsonConfig(merged))
     await Instance.dispose()
     return merged
   }
@@ -1419,11 +1398,11 @@ export namespace Config {
   function parseConfig(text: string, filepath: string): Info {
     let data: unknown
     try {
-      data = YAML.parse(text) ?? {}
+      data = JSON.parse(text)
     } catch (error) {
       throw new JsonError({
         path: filepath,
-        message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
+        message: `JSON parse error: ${error instanceof Error ? error.message : String(error)}`,
       })
     }
 
@@ -1447,7 +1426,7 @@ export namespace Config {
 
     const existing = before.trim().length > 0 ? parseConfig(before, filepath) : ({ $schema: configSchemaURL } as Info)
     const next = mergeDeep(existing, config)
-    await Bun.write(filepath, formatYamlConfig(next, before))
+    await Bun.write(filepath, formatJsonConfig(next))
 
     global.reset()
 
@@ -1469,7 +1448,7 @@ export namespace Config {
   export async function resetGlobal() {
     const filepath = globalConfigFile()
     const config = defaultConfig()
-    await Bun.write(filepath, formatYamlConfig(config))
+    await Bun.write(filepath, formatJsonConfig(config))
 
     global.reset()
 
@@ -1486,6 +1465,39 @@ export namespace Config {
       })
 
     return config
+  }
+
+  /**
+   * One-time migration: replace deprecated planner agent config (TodoWrite → Plan).
+   * Safe to call on every startup — exits immediately if migration is not needed.
+   */
+  export async function migrateGlobal(): Promise<void> {
+    const filepath = globalConfigFile()
+    const rawText = await Bun.file(filepath).text().catch(() => "")
+    if (!rawText.trim()) return
+
+    let existing: Info
+    try {
+      existing = parseConfig(rawText, filepath)
+    } catch {
+      return
+    }
+
+    const plannerActions = existing.agent?.planner?.actions as Record<string, string> | undefined
+    // Migration needed: planner still has old TodoWrite key and new Plan key is absent
+    if (!plannerActions?.TodoWrite || plannerActions.Plan) return
+
+    const newPlanner = defaultConfig().agent?.planner
+    if (!newPlanner) return
+
+    const updated: Info = {
+      ...existing,
+      agent: { ...(existing.agent ?? {}), planner: newPlanner },
+    }
+
+    await Bun.write(filepath, formatJsonConfig(updated))
+    global.reset()
+    log.info("migrated global config: planner agent updated (TodoWrite → Plan)")
   }
 
   export async function directories() {

@@ -62,6 +62,7 @@ export namespace Agent {
     task:          ["Task"],
     todowrite:     ["TodoWrite"],
     question:      ["AskUserQuestion"],
+    plan:          ["Plan"],
   }
 
   function convertToolsAllowedToActions(toolsAllowed: string[]): Record<string, "allow"> {
@@ -120,6 +121,7 @@ export namespace Agent {
       case "WebSearch": return "web"
       case "TodoWrite": return "todowrite"
       case "AskUserQuestion": return "question"
+      case "Plan": return "plan"
       default: return toolName.toLowerCase()
     }
   }

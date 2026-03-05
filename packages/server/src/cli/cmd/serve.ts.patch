@@ -12,7 +12,7 @@ export const ServeCommand = cmd({
     await Config.migrateGlobal()
     const config = await Config.global()
     if (!config.server?.password) {
-      console.log("Warning: server.password is not set in config.yaml; server is unsecured.")
+      console.log("Warning: server.password is not set in config.json; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
     const server = Server.listen(opts)

@@ -1,5 +1,9 @@
 import { Codex } from "@openai/codex-sdk"
 import { Log } from "@/util/log"
+import { Server } from "@/server/server"
+import { registerBridge, unregisterBridge, type BridgeContext } from "@/server/routes/tool-bridge"
+import { ToolRegistry } from "@/tool/registry"
+import type { Agent } from "@/runtime/agent/agent"
 
 const log = Log.create({ service: "codex-app-server" })
 
@@ -22,6 +26,9 @@ export type CodexStreamInput = {
   threadId?: string
   abort: AbortSignal
   cwd?: string
+  sessionID: string
+  agentName: string
+  agent: Agent.Info
 }
 
 type StreamEvent = {
@@ -128,6 +135,29 @@ export async function* codexAppServerStream(
   const onAbort = () => abortController.abort()
   input.abort.addEventListener("abort", onAbort, { once: true })
 
+  // Register MCP tool bridge — same mechanism as Claude Code
+  const bridgeId = crypto.randomUUID()
+  const serverUrl = Server.url()
+  const cwd = input.cwd ?? process.cwd()
+  const mcpUrl = `${serverUrl.origin}/tool-bridge/${bridgeId}?directory=${encodeURIComponent(cwd)}`
+
+  const rawTools = await ToolRegistry.tools({ providerID: "codex", modelID: input.modelId }, input.agent)
+  const bridgeTools: BridgeContext["tools"] = rawTools.map((t) => ({
+    id: t.id,
+    description: t.description,
+    parameters: t.parameters,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: (args: any, ctx: any) => t.execute(args, ctx),
+  }))
+
+  registerBridge(bridgeId, {
+    sessionID: input.sessionID,
+    agentName: input.agentName,
+    agent: input.agent,
+    abort: input.abort,
+    tools: bridgeTools,
+  })
+
   try {
     const codex = new Codex({
       config: {
@@ -137,6 +167,12 @@ export async function* codexAppServerStream(
         web_search: "disabled",
         features: {
           shell_tool: false,
+        },
+        mcp_servers: {
+          tools: {
+            url: mcpUrl,
+            tool_timeout_sec: 600, // 10 min — question tool needs long-lived connections
+          },
         },
       },
     })
@@ -273,5 +309,6 @@ export async function* codexAppServerStream(
     yield { type: "error", message: normalizeCodexErrorMessage(err) }
   } finally {
     input.abort.removeEventListener("abort", onAbort)
+    unregisterBridge(bridgeId)
   }
 }

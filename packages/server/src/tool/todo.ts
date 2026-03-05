@@ -3,7 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION_WRITE from "./todowrite.txt"
 import { Todo } from "../session/todo"
 
-export const TodoWriteTool = Tool.define("todowrite", {
+export const TodoWriteTool = Tool.define("todo_write", {
   description: DESCRIPTION_WRITE,
   parameters: z.object({
     todos: z.array(z.object(Todo.Info.shape)).describe("The updated todo list"),

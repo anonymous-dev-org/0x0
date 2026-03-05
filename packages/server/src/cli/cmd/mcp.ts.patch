@@ -14,6 +14,7 @@ import path from "path"
 import fs from "fs/promises"
 import { Global } from "@/core/global"
 import { Bus } from "@/core/bus"
+
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
     case "authenticated":
@@ -160,12 +161,16 @@ export const McpAuthCommand = cmd({
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")
-          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in .0x0/config.yaml:")
+          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in .0x0/config.json:")
           prompts.log.info(`
-mcp:
-  my-server:
-    type: remote
-    url: https://example.com/mcp`)
+{
+  "mcp": {
+    "my-server": {
+      "type": "remote",
+      "url": "https://example.com/mcp"
+    }
+  }
+}`)
           prompts.outro("Done")
           return
         }
@@ -377,14 +382,14 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  const filepath = global ? path.join(baseDir, "config.yaml") : path.join(baseDir, ".0x0", "config.yaml")
+  const filepath = global ? path.join(baseDir, "config.json") : path.join(baseDir, ".0x0", "config.json")
   return filepath
 }
 
 async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: string) {
   const file = Bun.file(configPath)
   const text = (await file.exists()) ? await file.text() : ""
-  const data = text.trim().length > 0 ? ((YAML.parse(text) ?? {}) as Config.Info) : ({} as Config.Info)
+  const data = text.trim().length > 0 ? (JSON.parse(text) as Config.Info) : ({} as Config.Info)
   const nextMcp = {
     ...(data.mcp ?? {}),
     [name]: mcpConfig,
@@ -395,7 +400,7 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true })
-  await Bun.write(configPath, YAML.stringify(next))
+  await Bun.write(configPath, JSON.stringify(next, null, 2) + "\n")
 
   return configPath
 }

@@ -1,6 +1,5 @@
 import path from "path"
 import fs from "fs/promises"
-import YAML from "yaml"
 import { Global } from "../global"
 import { Config } from "./config"
 
@@ -15,8 +14,7 @@ function projectProviderDir(projectRoot: string) {
 }
 
 function providerIDFromFilename(filename: string) {
-  if (filename.endsWith(".yaml")) return filename.slice(0, -5)
-  if (filename.endsWith(".yml")) return filename.slice(0, -4)
+  if (filename.endsWith(".json")) return filename.slice(0, -5)
   return undefined
 }
 
@@ -36,17 +34,17 @@ async function loadFromDirectory(directory: string): Promise<Config.Info[]> {
         throw new Config.JsonError({ path: filepath, message: String(error) }, { cause: error })
       })
 
-    let parsedYaml: unknown
+    let parsedJson: unknown
     try {
-      parsedYaml = YAML.parse(text) ?? {}
+      parsedJson = JSON.parse(text)
     } catch (error) {
       throw new Config.JsonError({
         path: filepath,
-        message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}`,
+        message: `JSON parse error: ${error instanceof Error ? error.message : String(error)}`,
       })
     }
 
-    const parsedProvider = Config.Provider.safeParse(parsedYaml)
+    const parsedProvider = Config.Provider.safeParse(parsedJson)
     if (!parsedProvider.success) {
       throw new Config.InvalidError({
         path: filepath,

@@ -266,6 +266,9 @@ export namespace LLM {
       threadId: input.codexThreadId,
       abort: input.abort,
       cwd: Instance.directory,
+      sessionID: input.sessionID,
+      agentName: input.agent.name,
+      agent: input.agent,
     })) {
       switch (event.type) {
         case "text-delta":
