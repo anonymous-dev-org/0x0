@@ -1,26 +1,25 @@
-import { Slug } from "@/util/slug"
-import path from "path"
-import { BusEvent } from "@/core/bus/bus-event"
-import { Bus } from "@/core/bus"
+import type { LanguageModelUsage, ProviderMetadata } from "ai"
 import { Decimal } from "decimal.js"
+import path from "path"
 import z from "zod"
-import { type LanguageModelUsage, type ProviderMetadata } from "ai"
+import { Bus } from "@/core/bus"
+import { BusEvent } from "@/core/bus/bus-event"
 import { Config } from "@/core/config/config"
+import { Global } from "@/core/global"
 import { Identifier } from "@/core/id/id"
 import { Installation } from "@/core/installation"
 
 import { Storage } from "@/core/storage/storage"
+import { PermissionNext } from "@/permission/next"
+import type { Provider } from "@/provider/provider"
+import { Command } from "@/runtime/command"
+import { fn } from "@/util/fn"
+import { Slug } from "@/util/slug"
+import { Snapshot } from "@/workspace/snapshot"
+import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
-import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
-import { fn } from "@/util/fn"
-import { Command } from "@/runtime/command"
-import { Snapshot } from "@/workspace/snapshot"
-
-import type { Provider } from "@/provider/provider"
-import { PermissionNext } from "@/permission/next"
-import { Global } from "@/core/global"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -34,7 +33,7 @@ export namespace Session {
 
   export function isDefaultTitle(title: string) {
     return new RegExp(
-      `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
+      `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`
     ).test(title)
   }
 
@@ -110,33 +109,33 @@ export namespace Session {
       "session.created",
       z.object({
         info: Info,
-      }),
+      })
     ),
     Updated: BusEvent.define(
       "session.updated",
       z.object({
         info: Info,
-      }),
+      })
     ),
     Deleted: BusEvent.define(
       "session.deleted",
       z.object({
         info: Info,
-      }),
+      })
     ),
     Diff: BusEvent.define(
       "session.diff",
       z.object({
         sessionID: z.string(),
         diff: Snapshot.FileDiff.array(),
-      }),
+      })
     ),
     Error: BusEvent.define(
       "session.error",
       z.object({
         sessionID: z.string().optional(),
         error: MessageV2.Assistant.shape.error,
-      }),
+      })
     ),
   }
 
@@ -148,14 +147,14 @@ export namespace Session {
         permission: Info.shape.permission,
       })
       .optional(),
-    async (input) => {
+    async input => {
       return createNext({
         parentID: input?.parentID,
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
       })
-    },
+    }
   )
 
   export const fork = fn(
@@ -163,7 +162,7 @@ export namespace Session {
       sessionID: Identifier.schema("session"),
       messageID: Identifier.schema("message").optional(),
     }),
-    async (input) => {
+    async input => {
       const original = await get(input.sessionID)
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
@@ -197,11 +196,11 @@ export namespace Session {
         }
       }
       return session
-    },
+    }
   )
 
-  export const touch = fn(Identifier.schema("session"), async (sessionID) => {
-    await update(sessionID, (draft) => {
+  export const touch = fn(Identifier.schema("session"), async sessionID => {
+    await update(sessionID, draft => {
       draft.time.updated = Date.now()
     })
   })
@@ -235,8 +234,8 @@ export namespace Session {
     const cfg = await Config.get()
     if (!result.parentID && cfg.share === "auto")
       share(result.id)
-        .then((share) => {
-          update(result.id, (draft) => {
+        .then(share => {
+          update(result.id, draft => {
             draft.share = share
           })
         })
@@ -256,16 +255,16 @@ export namespace Session {
     return path.join(base, [input.time.created, input.slug].join("-") + ".md")
   }
 
-  export const get = fn(Identifier.schema("session"), async (id) => {
+  export const get = fn(Identifier.schema("session"), async id => {
     const read = await Storage.read<Info>(["session", Instance.project.id, id])
     return read as Info
   })
 
-  export const getShare = fn(Identifier.schema("session"), async (id) => {
+  export const getShare = fn(Identifier.schema("session"), async id => {
     return Storage.read<ShareInfo>(["share", id])
   })
 
-  export const share = fn(Identifier.schema("session"), async (id) => {
+  export const share = fn(Identifier.schema("session"), async id => {
     const cfg = await Config.get()
     if (cfg.share === "disabled") {
       throw new Error("Sharing is disabled in configuration")
@@ -274,32 +273,32 @@ export namespace Session {
     const share = await ShareNext.create(id)
     await update(
       id,
-      (draft) => {
+      draft => {
         draft.share = {
           url: share.url,
         }
       },
-      { touch: false },
+      { touch: false }
     )
     return share
   })
 
-  export const unshare = fn(Identifier.schema("session"), async (id) => {
+  export const unshare = fn(Identifier.schema("session"), async id => {
     // Use ShareNext to remove the share (same as share function uses ShareNext to create)
     const { ShareNext } = await import("@/runtime/share/share-next")
     await ShareNext.remove(id)
     await update(
       id,
-      (draft) => {
+      draft => {
         draft.share = undefined
       },
-      { touch: false },
+      { touch: false }
     )
   })
 
   export async function update(id: string, editor: (session: Info) => void, options?: { touch?: boolean }) {
     const project = Instance.project
-    const result = await Storage.update<Info>(["session", project.id, id], (draft) => {
+    const result = await Storage.update<Info>(["session", project.id, id], draft => {
       editor(draft)
       if (options?.touch !== false) {
         draft.time.updated = Date.now()
@@ -311,7 +310,7 @@ export namespace Session {
     return result
   }
 
-  export const diff = fn(Identifier.schema("session"), async (sessionID) => {
+  export const diff = fn(Identifier.schema("session"), async sessionID => {
     const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID])
     return diffs ?? []
   })
@@ -321,7 +320,7 @@ export namespace Session {
       sessionID: Identifier.schema("session"),
       limit: z.number().optional(),
     }),
-    async (input) => {
+    async input => {
       const result = [] as MessageV2.WithParts[]
       for await (const msg of MessageV2.stream(input.sessionID)) {
         if (input.limit && result.length >= input.limit) break
@@ -329,7 +328,7 @@ export namespace Session {
       }
       result.reverse()
       return result
-    },
+    }
   )
 
   export async function* list() {
@@ -341,7 +340,7 @@ export namespace Session {
     }
   }
 
-  export const children = fn(Identifier.schema("session"), async (parentID) => {
+  export const children = fn(Identifier.schema("session"), async parentID => {
     const project = Instance.project
     const result = [] as Session.Info[]
     for (const item of await Storage.list(["session", project.id])) {
@@ -353,14 +352,14 @@ export namespace Session {
     return result
   })
 
-  export const remove = fn(Identifier.schema("session"), async (sessionID) => {
+  export const remove = fn(Identifier.schema("session"), async sessionID => {
     const project = Instance.project
     try {
       const session = await get(sessionID)
       for (const child of await children(sessionID)) {
         await remove(child.id)
       }
-      await unshare(sessionID).catch((e) => log.warn("failed to unshare during session delete", { error: e, sessionID }))
+      await unshare(sessionID).catch(e => log.warn("failed to unshare during session delete", { error: e, sessionID }))
       for (const msg of await Storage.list(["message", sessionID])) {
         for (const part of await Storage.list(["part", msg.at(-1)!])) {
           await Storage.remove(part)
@@ -376,7 +375,7 @@ export namespace Session {
     }
   })
 
-  export const updateMessage = fn(MessageV2.Info, async (msg) => {
+  export const updateMessage = fn(MessageV2.Info, async msg => {
     await Storage.write(["message", msg.sessionID, msg.id], msg)
     Bus.publish(MessageV2.Event.Updated, {
       info: msg,
@@ -389,14 +388,14 @@ export namespace Session {
       sessionID: Identifier.schema("session"),
       messageID: Identifier.schema("message"),
     }),
-    async (input) => {
+    async input => {
       await Storage.remove(["message", input.sessionID, input.messageID])
       Bus.publish(MessageV2.Event.Removed, {
         sessionID: input.sessionID,
         messageID: input.messageID,
       })
       return input.messageID
-    },
+    }
   )
 
   export const removePart = fn(
@@ -405,7 +404,7 @@ export namespace Session {
       messageID: Identifier.schema("message"),
       partID: Identifier.schema("part"),
     }),
-    async (input) => {
+    async input => {
       await Storage.remove(["part", input.messageID, input.partID])
       Bus.publish(MessageV2.Event.PartRemoved, {
         sessionID: input.sessionID,
@@ -413,7 +412,7 @@ export namespace Session {
         partID: input.partID,
       })
       return input.partID
-    },
+    }
   )
 
   const UpdatePartInput = z.union([
@@ -428,7 +427,7 @@ export namespace Session {
     }),
   ])
 
-  export const updatePart = fn(UpdatePartInput, async (input) => {
+  export const updatePart = fn(UpdatePartInput, async input => {
     const part = "delta" in input ? input.part : input
     const delta = "delta" in input ? input.delta : undefined
     await Storage.write(["part", part.messageID, part.id], part)
@@ -445,7 +444,7 @@ export namespace Session {
       usage: z.custom<LanguageModelUsage>(),
       metadata: z.custom<ProviderMetadata>().optional(),
     }),
-    (input) => {
+    input => {
       const cacheReadInputTokens = input.usage.cachedInputTokens ?? 0
       const cacheWriteInputTokens = (input.metadata?.["anthropic"]?.["cacheCreationInputTokens"] ??
         // @ts-expect-error
@@ -487,11 +486,11 @@ export namespace Session {
             // TODO: update models.dev to have better pricing model, for now:
             // charge reasoning tokens at the same rate as output tokens
             .add(new Decimal(tokens.reasoning).mul(costInfo?.output ?? 0).div(1_000_000))
-            .toNumber(),
+            .toNumber()
         ),
         tokens,
       }
-    },
+    }
   )
 
   export class BusyError extends Error {
@@ -505,16 +504,14 @@ export namespace Session {
       sessionID: Identifier.schema("session"),
       modelID: z.string(),
       providerID: z.string(),
-      messageID: Identifier.schema("message"),
     }),
-    async (input) => {
+    async input => {
       await SessionPrompt.command({
         sessionID: input.sessionID,
-        messageID: input.messageID,
         model: input.providerID + "/" + input.modelID,
         command: Command.Default.INIT,
         arguments: "",
       })
-    },
+    }
   )
 }

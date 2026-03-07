@@ -1,31 +1,31 @@
-import path from "path"
-import { exec } from "child_process"
-import * as prompts from "@clack/prompts"
-import { map, pipe, sortBy, values } from "remeda"
-import { Octokit } from "@octokit/rest"
-import { graphql } from "@octokit/graphql"
 import * as core from "@actions/core"
 import * as github from "@actions/github"
 import type { Context } from "@actions/github/lib/context"
+import * as prompts from "@clack/prompts"
+import { graphql } from "@octokit/graphql"
+import { Octokit } from "@octokit/rest"
 import type {
   IssueCommentEvent,
   IssuesEvent,
+  PullRequestEvent,
   PullRequestReviewCommentEvent,
   WorkflowDispatchEvent,
   WorkflowRunEvent,
-  PullRequestEvent,
 } from "@octokit/webhooks-types"
+import { $ } from "bun"
+import { exec } from "child_process"
+import path from "path"
+import { map, pipe, sortBy, values } from "remeda"
+import { Bus } from "@/core/bus"
+import { Identifier } from "@/core/id/id"
+import { Instance } from "@/project/instance"
+import { SessionPrompt } from "@/session/prompt"
+import { Provider } from "../../provider/provider"
+import { Session } from "../../session"
+import { MessageV2 } from "../../session/message-v2"
+import { bootstrap } from "../bootstrap"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
-import { Instance } from "@/project/instance"
-import { bootstrap } from "../bootstrap"
-import { Session } from "../../session"
-import { Identifier } from "@/core/id/id"
-import { Provider } from "../../provider/provider"
-import { Bus } from "@/core/bus"
-import { MessageV2 } from "../../session/message-v2"
-import { SessionPrompt } from "@/session/prompt"
-import { $ } from "bun"
 
 type GitHubAuthor = {
   login: string
@@ -166,7 +166,7 @@ export function parseGitHubRemote(url: string): { owner: string; repo: string } 
  * Throws only for truly empty responses.
  */
 export function extractResponseText(parts: MessageV2.Part[]): string | null {
-  const textPart = parts.findLast((p) => p.type === "text")
+  const textPart = parts.findLast(p => p.type === "text")
   if (textPart) return textPart.text
 
   // Non-text parts (tools, reasoning, step-start/step-finish, etc.) - signal summary needed
@@ -178,7 +178,7 @@ export function extractResponseText(parts: MessageV2.Part[]): string | null {
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
-  builder: (yargs) => yargs.command(GithubInstallCommand).command(GithubRunCommand).demandCommand(),
+  builder: yargs => yargs.command(GithubInstallCommand).command(GithubRunCommand).demandCommand(),
   async handler() {},
 })
 
@@ -231,7 +231,7 @@ export const GithubInstallCommand = cmd({
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
                 "   Learn more about the GitHub agent - https://zeroxzero.ai/docs/github/#usage-examples",
-              ].join("\n"),
+              ].join("\n")
             )
           }
 
@@ -259,21 +259,21 @@ export const GithubInstallCommand = cmd({
               openai: 2,
               google: 3,
             }
-            let provider = await prompts.select({
+            const provider = await prompts.select({
               message: "Select provider",
               maxItems: 8,
               options: pipe(
                 providers,
                 values(),
                 sortBy(
-                  (x) => priority[x.id] ?? 99,
-                  (x) => x.name ?? x.id,
+                  x => priority[x.id] ?? 99,
+                  x => x.name ?? x.id
                 ),
-                map((x) => ({
+                map(x => ({
                   label: x.name,
                   value: x.id,
                   hint: priority[x.id] === 0 ? "recommended" : undefined,
-                })),
+                }))
               ),
             })
 
@@ -291,11 +291,11 @@ export const GithubInstallCommand = cmd({
               options: pipe(
                 providerData.models,
                 values(),
-                sortBy((x) => x.name ?? x.id),
-                map((x) => ({
+                sortBy(x => x.name ?? x.id),
+                map(x => ({
                   label: x.name ?? x.id,
                   value: x.id,
-                })),
+                }))
               ),
             })
 
@@ -320,7 +320,7 @@ export const GithubInstallCommand = cmd({
                   ? `start "" "${url}"`
                   : `xdg-open "${url}"`
 
-            exec(command, (error) => {
+            exec(command, error => {
               if (error) {
                 prompts.log.warn(`Could not open browser. Please visit: ${url}`)
               }
@@ -336,7 +336,7 @@ export const GithubInstallCommand = cmd({
 
               if (retries > MAX_RETRIES) {
                 s.stop(
-                  `Failed to detect GitHub app installation. Make sure to install the app for the \`${app.owner}/${app.repo}\` repository.`,
+                  `Failed to detect GitHub app installation. Make sure to install the app for the \`${app.owner}/${app.repo}\` repository.`
                 )
                 throw new UI.CancelledError()
               }
@@ -349,10 +349,10 @@ export const GithubInstallCommand = cmd({
 
             async function getInstallation() {
               return await fetch(
-                `https://api.zeroxzero.ai/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
+                `https://api.zeroxzero.ai/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`
               )
-                .then((res) => res.json())
-                .then((data) => data.installation)
+                .then(res => res.json())
+                .then(data => data.installation)
             }
           }
 
@@ -394,7 +394,7 @@ jobs:
       - name: Run 0x0
         uses: anonymous-dev-org/0x0/github@latest${envStr}
         with:
-          model: ${provider}/${model}`,
+          model: ${provider}/${model}`
             )
 
             prompts.log.success(`Added workflow file: "${WORKFLOW_FILE}"`)
@@ -408,7 +408,7 @@ jobs:
 export const GithubRunCommand = cmd({
   command: "run",
   describe: "run the GitHub agent",
-  builder: (yargs) =>
+  builder: yargs =>
     yargs
       .option("event", {
         type: "string",
@@ -486,7 +486,7 @@ export const GithubRunCommand = cmd({
           const githubToken = process.env["GITHUB_TOKEN"]
           if (!githubToken) {
             throw new Error(
-              "GITHUB_TOKEN environment variable is not set. When using use_github_token, you must provide GITHUB_TOKEN.",
+              "GITHUB_TOKEN environment variable is not set. When using use_github_token, you must provide GITHUB_TOKEN."
             )
           }
           appToken = githubToken
@@ -552,7 +552,7 @@ export const GithubRunCommand = cmd({
               repoData.data.default_branch,
               branch,
               summary,
-              `${response}\n\nTriggered by ${triggerType}${footer({ image: true })}`,
+              `${response}\n\nTriggered by ${triggerType}${footer({ image: true })}`
             )
             console.log(`Created PR #${pr}`)
           } else {
@@ -574,7 +574,7 @@ export const GithubRunCommand = cmd({
               const summary = await summarize(response)
               await pushToLocalBranch(summary, uncommittedChanges)
             }
-            const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
+            const hasShared = prData.comments.nodes.some(c => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
             await createComment(`${response}${footer({ image: !hasShared })}`)
             await removeReaction(commentType)
           }
@@ -589,7 +589,7 @@ export const GithubRunCommand = cmd({
               const summary = await summarize(response)
               await pushToForkBranch(summary, prData, uncommittedChanges)
             }
-            const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
+            const hasShared = prData.comments.nodes.some(c => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
             await createComment(`${response}${footer({ image: !hasShared })}`)
             await removeReaction(commentType)
           }
@@ -609,7 +609,7 @@ export const GithubRunCommand = cmd({
               repoData.data.default_branch,
               branch,
               summary,
-              `${response}\n\nCloses #${issueId}${footer({ image: true })}`,
+              `${response}\n\nCloses #${issueId}${footer({ image: true })}`
             )
             await createComment(`Created PR #${pr}${footer({ image: true })}`)
             await removeReaction(commentType)
@@ -688,7 +688,7 @@ export const GithubRunCommand = cmd({
           | PullRequestReviewCommentEvent
           | WorkflowDispatchEvent
           | WorkflowRunEvent
-          | PullRequestEvent,
+          | PullRequestEvent
       ): event is IssueCommentEvent {
         return "issue" in event && "comment" in event
       }
@@ -728,7 +728,7 @@ export const GithubRunCommand = cmd({
         const reviewContext = getReviewCommentContext()
         const mentions = (process.env["MENTIONS"] || "/zeroxzero,/oc")
           .split(",")
-          .map((m) => m.trim().toLowerCase())
+          .map(m => m.trim().toLowerCase())
           .filter(Boolean)
         let prompt = (() => {
           if (!isCommentEvent) {
@@ -736,19 +736,19 @@ export const GithubRunCommand = cmd({
           }
           const body = (payload as IssueCommentEvent | PullRequestReviewCommentEvent).comment.body.trim()
           const bodyLower = body.toLowerCase()
-          if (mentions.some((m) => bodyLower === m)) {
+          if (mentions.some(m => bodyLower === m)) {
             if (reviewContext) {
               return `Review this code change and suggest improvements for the commented lines:\n\nFile: ${reviewContext.file}\nLines: ${reviewContext.line}\n\n${reviewContext.diffHunk}`
             }
             return "Summarize this thread"
           }
-          if (mentions.some((m) => bodyLower.includes(m))) {
+          if (mentions.some(m => bodyLower.includes(m))) {
             if (reviewContext) {
               return `${body}\n\nContext: You are reviewing a comment on file "${reviewContext.file}" at line ${reviewContext.line}.\n\nDiff context:\n${reviewContext.diffHunk}`
             }
             return body
           }
-          throw new Error(`Comments must mention ${mentions.map((m) => "`" + m + "`").join(" or ")}`)
+          throw new Error(`Comments must mention ${mentions.map(m => "`" + m + "`").join(" or ")}`)
         })()
 
         // Handle images
@@ -838,12 +838,12 @@ export const GithubRunCommand = cmd({
             color + `|`,
             UI.Style.TEXT_NORMAL + UI.Style.TEXT_DIM + ` ${type.padEnd(7, " ")}`,
             "",
-            UI.Style.TEXT_NORMAL + title,
+            UI.Style.TEXT_NORMAL + title
           )
         }
 
         let text = ""
-        Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
+        Bus.subscribe(MessageV2.Event.PartUpdated, async evt => {
           if (evt.properties.part.sessionID !== session.id) return
           //if (evt.properties.part.messageID === messageID) return
           const part = evt.properties.part
@@ -888,7 +888,6 @@ export const GithubRunCommand = cmd({
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
-          messageID: Identifier.ascending("message"),
           model: {
             providerID,
             modelID,
@@ -900,7 +899,7 @@ export const GithubRunCommand = cmd({
               type: "text",
               text: message,
             },
-            ...files.flatMap((f) => [
+            ...files.flatMap(f => [
               {
                 id: Identifier.ascending("part"),
                 type: "file" as const,
@@ -925,7 +924,7 @@ export const GithubRunCommand = cmd({
         if (result.info.role === "assistant" && result.info.error) {
           console.error("Agent error:", result.info.error)
           throw new Error(
-            `${result.info.error.name}: ${"message" in result.info.error ? result.info.error.message : ""}`,
+            `${result.info.error.name}: ${"message" in result.info.error ? result.info.error.message : ""}`
           )
         }
 
@@ -936,7 +935,6 @@ export const GithubRunCommand = cmd({
         console.log("Requesting summary from agent...")
         const summary = await SessionPrompt.prompt({
           sessionID: session.id,
-          messageID: Identifier.ascending("message"),
           model: {
             providerID,
             modelID,
@@ -954,7 +952,7 @@ export const GithubRunCommand = cmd({
         if (summary.info.role === "assistant" && summary.info.error) {
           console.error("Summary agent error:", summary.info.error)
           throw new Error(
-            `${summary.info.error.name}: ${"message" in summary.info.error ? summary.info.error.message : ""}`,
+            `${summary.info.error.name}: ${"message" in summary.info.error ? summary.info.error.message : ""}`
           )
         }
 
@@ -972,7 +970,7 @@ export const GithubRunCommand = cmd({
         } catch (error) {
           console.error("Failed to get OIDC token:", error instanceof Error ? error.message : error)
           throw new Error(
-            "Could not fetch an OIDC token. Make sure to add `id-token: write` to your workflow permissions.",
+            "Could not fetch an OIDC token. Make sure to add `id-token: write` to your workflow permissions."
           )
         }
       }
@@ -996,7 +994,7 @@ export const GithubRunCommand = cmd({
         if (!response.ok) {
           const responseJson = (await response.json()) as { error?: string }
           throw new Error(
-            `App token exchange failed: ${response.status} ${response.statusText} - ${responseJson.error}`,
+            `App token exchange failed: ${response.status} ${response.statusText} - ${responseJson.error}`
           )
         }
 
@@ -1193,7 +1191,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
               content: AGENT_REACTION,
             })
 
-            const eyesReaction = reactions.data.find((r) => r.user?.login === AGENT_USERNAME)
+            const eyesReaction = reactions.data.find(r => r.user?.login === AGENT_USERNAME)
             if (!eyesReaction) return
 
             return await octoRest.rest.reactions.deleteForPullRequestComment({
@@ -1211,7 +1209,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
             content: AGENT_REACTION,
           })
 
-          const eyesReaction = reactions.data.find((r) => r.user?.login === AGENT_USERNAME)
+          const eyesReaction = reactions.data.find(r => r.user?.login === AGENT_USERNAME)
           if (!eyesReaction) return
 
           return await octoRest.rest.reactions.deleteForIssueComment({
@@ -1229,7 +1227,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
           content: AGENT_REACTION,
         })
 
-        const eyesReaction = reactions.data.find((r) => r.user?.login === AGENT_USERNAME)
+        const eyesReaction = reactions.data.find(r => r.user?.login === AGENT_USERNAME)
         if (!eyesReaction) return
 
         await octoRest.rest.reactions.deleteForIssue({
@@ -1264,7 +1262,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
               head: `${owner}:${branch}`,
               base,
               state: "open",
-            }),
+            })
           )
 
           const first = existing.data[0]
@@ -1285,7 +1283,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
             base,
             title,
             body,
-          }),
+          })
         )
         return pr.data.number
       }
@@ -1353,7 +1351,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
             owner,
             repo,
             number: issueId,
-          },
+          }
         )
 
         const issue = issueResult.repository.issue
@@ -1365,11 +1363,11 @@ query($owner: String!, $repo: String!, $number: Int!) {
       function buildPromptDataForIssue(issue: GitHubIssue) {
         // Only called for non-schedule events, so payload is defined
         const comments = (issue.comments?.nodes || [])
-          .filter((c) => {
+          .filter(c => {
             const id = parseInt(c.databaseId)
             return id !== triggerCommentId
           })
-          .map((c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
+          .map(c => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
 
         return [
           "<github_action_context>",
@@ -1481,7 +1479,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
             owner,
             repo,
             number: issueId,
-          },
+          }
         )
 
         const pr = prResult.repository.pullRequest
@@ -1493,15 +1491,15 @@ query($owner: String!, $repo: String!, $number: Int!) {
       function buildPromptDataForPR(pr: GitHubPullRequest) {
         // Only called for non-schedule events, so payload is defined
         const comments = (pr.comments?.nodes || [])
-          .filter((c) => {
+          .filter(c => {
             const id = parseInt(c.databaseId)
             return id !== triggerCommentId
           })
-          .map((c) => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
+          .map(c => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
 
-        const files = (pr.files.nodes || []).map((f) => `- ${f.path} (${f.changeType}) +${f.additions}/-${f.deletions}`)
-        const reviewData = (pr.reviews.nodes || []).map((r) => {
-          const comments = (r.comments.nodes || []).map((c) => `    - ${c.path}:${c.line ?? "?"}: ${c.body}`)
+        const files = (pr.files.nodes || []).map(f => `- ${f.path} (${f.changeType}) +${f.additions}/-${f.deletions}`)
+        const reviewData = (pr.reviews.nodes || []).map(r => {
+          const comments = (r.comments.nodes || []).map(c => `    - ${c.path}:${c.line ?? "?"}: ${c.body}`)
           return [
             `- ${r.author.login} at ${r.submittedAt}:`,
             `  - Review body: ${r.body}`,

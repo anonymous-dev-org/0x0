@@ -1,6 +1,5 @@
 import z from "zod"
 import { Config } from "@/core/config/config"
-import { Identifier } from "@/core/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/runtime/agent/agent"
 import { defer } from "@/util/defer"
@@ -202,8 +201,6 @@ export const TaskTool = Tool.define("task", async ctx => {
         },
       })
 
-      const messageID = Identifier.ascending("message")
-
       if (ctx.abort.aborted) throw new Error("Task aborted")
 
       function cancel() {
@@ -218,7 +215,6 @@ export const TaskTool = Tool.define("task", async ctx => {
       if (ctx.abort.aborted) throw new Error("Task aborted")
 
       const result = await SessionPrompt.prompt({
-        messageID,
         sessionID: session.id,
         model: {
           modelID: model.modelID,

@@ -1,49 +1,49 @@
-import path from "path"
-import os from "os"
-import fs from "fs/promises"
-import z from "zod"
-import { Identifier } from "@/core/id/id"
-import { MessageV2 } from "./message-v2"
-import { Log } from "../util/log"
-import { SessionRevert } from "./revert"
-import { Session } from "."
-import { Agent } from "@/runtime/agent/agent"
-import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
-import { SessionCompaction } from "./compaction"
-import { Instance } from "../project/instance"
-import { Bus } from "@/core/bus"
-import { InstructionPrompt } from "./instruction"
-import MAX_STEPS from "../session/prompt/max-steps.txt"
-import { defer } from "../util/defer"
-import { clone } from "remeda"
-import { ToolRegistry } from "../tool/registry"
-import { MCP } from "@/integration/mcp"
-import { LSP } from "@/integration/lsp"
-import { ReadTool } from "../tool/read"
-import { ListTool } from "../tool/ls"
-import { FileTime } from "@/workspace/file/time"
-import { ulid } from "ulid"
-import { spawn } from "child_process"
-import { Command } from "@/runtime/command"
+import { type Tool as AITool, asSchema, jsonSchema, type ToolCallOptions, tool } from "ai"
 import { $, fileURLToPath, pathToFileURL } from "bun"
-import { ConfigMarkdown } from "@/core/config/markdown"
+import { spawn } from "child_process"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
+import { clone } from "remeda"
+import { ulid } from "ulid"
+import z from "zod"
+import { Bus } from "@/core/bus"
 import { Config } from "@/core/config/config"
-import { SessionSummary } from "./summary"
+import { ConfigMarkdown } from "@/core/config/markdown"
+import { Identifier } from "@/core/id/id"
+import { LSP } from "@/integration/lsp"
+import { MCP } from "@/integration/mcp"
+import { PermissionNext } from "@/permission/next"
+import { Agent } from "@/runtime/agent/agent"
+import { Command } from "@/runtime/command"
+import { InvalidTool } from "@/tool/invalid"
+import { TaskTool } from "@/tool/task"
+import type { Tool } from "@/tool/tool"
+import { Truncate } from "@/tool/truncation"
 import { NamedError } from "@/util/error"
 import { fn } from "@/util/fn"
-import { SessionProcessor } from "./processor"
-import { TaskTool } from "@/tool/task"
-import { Tool } from "@/tool/tool"
-import { PermissionNext } from "@/permission/next"
-import { SessionStatus } from "./status"
-import { LLM } from "./llm"
 import { iife } from "@/util/iife"
+import { FileTime } from "@/workspace/file/time"
 import { Shell } from "@/workspace/shell/shell"
-import { Truncate } from "@/tool/truncation"
-import { InvalidTool } from "@/tool/invalid"
+import { Instance } from "../project/instance"
+import { Provider } from "../provider/provider"
+import MAX_STEPS from "../session/prompt/max-steps.txt"
+import { ListTool } from "../tool/ls"
+import { ReadTool } from "../tool/read"
+import { ToolRegistry } from "../tool/registry"
+import { defer } from "../util/defer"
+import { Log } from "../util/log"
+import { Session } from "."
+import { SessionCompaction } from "./compaction"
+import { InstructionPrompt } from "./instruction"
+import { LLM } from "./llm"
+import { MessageV2 } from "./message-v2"
+import { SessionProcessor } from "./processor"
+import { SessionRevert } from "./revert"
+import { SessionStatus } from "./status"
+import { SessionSummary } from "./summary"
 
-// @ts-ignore
+// @ts-expect-error
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 export namespace SessionPrompt {
@@ -88,11 +88,11 @@ export namespace SessionPrompt {
       > = {}
       return data
     },
-    async (current) => {
+    async current => {
       for (const item of Object.values(current)) {
         item.abort.abort()
       }
-    },
+    }
   )
 
   export function assertNotBusy(sessionID: string) {
@@ -102,7 +102,6 @@ export namespace SessionPrompt {
 
   export const PromptInput = z.object({
     sessionID: Identifier.schema("session"),
-    messageID: Identifier.schema("message").optional(),
     model: z
       .object({
         providerID: z.string(),
@@ -115,7 +114,7 @@ export namespace SessionPrompt {
       .record(z.string(), z.boolean())
       .optional()
       .describe(
-        "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
+        "@deprecated tools and permissions have been merged, you can set permissions on the session itself now"
       ),
     system: z.string().optional(),
     variant: z.string().optional(),
@@ -162,12 +161,12 @@ export namespace SessionPrompt {
           .meta({
             ref: "SubtaskPartInput",
           }),
-      ]),
+      ])
     ),
   })
   export type PromptInput = z.infer<typeof PromptInput>
 
-  export const prompt = fn(PromptInput, async (input) => {
+  export const prompt = fn(PromptInput, async input => {
     const session = await Session.get(input.sessionID)
     await SessionRevert.cleanup(session)
 
@@ -186,7 +185,7 @@ export namespace SessionPrompt {
     }
     if (permissions.length > 0) {
       session.permission = permissions
-      await Session.update(session.id, (draft) => {
+      await Session.update(session.id, draft => {
         draft.permission = permissions
       })
     }
@@ -208,7 +207,7 @@ export namespace SessionPrompt {
     const files = ConfigMarkdown.files(template)
     const seen = new Set<string>()
     await Promise.all(
-      files.map(async (match) => {
+      files.map(async match => {
         const name = match[1] ?? ""
         if (!name || seen.has(name)) return
         seen.add(name)
@@ -244,7 +243,7 @@ export namespace SessionPrompt {
           filename: name,
           mime: "text/plain",
         })
-      }),
+      })
     )
     return parts
   }
@@ -285,7 +284,7 @@ export namespace SessionPrompt {
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
   })
-  export const loop = fn(LoopInput, async (input) => {
+  export const loop = fn(LoopInput, async input => {
     const { sessionID, resume_existing } = input
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
@@ -310,7 +309,7 @@ export namespace SessionPrompt {
       let lastUser: MessageV2.User | undefined
       let lastAssistant: MessageV2.Assistant | undefined
       let lastFinished: MessageV2.Assistant | undefined
-      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+      const tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
       for (let i = msgs.length - 1; i >= 0; i--) {
         const msg = msgs[i]
         if (!msg) continue
@@ -319,7 +318,7 @@ export namespace SessionPrompt {
         if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
           lastFinished = msg.info as MessageV2.Assistant
         if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
+        const task = msg.parts.filter(part => part.type === "compaction" || part.type === "subtask")
         if (task && !lastFinished) {
           tasks.push(...task)
         }
@@ -378,7 +377,7 @@ export namespace SessionPrompt {
             created: Date.now(),
           },
         })) as MessageV2.Assistant
-        let part = (await Session.updatePart({
+        const part = (await Session.updatePart({
           id: Identifier.ascending("part"),
           messageID: assistantMessage.id,
           sessionID: assistantMessage.sessionID,
@@ -431,11 +430,11 @@ export namespace SessionPrompt {
             await PermissionNext.ask({
               ...req,
               sessionID: sessionID,
-               ruleset: PermissionNext.merge(taskAgent?.permission ?? [], session.permission ?? []),
+              ruleset: PermissionNext.merge(taskAgent?.permission ?? [], session.permission ?? []),
             })
           },
         }
-        const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
+        const result = await taskTool.execute(taskArgs, taskCtx).catch(error => {
           executionError = error
           log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
           return undefined
@@ -585,8 +584,8 @@ export namespace SessionPrompt {
       using _ = defer(() => InstructionPrompt.clear(processor.message.id))
 
       // Check if user explicitly invoked an agent via @ in this turn
-      const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-      const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+      const lastUserMsg = msgs.findLast(m => m.info.role === "user")
+      const bypassAgentCheck = lastUserMsg?.parts.some(p => p.type === "agent") ?? false
 
       const tools = await resolveTools({
         agent,
@@ -608,7 +607,7 @@ export namespace SessionPrompt {
       const sessionMessages = clone(msgs)
       const skillPrompt = skill(sessionMessages)
       for (const msg of sessionMessages) {
-        msg.parts = msg.parts.filter((part) => !(part.type === "tool" && part.tool === "skill"))
+        msg.parts = msg.parts.filter(part => !(part.type === "tool" && part.tool === "skill"))
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
@@ -648,7 +647,6 @@ export namespace SessionPrompt {
         model,
       })
       if (result === "stop") break
-      continue
     }
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
@@ -717,18 +715,18 @@ export namespace SessionPrompt {
 
     const excluded = PermissionNext.disabled(
       await ToolRegistry.ids(),
-      PermissionNext.merge(input.agent.permission, input.session.permission ?? []),
+      PermissionNext.merge(input.agent.permission, input.session.permission ?? [])
     )
 
     for (const item of await ToolRegistry.tools(
       { modelID: input.model.id, providerID: input.model.providerID },
       input.agent,
-      excluded,
+      excluded
     )) {
       const json = z.toJSONSchema(item.parameters)
       if (json.type !== "object") {
         throw new Error(
-          `Invalid schema for tool "${item.id}": schema must be a JSON Schema object, got ${JSON.stringify(json.type ?? null)}.`,
+          `Invalid schema for tool "${item.id}": schema must be a JSON Schema object, got ${JSON.stringify(json.type ?? null)}.`
         )
       }
       const schema = json
@@ -845,7 +843,7 @@ export namespace SessionPrompt {
         : undefined)
 
     const info: MessageV2.Info = {
-      id: input.messageID ?? Identifier.ascending("message"),
+      id: Identifier.ascending("message"),
       role: "user",
       sessionID: input.sessionID,
       time: {
@@ -965,7 +963,7 @@ export namespace SessionPrompt {
                 ]
               }
               break
-            case "file:":
+            case "file:": {
               log.info("file", { mime: part.mime })
               // have to normalize, symbol search returns absolute paths
               // Decode the pathname since URL constructor doesn't automatically decode it
@@ -979,8 +977,8 @@ export namespace SessionPrompt {
               }
 
               if (part.mime === "text/plain") {
-                let offset: number | undefined = undefined
-                let limit: number | undefined = undefined
+                let offset: number | undefined
+                let limit: number | undefined
                 const range = {
                   start: url.searchParams.get("start"),
                   end: url.searchParams.get("end"),
@@ -1027,7 +1025,7 @@ export namespace SessionPrompt {
                 ]
 
                 await ReadTool.init()
-                  .then(async (t) => {
+                  .then(async t => {
                     const model = await Provider.getModel(info.model.providerID, info.model.modelID)
                     const readCtx: Tool.Context = {
                       sessionID: input.sessionID,
@@ -1050,13 +1048,13 @@ export namespace SessionPrompt {
                     })
                     if (result.attachments?.length) {
                       pieces.push(
-                        ...result.attachments.map((attachment) => ({
+                        ...result.attachments.map(attachment => ({
                           ...attachment,
                           synthetic: true,
                           filename: attachment.filename ?? part.filename,
                           messageID: info.id,
                           sessionID: input.sessionID,
-                        })),
+                        }))
                       )
                     } else {
                       pieces.push({
@@ -1067,7 +1065,7 @@ export namespace SessionPrompt {
                       })
                     }
                   })
-                  .catch((error) => {
+                  .catch(error => {
                     log.error("failed to read file", { error })
                     const message = error instanceof Error ? error.message : error.toString()
                     Bus.publish(Session.Event.Error, {
@@ -1101,7 +1099,7 @@ export namespace SessionPrompt {
                   metadata: async () => {},
                   ask: async () => {},
                 }
-                const result = await ListTool.init().then((t) => t.execute(args, listCtx))
+                const result = await ListTool.init().then(t => t.execute(args, listCtx))
                 return [
                   {
                     id: Identifier.ascending("part"),
@@ -1136,7 +1134,7 @@ export namespace SessionPrompt {
                   messageID: info.id,
                   sessionID: input.sessionID,
                   type: "text",
-                  text: `Called the Read tool with the following input: {\"filePath\":\"${filepath}\"}`,
+                  text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
                   synthetic: true,
                 },
                 {
@@ -1150,6 +1148,7 @@ export namespace SessionPrompt {
                   source: part.source,
                 },
               ]
+            }
           }
         }
 
@@ -1161,8 +1160,8 @@ export namespace SessionPrompt {
             sessionID: input.sessionID,
           },
         ]
-      }),
-    ).then((x) => x.flat())
+      })
+    ).then(x => x.flat())
 
     await Session.updateMessage(info)
     for (const part of parts) {
@@ -1204,7 +1203,7 @@ export namespace SessionPrompt {
         cancel(input.sessionID)
       } else {
         // Otherwise, trigger the session loop to process queued items
-        loop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
+        loop({ sessionID: input.sessionID, resume_existing: true }).catch(error => {
           log.error("session loop failed to resume after shell command", { sessionID: input.sessionID, error })
         })
       }
@@ -1352,7 +1351,7 @@ export namespace SessionPrompt {
 
     let output = ""
 
-    proc.stdout?.on("data", (chunk) => {
+    proc.stdout?.on("data", chunk => {
       output += chunk.toString()
       if (part.state.status === "running") {
         part.state.metadata = {
@@ -1363,7 +1362,7 @@ export namespace SessionPrompt {
       }
     })
 
-    proc.stderr?.on("data", (chunk) => {
+    proc.stderr?.on("data", chunk => {
       output += chunk.toString()
       if (part.state.status === "running") {
         part.state.metadata = {
@@ -1391,7 +1390,7 @@ export namespace SessionPrompt {
 
     abort.addEventListener("abort", abortHandler, { once: true })
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       proc.on("close", () => {
         exited = true
         abort.removeEventListener("abort", abortHandler)
@@ -1425,7 +1424,6 @@ export namespace SessionPrompt {
   }
 
   export const CommandInput = z.object({
-    messageID: Identifier.schema("message").optional(),
     sessionID: Identifier.schema("session"),
     agent: z.string().optional(),
     model: z.string().optional(),
@@ -1441,7 +1439,7 @@ export namespace SessionPrompt {
           }).partial({
             id: true,
           }),
-        ]),
+        ])
       )
       .optional(),
   })
@@ -1465,7 +1463,7 @@ export namespace SessionPrompt {
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
     const raw = input.arguments.match(argsRegex) ?? []
-    const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
+    const args = raw.map(arg => arg.replace(quoteTrimRegex, ""))
 
     const templateCommand = await command.template
 
@@ -1502,7 +1500,7 @@ export namespace SessionPrompt {
           } catch (error) {
             return `Error executing command: ${error instanceof Error ? error.message : String(error)}`
           }
-        }),
+        })
       )
       let index = 0
       template = template.replace(bashRegex, () => results[index++] ?? "")
@@ -1538,7 +1536,7 @@ export namespace SessionPrompt {
     }
     const agent = await Agent.get(agentName)
     if (!agent) {
-      const available = await Agent.list().then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
+      const available = await Agent.list().then(agents => agents.filter(a => !a.hidden).map(a => a.name))
       const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
       const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
       Bus.publish(Session.Event.Error, {
@@ -1562,7 +1560,7 @@ export namespace SessionPrompt {
               modelID: taskModel.modelID,
             },
             // TODO: how can we make task tool accept a more complex input?
-            prompt: templateParts.find((y) => y.type === "text")?.text ?? "",
+            prompt: templateParts.find(y => y.type === "text")?.text ?? "",
           },
         ]
       : [...templateParts, ...(input.parts ?? [])]
@@ -1576,7 +1574,6 @@ export namespace SessionPrompt {
 
     const result = (await prompt({
       sessionID: input.sessionID,
-      messageID: input.messageID,
       model: {
         providerID: userModel.providerID ?? "",
         modelID: userModel.modelID,
@@ -1607,12 +1604,12 @@ export namespace SessionPrompt {
 
     // Find first non-synthetic user message
     const firstRealUserIdx = input.history.findIndex(
-      (m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic),
+      m => m.info.role === "user" && !m.parts.every(p => "synthetic" in p && p.synthetic)
     )
     if (firstRealUserIdx === -1) return
 
     const isFirst =
-      input.history.filter((m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic))
+      input.history.filter(m => m.info.role === "user" && !m.parts.every(p => "synthetic" in p && p.synthetic))
         .length === 1
     if (!isFirst) return
 
@@ -1624,8 +1621,8 @@ export namespace SessionPrompt {
 
     // For subtask-only messages (from command invocations), extract the prompt directly
     // since toModelMessage converts subtask parts to generic "The following tool was executed by the user"
-    const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
-    const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
+    const subtaskParts = firstRealUser.parts.filter(p => p.type === "subtask") as MessageV2.SubtaskPart[]
+    const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every(p => p.type === "subtask")
 
     const agent = await Agent.get("title")
     if (!agent) return
@@ -1651,25 +1648,28 @@ export namespace SessionPrompt {
           content: "Generate a title for this conversation:\n",
         },
         ...(hasOnlySubtaskParts
-          ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
+          ? [{ role: "user" as const, content: subtaskParts.map(p => p.prompt).join("\n") }]
           : MessageV2.toModelMessages(contextMessages, model)),
       ],
-    }).catch((err) => { log.error("failed to generate title", { error: err }); return undefined })
+    }).catch(err => {
+      log.error("failed to generate title", { error: err })
+      return undefined
+    })
     if (text)
       return Session.update(
         input.session.id,
-        (draft) => {
+        draft => {
           const cleaned = text
             .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
             .split("\n")
-            .map((line) => line.trim())
-            .find((line) => line.length > 0)
+            .map(line => line.trim())
+            .find(line => line.length > 0)
           if (!cleaned) return
 
           const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
           draft.title = title
         },
-        { touch: false },
+        { touch: false }
       )
   }
 }
