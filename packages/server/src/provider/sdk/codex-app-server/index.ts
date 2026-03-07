@@ -1,9 +1,9 @@
-import { Codex } from "@openai/codex-sdk"
-import { Log } from "@/util/log"
-import { Server } from "@/server/server"
-import { registerBridge, unregisterBridge, type BridgeContext } from "@/server/routes/tool-bridge"
-import { ToolRegistry } from "@/tool/registry"
+import { resolveCodexBinary } from "@/provider/resolve-codex-binary"
 import type { Agent } from "@/runtime/agent/agent"
+import { type BridgeContext, registerBridge, unregisterBridge } from "@/server/routes/tool-bridge"
+import { Server } from "@/server/server"
+import { ToolRegistry } from "@/tool/registry"
+import { Log } from "@/util/log"
 
 const log = Log.create({ service: "codex-app-server" })
 
@@ -105,13 +105,7 @@ function isAuthErrorMessage(message: string): boolean {
 export function composeCodexTurnInput(prompt: string, systemPrompt?: string): string {
   const sys = (systemPrompt ?? "").trim()
   if (!sys) return prompt
-  return [
-    "<system-instructions>",
-    sys,
-    "</system-instructions>",
-    "",
-    prompt,
-  ].join("\n")
+  return ["<system-instructions>", sys, "</system-instructions>", "", prompt].join("\n")
 }
 
 export function normalizeCodexErrorMessage(error: unknown): string {
@@ -123,9 +117,7 @@ export function normalizeCodexErrorMessage(error: unknown): string {
   return fallback
 }
 
-export async function* codexAppServerStream(
-  input: CodexStreamInput,
-): AsyncGenerator<CodexEvent> {
+export async function* codexAppServerStream(input: CodexStreamInput): AsyncGenerator<CodexEvent> {
   const textByItem = new Map<string, string>()
   const outputByItem = new Map<string, string>()
   const mcpArgsSeen = new Set<string>()
@@ -142,7 +134,7 @@ export async function* codexAppServerStream(
   const mcpUrl = `${serverUrl.origin}/tool-bridge/${bridgeId}?directory=${encodeURIComponent(cwd)}`
 
   const rawTools = await ToolRegistry.tools({ providerID: "codex", modelID: input.modelId }, input.agent)
-  const bridgeTools: BridgeContext["tools"] = rawTools.map((t) => ({
+  const bridgeTools: BridgeContext["tools"] = rawTools.map(t => ({
     id: t.id,
     description: t.description,
     parameters: t.parameters,
@@ -159,23 +151,48 @@ export async function* codexAppServerStream(
   })
 
   try {
-    const codex = new Codex({
-      config: {
-        include_apply_patch_tool: false,
-        tools_web_search: false,
-        tools_view_image: false,
-        web_search: "disabled",
-        features: {
-          shell_tool: false,
-        },
-        mcp_servers: {
-          tools: {
-            url: mcpUrl,
-            tool_timeout_sec: 600, // 10 min — question tool needs long-lived connections
+    const codexPath = resolveCodexBinary()
+    if (!codexPath) {
+      yield { type: "error", message: "Codex CLI binary not found. Install @openai/codex or add codex to your PATH." }
+      return
+    }
+
+    // Dynamic import: avoids top-level createRequire(import.meta.url) in compiled binaries
+    let CodexClass: typeof import("@openai/codex-sdk").Codex
+    try {
+      const mod = await import("@openai/codex-sdk")
+      CodexClass = mod.Codex
+    } catch (importErr) {
+      const msg = importErr instanceof Error ? importErr.message : String(importErr)
+      yield { type: "error", message: `Failed to load @openai/codex-sdk: ${msg}` }
+      return
+    }
+
+    let codex: InstanceType<typeof CodexClass>
+    try {
+      codex = new CodexClass({
+        codexPathOverride: codexPath,
+        config: {
+          include_apply_patch_tool: false,
+          tools_web_search: false,
+          tools_view_image: false,
+          web_search: "disabled",
+          features: {
+            shell_tool: false,
+          },
+          mcp_servers: {
+            tools: {
+              url: mcpUrl,
+              tool_timeout_sec: 600, // 10 min — question tool needs long-lived connections
+            },
           },
         },
-      },
-    })
+      })
+    } catch (ctorErr) {
+      const msg = ctorErr instanceof Error ? ctorErr.message : String(ctorErr)
+      yield { type: "error", message: `Failed to initialize Codex SDK (codexPath=${codexPath}): ${msg}` }
+      return
+    }
 
     const threadOpts = {
       model: input.modelId || undefined,
@@ -189,9 +206,7 @@ export async function* codexAppServerStream(
       networkAccessEnabled: false,
     }
 
-    const thread = input.threadId
-      ? codex.resumeThread(input.threadId, threadOpts)
-      : codex.startThread(threadOpts)
+    const thread = input.threadId ? codex.resumeThread(input.threadId, threadOpts) : codex.startThread(threadOpts)
 
     const turnInput = composeCodexTurnInput(input.prompt, input.systemPrompt)
     const { events } = await thread.runStreamed(turnInput, { signal: abortController.signal })

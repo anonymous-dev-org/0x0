@@ -1,14 +1,25 @@
-import z from "zod"
-import { Tool } from "./tool"
 import TurndownService from "turndown"
-import DESCRIPTION from "./search_remote.txt"
+import z from "zod"
 import { abortAfterAny } from "../util/abort"
+import DESCRIPTION from "./search_remote.txt"
+import { Tool } from "./tool"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 30 * 1000
 const MAX_TIMEOUT = 120 * 1000
 const EXA_URL = "https://mcp.exa.ai/mcp"
 const EXA_RESULTS = 8
+
+function exaError(mode: "web" | "code", status: number, body: string): Error {
+  const label = mode === "web" ? "Web search" : "Code search"
+  const lines = [
+    `${label} failed (HTTP ${status}): ${body}`,
+    "",
+    "This tool uses Exa's hosted MCP endpoint (https://mcp.exa.ai/mcp) which may be rate-limited or require authentication.",
+    "If this persists, visit https://dashboard.exa.ai to check service status or obtain an API key.",
+  ]
+  return new Error(lines.join("\n"))
+}
 
 const Schema = z
   .object({
@@ -75,7 +86,7 @@ const Schema = z
     }
 
     if (!value.query) {
-      ctx.addIssue({ code: "custom", path: ["query"], message: `query is required when mode is \"${value.mode}\"` })
+      ctx.addIssue({ code: "custom", path: ["query"], message: `query is required when mode is "${value.mode}"` })
     }
 
     if (value.mode === "web") {
@@ -251,7 +262,7 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
           clearTimeout()
           if (!response.ok) {
             const errorText = await response.text()
-            throw new Error(`Search error (${response.status}): ${errorText}`)
+            throw exaError("web", response.status, errorText)
           }
 
           const out = await response.text()
@@ -271,7 +282,9 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         } catch (error) {
           clearTimeout()
           if (error instanceof Error && error.name === "AbortError") {
-            throw new Error("Search request timed out")
+            throw new Error(
+              "Web search request timed out. The Exa search endpoint (https://mcp.exa.ai/mcp) may be unavailable."
+            )
           }
           throw error
         }
@@ -316,7 +329,7 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
         clearTimeout()
         if (!response.ok) {
           const errorText = await response.text()
-          throw new Error(`Code search error (${response.status}): ${errorText}`)
+          throw exaError("code", response.status, errorText)
         }
 
         const out = await response.text()
@@ -337,7 +350,9 @@ export const SearchRemoteTool = Tool.define<typeof Schema, Metadata>("search_rem
       } catch (error) {
         clearTimeout()
         if (error instanceof Error && error.name === "AbortError") {
-          throw new Error("Code search request timed out")
+          throw new Error(
+            "Code search request timed out. The Exa search endpoint (https://mcp.exa.ai/mcp) may be unavailable."
+          )
         }
         throw error
       }
@@ -360,9 +375,7 @@ function parseSSE(input: string) {
       }
       const text = json.result?.content?.[0]?.text
       if (text) return text
-    } catch {
-      continue
-    }
+    } catch {}
   }
 }
 

@@ -48,7 +48,7 @@
     },
     "packages/server": {
       "name": "@anonymous-dev/0x0-server",
-      "version": "2.1.0",
+      "version": "2.4.1",
       "bin": {
         "0x0-server": "./bin/0x0-server",
       },
@@ -107,6 +107,14 @@
         "typescript": "catalog:",
         "vscode-languageserver-types": "3.17.5",
         "zod-to-json-schema": "3.24.5",
+      },
+      "optionalDependencies": {
+        "@openai/codex-darwin-arm64": "npm:@openai/codex@0.106.0-darwin-arm64",
+        "@openai/codex-darwin-x64": "npm:@openai/codex@0.106.0-darwin-x64",
+        "@openai/codex-linux-arm64": "npm:@openai/codex@0.106.0-linux-arm64",
+        "@openai/codex-linux-x64": "npm:@openai/codex@0.106.0-linux-x64",
+        "@openai/codex-win32-arm64": "npm:@openai/codex@0.106.0-win32-arm64",
+        "@openai/codex-win32-x64": "npm:@openai/codex@0.106.0-win32-x64",
       },
     },
     "packages/tui": {

@@ -1,17 +1,21 @@
-import { Tool } from "./tool"
-import DESCRIPTION from "./task.txt"
 import z from "zod"
-import { Session } from "../session"
-import { MessageV2 } from "../session/message-v2"
-import { Identifier } from "@/core/id/id"
-import { Agent } from "@/runtime/agent/agent"
-import { SessionPrompt } from "../session/prompt"
-import { SessionCompaction } from "../session/compaction"
-import { iife } from "@/util/iife"
-import { defer } from "@/util/defer"
+import { Bus } from "@/core/bus"
+import { TuiEvent } from "@/core/bus/tui-event"
 import { Config } from "@/core/config/config"
+import { Identifier } from "@/core/id/id"
 import { PermissionNext } from "@/permission/next"
+import { Agent } from "@/runtime/agent/agent"
+import { defer } from "@/util/defer"
+import { NamedError } from "@/util/error"
+import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
+import { Session } from "../session"
+import { SessionCompaction } from "../session/compaction"
+import { MessageV2 } from "../session/message-v2"
+import { SessionPrompt } from "../session/prompt"
+import { Todo } from "../session/todo"
+import DESCRIPTION from "./task.txt"
+import { Tool } from "./tool"
 
 const log = Log.create({ service: "tool.task" })
 
@@ -19,7 +23,7 @@ const parameters = z.object({
   mode: z
     .enum(["subtask", "handoff"])
     .describe(
-      "subtask: delegate work and return to the current agent. handoff: permanently transfer control to another agent",
+      "subtask: delegate work and return to the current agent. handoff: permanently transfer control to another agent"
     ),
   description: z.string().describe("A short (3-5 words) description of the task"),
   agent: z.string().describe("The agent to use for this task"),
@@ -27,7 +31,7 @@ const parameters = z.object({
   task_id: z
     .string()
     .describe(
-      "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same agent session as before instead of creating a fresh one)",
+      "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same agent session as before instead of creating a fresh one)"
     )
     .optional(),
   command: z.string().describe("The command that triggered this task").optional(),
@@ -38,20 +42,20 @@ const parameters = z.object({
     .default(true),
 })
 
-export const TaskTool = Tool.define("task", async (ctx) => {
-  const agents = await Agent.list().then((x) => x.filter((a) => !a.hidden))
+export const TaskTool = Tool.define("task", async ctx => {
+  const agents = await Agent.list().then(x => x.filter(a => !a.hidden))
 
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent
   const accessibleAgents = caller
-    ? agents.filter((a) => PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny")
+    ? agents.filter(a => PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny")
     : agents
 
   const description = DESCRIPTION.replace(
     "{agents}",
     accessibleAgents
-      .map((a) => `- ${a.name}: ${a.description ?? "This agent should only be called manually by the user."}`)
-      .join("\n"),
+      .map(a => `- ${a.name}: ${a.description ?? "This agent should only be called manually by the user."}`)
+      .join("\n")
   )
   return {
     description,
@@ -86,7 +90,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           })
         }
 
-        const lastUser = [...ctx.messages].reverse().find((item) => item.info.role === "user")?.info
+        const lastUser = [...ctx.messages].reverse().find(item => item.info.role === "user")?.info
         if (!lastUser || lastUser.role !== "user") {
           throw new Error("Unable to handoff: missing user message context")
         }
@@ -104,30 +108,56 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           }
         }
 
-        const handoffMessage = await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: ctx.sessionID,
-          role: "user",
-          time: {
-            created: Date.now(),
-          },
-          agent: agent.name,
-          model,
+        // Find plan file path from the current session's messages
+        const planFilePath = ctx.messages
+          .flatMap(m => m.parts)
+          .filter(
+            (p): p is MessageV2.ToolPart => p.type === "tool" && p.tool === "plan" && p.state.status === "completed"
+          )
+          .at(-1)?.metadata?.filepath as string | undefined
+
+        // Create child session for the target agent
+        const childSession = await Session.create({
+          parentID: ctx.sessionID,
+          title: params.description + ` (@${agent.name} agent)`,
         })
 
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: handoffMessage.id,
-          sessionID: ctx.sessionID,
-          type: "text",
-          synthetic: true,
-          text: [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`].join("\n"),
-        } satisfies MessageV2.TextPart)
+        // Copy todos from parent to child
+        const todos = await Todo.get(ctx.sessionID)
+        if (todos.length) await Todo.update({ sessionID: childSession.id, todos })
+
+        // Build handoff prompt
+        const promptLines = [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`]
+        if (planFilePath) {
+          promptLines.push("", `Plan file: ${planFilePath}`)
+          promptLines.push(
+            "",
+            "Read the plan file above and execute it. Update the todo checklist as you complete each task."
+          )
+        }
+        const handoffPromptText = promptLines.join("\n")
+
+        // Fire-and-forget: start prompt loop on child session
+        SessionPrompt.prompt({
+          sessionID: childSession.id,
+          agent: agent.name,
+          model,
+          parts: [{ type: "text", text: handoffPromptText }],
+        }).catch(e => {
+          log.error("handoff prompt error", { sessionID: childSession.id, error: e })
+          Bus.publish(Session.Event.Error, {
+            sessionID: childSession.id,
+            error: new NamedError.Unknown({ message: e instanceof Error ? e.message : String(e) }).toObject(),
+          })
+        })
+
+        // Navigate TUI to the new child session
+        Bus.publish(TuiEvent.SessionSelect, { sessionID: childSession.id })
 
         return {
           title: `Handoff to ${agent.name}`,
           metadata: {
-            sessionId: ctx.sessionID,
+            sessionId: childSession.id,
             model,
             handoff: {
               switched: true,
@@ -136,7 +166,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
               reason: params.description,
             },
           },
-          output: ["<handoff_result>", `Handed off to @${agent.name}`, "</handoff_result>"].join("\n"),
+          output: [
+            "<handoff_result>",
+            `Handed off to @${agent.name}`,
+            `New session: ${childSession.id}`,
+            "</handoff_result>",
+          ].join("\n"),
         }
       }
 
@@ -159,10 +194,17 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const session = await iife(async () => {
         if (params.task_id) {
-          const found = await Session.get(params.task_id).catch((e) => { log.warn("failed to lookup task session", { error: e, taskId: params.task_id }); return undefined })
+          const found = await Session.get(params.task_id).catch(e => {
+            log.warn("failed to lookup task session", { error: e, taskId: params.task_id })
+            return undefined
+          })
           if (found) {
             if (found.parentID !== ctx.sessionID) {
-              log.warn("task_id does not belong to this session", { taskId: params.task_id, parentID: found.parentID, sessionID: ctx.sessionID })
+              log.warn("task_id does not belong to this session", {
+                taskId: params.task_id,
+                parentID: found.parentID,
+                sessionID: ctx.sessionID,
+              })
               throw new Error(`Task ${params.task_id} does not belong to this session`)
             }
             return found
@@ -210,12 +252,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           todowrite: false,
           todoread: false,
           ...(hasTaskPermission ? {} : { task: false }),
-          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
+          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map(t => [t, false])),
         },
         parts: promptParts,
       })
 
-      const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+      const text = result.parts.findLast(x => x.type === "text")?.text ?? ""
 
       const output = [
         `task_id: ${session.id} (for resuming to continue this task if needed)`,

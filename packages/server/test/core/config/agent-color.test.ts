@@ -1,78 +1,52 @@
-import { test, expect } from "bun:test"
-import path from "path"
-import { tmpdir } from "../../fixture/fixture"
-import { Instance } from "../../../src/project/instance"
+import { expect, test } from "bun:test"
 import { Config } from "../../../src/core/config/config"
+import { Instance } from "../../../src/project/instance"
 import { Agent as AgentSvc } from "../../../src/runtime/agent/agent"
 import { Color } from "../../../src/util/color"
-import YAML from "yaml"
+import { tmpdir } from "../../fixture/fixture"
 
 test("agent color parsed from project config", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, ".0x0", "config.yaml"),
-        YAML.stringify({
-          $schema: "https://zeroxzero.ai/config.json",
-          agent: {
-            build: {
-              name: "Build",
-              color: "#FFA500",
-              actions: { "claude-code": { Read: "allow" } },
-              thinking_effort: "medium",
-            },
-            plan: {
-              name: "Plan",
-              color: "#7C3AED",
-              actions: { "claude-code": { Read: "allow" } },
-              thinking_effort: "high",
-            },
-          },
-        }),
-      )
+    config: {
+      agent: {
+        builder: {
+          color: "#FFA500",
+        },
+        planner: {
+          color: "#7C3AED",
+        },
+      },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const cfg = await Config.get()
-      expect(cfg.agent?.["build"]?.color).toBe("#FFA500")
-      expect(cfg.agent?.["plan"]?.color).toBe("#7C3AED")
+      expect(cfg.agent?.builder?.color).toBe("#FFA500")
+      expect(cfg.agent?.planner?.color).toBe("#7C3AED")
     },
   })
 })
 
 test("Agent.get includes color from config", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, ".0x0", "config.yaml"),
-        YAML.stringify({
-          $schema: "https://zeroxzero.ai/config.json",
-          agent: {
-            plan: {
-              name: "Plan",
-              color: "#A855F7",
-              actions: { "claude-code": { Read: "allow" } },
-              thinking_effort: "high",
-            },
-            build: {
-              name: "Build",
-              color: "#2563EB",
-              actions: { "claude-code": { Read: "allow" } },
-              thinking_effort: "medium",
-            },
-          },
-        }),
-      )
+    config: {
+      agent: {
+        planner: {
+          color: "#A855F7",
+        },
+        builder: {
+          color: "#2563EB",
+        },
+      },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const plan = await AgentSvc.get("plan")
+      const plan = await AgentSvc.get("planner")
       expect(plan?.color).toBe("#A855F7")
-      const build = await AgentSvc.get("build")
+      const build = await AgentSvc.get("builder")
       expect(build?.color).toBe("#2563EB")
     },
   })

@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { beforeEach, expect, mock, test } from "bun:test"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -49,9 +49,9 @@ const { tmpdir } = await import("../../fixture/fixture")
 
 test("headers are passed to transports when oauth is enabled (default)", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
+    init: async dir => {
       await Bun.write(
-        `${dir}/.0x0/config.yaml`,
+        `${dir}/.0x0/config.json`,
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -64,7 +64,7 @@ test("headers are passed to transports when oauth is enabled (default)", async (
               },
             },
           },
-        }),
+        })
       )
     },
   })

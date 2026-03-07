@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach } from "bun:test"
+import { beforeEach, expect, mock, test } from "bun:test"
 import { EventEmitter } from "events"
 
 // Track open() calls and control failure behavior
@@ -107,9 +107,9 @@ const { tmpdir } = await import("../../fixture/fixture")
 
 test("BrowserOpenFailed event is published when open() throws", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
+    init: async dir => {
       await Bun.write(
-        `${dir}/.0x0/config.yaml`,
+        `${dir}/.0x0/config.json`,
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -118,7 +118,7 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
               url: "https://example.com/mcp",
             },
           },
-        }),
+        })
       )
     },
   })
@@ -129,7 +129,7 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
       openShouldFail = true
 
       const events: Array<{ mcpName: string; url: string }> = []
-      const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, (evt) => {
+      const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, evt => {
         events.push(evt.properties)
       })
 
@@ -139,7 +139,7 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
       const authPromise = MCP.authenticate("test-oauth-server").catch(() => undefined)
 
       // Config.get() can be slow in tests, so give it plenty of time.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await new Promise(resolve => setTimeout(resolve, 2_000))
 
       // Stop the callback server and cancel any pending auth
       await McpOAuthCallback.stop()
@@ -158,9 +158,9 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
 
 test("BrowserOpenFailed event is NOT published when open() succeeds", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
+    init: async dir => {
       await Bun.write(
-        `${dir}/.0x0/config.yaml`,
+        `${dir}/.0x0/config.json`,
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -169,7 +169,7 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
               url: "https://example.com/mcp",
             },
           },
-        }),
+        })
       )
     },
   })
@@ -180,7 +180,7 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
       openShouldFail = false
 
       const events: Array<{ mcpName: string; url: string }> = []
-      const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, (evt) => {
+      const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, evt => {
         events.push(evt.properties)
       })
 
@@ -188,7 +188,7 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
       const authPromise = MCP.authenticate("test-oauth-server-2").catch(() => undefined)
 
       // Config.get() can be slow in tests; also covers the ~500ms open() error-detection window.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await new Promise(resolve => setTimeout(resolve, 2_000))
 
       // Stop the callback server and cancel any pending auth
       await McpOAuthCallback.stop()
@@ -207,9 +207,9 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
 
 test("open() is called with the authorization URL", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
+    init: async dir => {
       await Bun.write(
-        `${dir}/.0x0/config.yaml`,
+        `${dir}/.0x0/config.json`,
         JSON.stringify({
           $schema: "https://zeroxzero.ai/config.json",
           mcp: {
@@ -218,7 +218,7 @@ test("open() is called with the authorization URL", async () => {
               url: "https://example.com/mcp",
             },
           },
-        }),
+        })
       )
     },
   })
@@ -233,7 +233,7 @@ test("open() is called with the authorization URL", async () => {
       const authPromise = MCP.authenticate("test-oauth-server-3").catch(() => undefined)
 
       // Config.get() can be slow in tests; also covers the ~500ms open() error-detection window.
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await new Promise(resolve => setTimeout(resolve, 2_000))
 
       // Stop the callback server and cancel any pending auth
       await McpOAuthCallback.stop()

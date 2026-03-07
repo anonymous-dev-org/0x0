@@ -1,20 +1,19 @@
-import { Config } from "@/core/config/config"
+import path from "path"
+import { mergeDeep, pipe, sortBy, values } from "remeda"
 import z from "zod"
-import { Provider } from "@/provider/provider"
+import { Config } from "@/core/config/config"
+import { Global } from "@/core/global"
+import { Skill } from "@/integration/skill"
+import { PermissionNext } from "@/permission/next"
 import { Instance } from "@/project/instance"
+import { Provider } from "@/provider/provider"
 import { Truncate } from "@/tool/truncation"
+import { NamedError } from "@/util/error"
 import { Log } from "@/util/log"
-
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
-import { PermissionNext } from "@/permission/next"
-import { NamedError } from "@/util/error"
-import { mergeDeep, pipe, sortBy, values } from "remeda"
-import { Global } from "@/core/global"
-import path from "path"
-import { Skill } from "@/integration/skill"
 
 export namespace Agent {
   const log = Log.create({ service: "agent" })
@@ -41,9 +40,7 @@ export namespace Agent {
       prompt: z.string().optional(),
       options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
-      actions: z
-        .record(z.string(), z.enum(["allow", "deny", "ask"]))
-        .default({}),
+      actions: z.record(z.string(), z.enum(["allow", "deny", "ask"])).default({}),
       thinkingEffort: z.string().optional(),
       knowledgeBase: z.array(z.string()).default([]),
     })
@@ -54,15 +51,15 @@ export namespace Agent {
 
   // Backward-compat: convert legacy tools_allowed IDs to actions
   const LEGACY_TOOL_TO_ACTIONS: Record<string, string[]> = {
-    bash:          ["Bash"],
-    read:          ["Read"],
-    search:        ["Glob", "Grep"],
+    bash: ["Bash"],
+    read: ["Read"],
+    search: ["Glob", "Grep"],
     search_remote: ["WebFetch", "WebSearch"],
-    apply_patch:   ["Edit", "Write", "MultiEdit", "NotebookEdit"],
-    task:          ["Task"],
-    todowrite:     ["TodoWrite"],
-    question:      ["AskUserQuestion"],
-    plan:          ["Plan"],
+    apply_patch: ["Edit", "Write", "MultiEdit", "NotebookEdit"],
+    task: ["Task"],
+    todowrite: ["TodoWrite"],
+    question: ["AskUserQuestion"],
+    plan: ["Plan"],
   }
 
   function convertToolsAllowedToActions(toolsAllowed: string[]): Record<string, "allow"> {
@@ -83,7 +80,7 @@ export namespace Agent {
    */
   function migrateNestedActions(
     agentKey: string,
-    actions: Record<string, unknown>,
+    actions: Record<string, unknown>
   ): Record<string, "allow" | "deny" | "ask"> {
     const flat: Record<string, "allow" | "deny" | "ask"> = {}
     let migrated = false
@@ -108,23 +105,56 @@ export namespace Agent {
   // Map tool names → permission keys
   function toolToPermission(toolName: string): string {
     switch (toolName) {
-      case "Bash": return "bash"
+      case "Bash":
+        return "bash"
       case "Edit":
       case "Write":
       case "MultiEdit":
-      case "NotebookEdit": return "edit"
-      case "Read": return "read"
+      case "NotebookEdit":
+      case "ApplyPatch":
+        return "edit"
+      case "Read":
+        return "read"
       case "Glob":
-      case "Grep": return "search"
-      case "Task": return "task"
+      case "Grep":
+        return "search"
+      case "Task":
+        return "task"
       case "WebFetch":
-      case "WebSearch": return "web"
-      case "TodoWrite": return "todowrite"
-      case "AskUserQuestion": return "question"
-      case "Plan": return "plan"
-      default: return toolName.toLowerCase()
+      case "WebSearch":
+        return "search_remote"
+      case "TodoWrite":
+        return "todowrite"
+      case "AskUserQuestion":
+        return "question"
+      case "Plan":
+        return "plan"
+      default:
+        return toolName.toLowerCase()
     }
   }
+
+  const ALL_KNOWN_ACTIONS = [
+    "Bash",
+    "Read",
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "ApplyPatch",
+    "Glob",
+    "Grep",
+    "Task",
+    "WebFetch",
+    "WebSearch",
+    "TodoWrite",
+    "AskUserQuestion",
+    "Plan",
+    "Docs",
+    "Lsp",
+  ] as const
+
+  const ALL_PERMISSION_KEYS = [...new Set(ALL_KNOWN_ACTIONS.map(toolToPermission))]
 
   function derivePermissionKeysFromActions(actions: Record<string, string>): string[] {
     const keys = new Set<string>()
@@ -144,7 +174,7 @@ export namespace Agent {
       external_directory: {
         "*": "ask",
         [Truncate.GLOB]: "allow",
-        ...Object.fromEntries(skillDirs.map((dir) => [path.join(dir, "*"), "allow"])),
+        ...Object.fromEntries(skillDirs.map(dir => [path.join(dir, "*"), "allow"])),
       },
       question: "deny",
       // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
@@ -170,7 +200,7 @@ export namespace Agent {
           PermissionNext.fromConfig({
             "*": "deny",
           }),
-          user,
+          user
         ),
         options: {},
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
@@ -188,7 +218,7 @@ export namespace Agent {
           PermissionNext.fromConfig({
             "*": "deny",
           }),
-          user,
+          user
         ),
         prompt: PROMPT_TITLE,
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
@@ -205,7 +235,7 @@ export namespace Agent {
           PermissionNext.fromConfig({
             "*": "deny",
           }),
-          user,
+          user
         ),
         prompt: PROMPT_SUMMARY,
         knowledgeBase: [...(cfg.knowledge_base ?? [])],
@@ -267,14 +297,14 @@ export namespace Agent {
           defaults,
           user,
           PermissionNext.fromConfig({ "*": "deny" }),
-          PermissionNext.fromConfig(Object.fromEntries(permKeys.map((k) => [k, "allow" as const]))),
+          PermissionNext.fromConfig(Object.fromEntries(permKeys.map(k => [k, "allow" as const])))
         )
       }
 
       if (value.permission) {
         item.permission = PermissionNext.merge(
           item.permission,
-          PermissionNext.fromConfig(value.permission as Parameters<typeof PermissionNext.fromConfig>[0]),
+          PermissionNext.fromConfig(value.permission as Parameters<typeof PermissionNext.fromConfig>[0])
         )
       }
 
@@ -315,19 +345,31 @@ export namespace Agent {
         if (!known.has(k)) item.options[k] = v
       }
 
+      if (key === "builder") {
+        const builderPermKeys = new Set(derivePermissionKeysFromActions(item.actions ?? {}))
+        const allPermKeys = ALL_PERMISSION_KEYS
+        const denyKeys = allPermKeys.filter(k => !builderPermKeys.has(k))
+        if (denyKeys.length > 0) {
+          item.permission = PermissionNext.merge(
+            item.permission,
+            PermissionNext.fromConfig(Object.fromEntries(denyKeys.map(k => [k, "deny" as const])))
+          )
+        }
+      }
+
       if (key === "planner") {
         const plannerPermKeys = derivePermissionKeysFromActions(item.actions ?? {})
         item.permission = PermissionNext.merge(
           item.permission,
           PermissionNext.fromConfig({ "*": "deny" }),
-          PermissionNext.fromConfig(Object.fromEntries(plannerPermKeys.map((k) => [k, "allow" as const]))),
+          PermissionNext.fromConfig(Object.fromEntries(plannerPermKeys.map(k => [k, "allow" as const]))),
           PermissionNext.fromConfig({
             read: { "*.env": "ask", "*.env.*": "ask", "*.env.example": "allow" },
             edit: { ".zeroxzero/plans/*": "allow" },
             external_directory: {
               [path.join(Global.Path.data, "plans", "*")]: "allow",
             },
-          }),
+          })
         )
       }
     }
@@ -336,7 +378,7 @@ export namespace Agent {
     for (const name in result) {
       const agent = result[name]
       if (!agent) continue
-      const explicit = agent.permission.some((r) => {
+      const explicit = agent.permission.some(r => {
         if (r.permission !== "external_directory") return false
         if (r.action !== "deny") return false
         return r.pattern === Truncate.GLOB
@@ -345,7 +387,7 @@ export namespace Agent {
 
       agent.permission = PermissionNext.merge(
         agent.permission,
-        PermissionNext.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } }),
+        PermissionNext.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } })
       )
     }
 
@@ -353,7 +395,7 @@ export namespace Agent {
   })
 
   export async function get(agent: string) {
-    return state().then((x) => x[agent])
+    return state().then(x => x[agent])
   }
 
   export async function list() {
@@ -361,7 +403,7 @@ export namespace Agent {
     return pipe(
       await state(),
       values(),
-      sortBy([(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "planner"), "desc"]),
+      sortBy([x => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "planner"), "desc"])
     )
   }
 
@@ -379,14 +421,15 @@ export namespace Agent {
     const preferred = agents.planner
     if (preferred && preferred.hidden !== true) return preferred.name
 
-    const visible = Object.values(agents).find((a) => a.hidden !== true)
+    const visible = Object.values(agents).find(a => a.hidden !== true)
     if (!visible) throw new Error("no visible agent found")
     return visible.name
   }
 
-  export async function generate(
-    _input: { description: string; model?: { providerID: string; modelID: string } },
-  ): Promise<{ identifier: string; whenToUse: string; systemPrompt: string }> {
+  export async function generate(_input: {
+    description: string
+    model?: { providerID: string; modelID: string }
+  }): Promise<{ identifier: string; whenToUse: string; systemPrompt: string }> {
     throw new NamedError.Unknown({ message: "Agent generation is not supported in CLI-delegating mode." })
   }
 }

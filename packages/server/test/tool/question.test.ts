@@ -1,7 +1,7 @@
-import { describe, expect, test, spyOn, beforeEach, afterEach } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { z } from "zod"
-import { QuestionTool } from "../../src/tool/question"
 import * as QuestionModule from "../../src/runtime/question"
+import { QuestionTool } from "../../src/tool/question"
 
 const ctx = {
   sessionID: "test-session",
@@ -54,7 +54,10 @@ describe("tool.question", () => {
       {
         question: "What is your favorite animal?",
         header: "This Header is Over 12",
-        options: [{ label: "Dog", description: "Man's best friend" }],
+        options: [
+          { label: "Dog", description: "Man's best friend" },
+          { label: "Cat", description: "Independent and curious" },
+        ],
       },
     ]
 

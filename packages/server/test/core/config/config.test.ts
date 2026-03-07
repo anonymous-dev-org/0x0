@@ -1,14 +1,15 @@
-import { test, expect } from "bun:test"
+import { expect, test } from "bun:test"
+import path from "path"
 import { Config } from "../../../src/core/config/config"
 import { Instance } from "../../../src/project/instance"
 import { tmpdir } from "../../fixture/fixture"
-import path from "path"
-import fs from "fs/promises"
 
-async function writeProjectConfig(dir: string, content: string) {
+async function writeProjectConfig(dir: string, config: Record<string, unknown>) {
   const configDir = path.join(dir, ".0x0")
-  await fs.mkdir(configDir, { recursive: true })
-  await Bun.write(path.join(configDir, "config.yaml"), content)
+  await Bun.write(
+    path.join(configDir, "config.json"),
+    JSON.stringify({ $schema: "https://zeroxzero.ai/config.json", ...config }, null, 2)
+  )
 }
 
 test("loads config with defaults when no files exist", async () => {
@@ -25,18 +26,13 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
-test("loads project config from .0x0/config.yaml", async () => {
+test("loads project config from .0x0/config.json", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
-      await writeProjectConfig(
-        dir,
-        `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
-$schema: https://zeroxzero.ai/config.json
-model: anthropic/claude-sonnet-4-20250514
-knowledge_base:
-  - project note
-`,
-      )
+    init: async dir => {
+      await writeProjectConfig(dir, {
+        model: "anthropic/claude-sonnet-4-20250514",
+        knowledge_base: ["project note"],
+      })
     },
   })
 
@@ -50,13 +46,13 @@ knowledge_base:
   })
 })
 
-test("updateProject writes .0x0/config.yaml", async () => {
+test("updateProject writes .0x0/config.json", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       await Config.updateProject({ knowledge_base: ["first", "second"] })
-      const projectConfigPath = path.join(tmp.path, ".0x0", "config.yaml")
+      const projectConfigPath = path.join(tmp.path, ".0x0", "config.json")
       expect(await Bun.file(projectConfigPath).exists()).toBe(true)
       const config = await Config.getProject()
       expect(config.knowledge_base).toEqual(["first", "second"])
@@ -64,17 +60,22 @@ test("updateProject writes .0x0/config.yaml", async () => {
   })
 })
 
-test("handles environment variable substitution in YAML", async () => {
+test("handles environment variable substitution in config", async () => {
   process.env.TEST_VAR = "anthropic/test-model"
   try {
     await using tmp = await tmpdir({
-      init: async (dir) => {
-        await writeProjectConfig(
-          dir,
-          `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
-$schema: https://zeroxzero.ai/config.json
-model: "{env:TEST_VAR}"
-`,
+      init: async dir => {
+        const configDir = path.join(dir, ".0x0")
+        await Bun.write(
+          path.join(configDir, "config.json"),
+          JSON.stringify(
+            {
+              $schema: "https://zeroxzero.ai/config.json",
+              model: "{env:TEST_VAR}",
+            },
+            null,
+            2
+          )
         )
       },
     })
@@ -91,16 +92,21 @@ model: "{env:TEST_VAR}"
   }
 })
 
-test("handles file inclusion substitution in YAML", async () => {
+test("handles file inclusion substitution in config", async () => {
   await using tmp = await tmpdir({
-    init: async (dir) => {
+    init: async dir => {
       await Bun.write(path.join(dir, "included.txt"), "anthropic/test-model")
-      await writeProjectConfig(
-        dir,
-        `# yaml-language-server: $schema=https://zeroxzero.ai/config.json
-$schema: https://zeroxzero.ai/config.json
-model: "{file:../included.txt}"
-`,
+      const configDir = path.join(dir, ".0x0")
+      await Bun.write(
+        path.join(configDir, "config.json"),
+        JSON.stringify(
+          {
+            $schema: "https://zeroxzero.ai/config.json",
+            model: "{file:../included.txt}",
+          },
+          null,
+          2
+        )
       )
     },
   })

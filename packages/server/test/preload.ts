@@ -1,10 +1,11 @@
 // IMPORTANT: Set env vars BEFORE any imports from src/ directory
 // xdg-basedir reads env vars at import time, so we must set these first
+
+import { afterAll } from "bun:test"
+import fsSync from "fs"
+import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import fs from "fs/promises"
-import fsSync from "fs"
-import { afterAll } from "bun:test"
 
 const dir = path.join(os.tmpdir(), "zeroxzero-test-data-" + process.pid)
 await fs.mkdir(dir, { recursive: true })
@@ -29,7 +30,7 @@ process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 // Write an empty config.yaml to initialize the config directory
 const configDir = path.join(dir, "config", "0x0")
 await fs.mkdir(configDir, { recursive: true })
-await fs.writeFile(path.join(configDir, "config.yaml"), "")
+await fs.writeFile(path.join(configDir, "config.json"), "{}")
 
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "zeroxzero")

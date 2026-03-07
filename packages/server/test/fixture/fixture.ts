@@ -2,8 +2,6 @@ import { $ } from "bun"
 import * as fs from "fs/promises"
 import os from "os"
 import path from "path"
-import type { Config } from "../../src/core/config/config"
-import YAML from "yaml"
 
 // Strip null bytes from paths (defensive fix for CI environment issues)
 function sanitizePath(p: string): string {
@@ -28,11 +26,15 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
     const configDir = path.join(dirpath, ".0x0")
     await fs.mkdir(configDir, { recursive: true })
     await Bun.write(
-      path.join(configDir, "config.yaml"),
-      YAML.stringify({
-        $schema: "https://zeroxzero.ai/config.json",
-        ...options.config,
-      }),
+      path.join(configDir, "config.json"),
+      JSON.stringify(
+        {
+          $schema: "https://zeroxzero.ai/config.json",
+          ...options.config,
+        },
+        null,
+        2
+      )
     )
   }
   const extra = await options?.init?.(dirpath)

@@ -1,9 +1,9 @@
-import { test, expect } from "bun:test"
+import { expect, test } from "bun:test"
 import path from "path"
-import { tmpdir } from "../../fixture/fixture"
+import { PermissionNext } from "../../../src/permission/next"
 import { Instance } from "../../../src/project/instance"
 import { Agent } from "../../../src/runtime/agent/agent"
-import { PermissionNext } from "../../../src/permission/next"
+import { tmpdir } from "../../fixture/fixture"
 
 // Helper to evaluate permission for a tool with wildcard pattern
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
@@ -17,7 +17,7 @@ test("returns default native agents when no config", async () => {
     directory: tmp.path,
     fn: async () => {
       const agents = await Agent.list()
-      const names = agents.map((a) => a.name)
+      const names = agents.map(a => a.name)
       expect(names).toContain("builder")
       expect(names).toContain("planner")
       expect(names).toContain("compaction")
@@ -201,7 +201,7 @@ test("agent disable removes agent from list", async () => {
       const explore = await Agent.get("explore")
       expect(explore).toBeUndefined()
       const agents = await Agent.list()
-      const names = agents.map((a) => a.name)
+      const names = agents.map(a => a.name)
       expect(names).not.toContain("explore")
     },
   })
@@ -418,13 +418,24 @@ test("default permission includes doom_loop and external_directory as ask", asyn
   })
 })
 
-test("search_remote is allowed by default", async () => {
+test("search_remote is denied for builder by default", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const build = await Agent.get("builder")
-      expect(evalPerm(build, "search_remote")).toBe("allow")
+      expect(evalPerm(build, "search_remote")).toBe("deny")
+    },
+  })
+})
+
+test("search_remote is allowed for planner by default", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const planner = await Agent.get("planner")
+      expect(evalPerm(planner, "search_remote")).toBe("allow")
     },
   })
 })
@@ -542,7 +553,7 @@ test("explicit Truncate.GLOB deny is respected", async () => {
 test("skill directories are allowed for external_directory", async () => {
   await using tmp = await tmpdir({
     git: true,
-    init: async (dir) => {
+    init: async dir => {
       const skillDir = path.join(dir, ".zeroxzero", "skill", "perm-skill")
       await Bun.write(
         path.join(skillDir, "SKILL.md"),
@@ -552,7 +563,7 @@ description: Permission skill.
 ---
 
 # Permission Skill
-`,
+`
       )
     },
   })

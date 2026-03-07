@@ -1,24 +1,24 @@
-import { Log } from "@/util/log"
-import path from "path"
-import os from "os"
-import z from "zod"
-import { Filesystem } from "@/util/filesystem"
-import { mergeDeep, unique } from "remeda"
-import { Global } from "../global"
-import fs from "fs/promises"
-import { lazy } from "@/util/lazy"
-import { NamedError } from "@/util/error"
-import { Instance } from "@/project/instance"
-import { LSPServer } from "@/integration/lsp/server"
-import { BunProc } from "@/integration/bun"
-import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
+import { mergeDeep, unique } from "remeda"
+import z from "zod"
 import { Bus } from "@/core/bus"
 import { GlobalBus } from "@/core/bus/global"
+import { BunProc } from "@/integration/bun"
+import { LSPServer } from "@/integration/lsp/server"
+import { Instance } from "@/project/instance"
 import { Event } from "@/server/event"
-import { proxied } from "@/util/proxied"
-import { iife } from "@/util/iife"
 import PROMPT_DEFAULT from "@/session/prompt/default_system_prompt.txt"
+import { NamedError } from "@/util/error"
+import { Filesystem } from "@/util/filesystem"
+import { iife } from "@/util/iife"
+import { lazy } from "@/util/lazy"
+import { Log } from "@/util/log"
+import { proxied } from "@/util/proxied"
+import { Global } from "../global"
+import { ConfigMarkdown } from "./markdown"
 export namespace Config {
   const ModelId = z.string()
 
@@ -39,7 +39,7 @@ export namespace Config {
   function legacyToolIssue(tool: string) {
     const replacement = LEGACY_TOOL_KEYS[tool as keyof typeof LEGACY_TOOL_KEYS]
     return replacement
-      ? `Legacy tool key \"${tool}\" is no longer supported in tools config. Use \"${replacement}\" instead.`
+      ? `Legacy tool key "${tool}" is no longer supported in tools config. Use "${replacement}" instead.`
       : undefined
   }
 
@@ -49,7 +49,7 @@ export namespace Config {
     }
     const replacement = LEGACY_TOOL_KEYS[permission as keyof typeof LEGACY_TOOL_KEYS]
     return replacement
-      ? `Legacy permission key \"${permission}\" is no longer supported. Use \"${replacement}\" instead.`
+      ? `Legacy permission key "${permission}" is no longer supported. Use "${replacement}" instead.`
       : undefined
   }
 
@@ -103,11 +103,17 @@ export namespace Config {
           thinking_effort: "medium",
           description: "The default agent. Executes tools based on configured permissions.",
           actions: {
-            Bash: "allow", Read: "allow", Edit: "allow", Write: "allow",
-            Glob: "allow", Grep: "allow",
-            WebFetch: "allow", WebSearch: "allow", Task: "allow",
-            TodoWrite: "allow", AskUserQuestion: "allow",
-            ApplyPatch: "allow", Docs: "allow",
+            Bash: "allow",
+            Read: "allow",
+            Edit: "allow",
+            Write: "allow",
+            Glob: "allow",
+            Grep: "allow",
+            Task: "allow",
+            TodoWrite: "allow",
+            AskUserQuestion: "allow",
+            ApplyPatch: "allow",
+            Docs: "allow",
           },
           prompt: [
             "You are the executioner. You take the plan and ship it. No thinking in circles, no second-guessing, no over-engineering.",
@@ -123,7 +129,7 @@ export namespace Config {
             "- Every line earns its place. Less is more.",
             "- `any` and `as` are banned. Type it properly or don't type it at all.",
             "- No nesting deeper than 3 levels. One function, one job. If it doesn't fit on a screen, split it.",
-            '- Variable and function names describe exactly what they store and do. `x` for a user email is a crime. `doStuff()` is a felony.',
+            "- Variable and function names describe exactly what they store and do. `x` for a user email is a crime. `doStuff()` is a felony.",
             "- No comments unless the logic is genuinely non-obvious. The code speaks for itself. `// increment i` gets your keyboard confiscated.",
             "- No clever code. If you're proud of how tricky it is, rewrite it to be obviously correct.",
             "- Don't DRY until you've repeated yourself three times. Bad abstractions are worse than duplication.",
@@ -146,10 +152,17 @@ export namespace Config {
           thinking_effort: "high",
           description: "Planning agent. Disallows all edit tools.",
           actions: {
-            Read: "allow", Glob: "allow", Grep: "allow",
-            WebFetch: "allow", WebSearch: "allow", Task: "allow",
-            AskUserQuestion: "allow", Plan: "allow", Docs: "allow",
+            Read: "allow",
+            Glob: "allow",
+            Grep: "allow",
+            WebFetch: "allow",
+            WebSearch: "allow",
+            Task: "allow",
+            AskUserQuestion: "allow",
+            Plan: "allow",
+            Docs: "allow",
           },
+
           prompt: [
             "You are the architect. Your sole deliverable is a detailed, verified implementation plan with a structured task list. You do not write code. You do not run commands. You do not execute anything. You research, reason, and produce a plan so precise that a developer — or an automated agent — can execute it without asking a single clarifying question.",
             "",
@@ -187,7 +200,7 @@ export namespace Config {
             "- [ ] **Why**: One sentence connecting this item to the requirement",
             '- [ ] **Tests**: What to test for this item (or "N/A — covered by item #X")',
             "",
-            'If a to-do item doesn\'t have a file path and specific implementation details, delete it and rewrite it. "Implement the feature" is not a to-do — it\'s a wish.',
+            "If a to-do item doesn't have a file path and specific implementation details, delete it and rewrite it. \"Implement the feature\" is not a to-do — it's a wish.",
             "",
             "After writing the plan, review it against the requirements from Step 1. Every requirement must map to at least one to-do item. Every to-do item must map to a requirement. If there's a gap, fix it before presenting.",
             "",
@@ -221,7 +234,7 @@ export namespace Config {
             "- `content`: the complete markdown plan exactly as it will be presented (goal, requirements, numbered checklist, risks)",
             '- `todos`: the numbered task items as a structured list, all status="pending", priority derived from the plan',
             "",
-            "Do not skip this step. The saved file is builder's persistent reference during execution. If you revise the plan later (Step 6 → \"Keep iterating\"), call Plan again to overwrite it.",
+            'Do not skip this step. The saved file is builder\'s persistent reference during execution. If you revise the plan later (Step 6 → "Keep iterating"), call Plan again to overwrite it.',
             "",
             "STEP 6 — HAND OFF",
             "You may only reach this step after the Plan tool has been called successfully in Step 5.",
@@ -258,9 +271,9 @@ export namespace Config {
   }
 
   async function discoverGlobalConfigFiles() {
-    const candidates = configFiles.map((file) => path.join(Global.Path.config, file))
+    const candidates = configFiles.map(file => path.join(Global.Path.config, file))
     const existing = await Promise.all(
-      candidates.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)),
+      candidates.map(async candidate => ((await Bun.file(candidate).exists()) ? candidate : undefined))
     )
     return existing.filter((file): file is string => Boolean(file))
   }
@@ -281,11 +294,11 @@ export namespace Config {
   async function discoverProjectConfigFiles(start: string, stop?: string) {
     const files = [] as string[]
     for (const dir of walkUpDirectories(start, stop).toReversed()) {
-      const candidates = projectConfigDirs.flatMap((prefix) =>
-        configFiles.map((file) => (prefix ? path.join(dir, prefix, file) : path.join(dir, file))),
+      const candidates = projectConfigDirs.flatMap(prefix =>
+        configFiles.map(file => (prefix ? path.join(dir, prefix, file) : path.join(dir, file)))
       )
       const existing = await Promise.all(
-        candidates.map(async (candidate) => ((await Bun.file(candidate).exists()) ? candidate : undefined)),
+        candidates.map(async candidate => ((await Bun.file(candidate).exists()) ? candidate : undefined))
       )
       const found = existing.filter((file): file is string => Boolean(file))
       if (found.length > 1) {
@@ -340,7 +353,7 @@ export namespace Config {
           targets: [".zeroxzero"],
           start: Instance.directory,
           stop: Instance.worktree,
-        }),
+        })
       )),
       // Always scan ~/.zeroxzero/ (user home directory)
       ...(await Array.fromAsync(
@@ -348,7 +361,7 @@ export namespace Config {
           targets: [".zeroxzero"],
           start: Global.Path.home,
           stop: Global.Path.home,
-        }),
+        })
       )),
     ]
 
@@ -370,7 +383,7 @@ export namespace Config {
         iife(async () => {
           const shouldInstall = await needsInstall(dir)
           if (shouldInstall) await installDependencies(dir)
-        }),
+        })
       )
 
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
@@ -404,7 +417,7 @@ export namespace Config {
   })
 
   export async function waitForDependencies() {
-    const deps = await state().then((x) => x.deps)
+    const deps = await state().then(x => x.deps)
     if (!deps.length) return
     const start = performance.now()
     await Promise.all(deps)
@@ -431,8 +444,8 @@ export namespace Config {
         // TODO: get rid of this case (see: https://github.com/oven-sh/bun/issues/19936)
         ...(proxied() ? ["--no-cache"] : []),
       ],
-      { cwd: dir },
-    ).catch((e) => log.warn("bun install failed", { error: e }))
+      { cwd: dir }
+    ).catch(e => log.warn("bun install failed", { error: e }))
   }
 
   async function isWritable(dir: string) {
@@ -486,7 +499,7 @@ export namespace Config {
       dot: true,
       cwd: dir,
     })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
+      const md = await ConfigMarkdown.parse(item).catch(async err => {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse command ${item}`
@@ -526,7 +539,7 @@ export namespace Config {
       dot: true,
       cwd: dir,
     })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
+      const md = await ConfigMarkdown.parse(item).catch(async err => {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse agent ${item}`
@@ -602,7 +615,7 @@ export namespace Config {
         .union([McpOAuth, z.literal(false)])
         .optional()
         .describe(
-          "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.",
+          "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection."
         ),
       timeout: z
         .number()
@@ -675,7 +688,7 @@ export namespace Config {
           skill: PermissionRule.optional(),
         })
         .catchall(PermissionRule)
-        .or(PermissionAction),
+        .or(PermissionAction)
     )
     .superRefine((value, ctx) => {
       if (typeof value === "string") return
@@ -756,7 +769,7 @@ export namespace Config {
             z.enum(["allow", "deny", "ask"]),
             // Backward-compat: nested per-provider format (migrated to flat in agent.ts)
             z.record(z.string(), z.enum(["allow", "deny", "ask"])),
-          ]),
+          ])
         )
         .optional()
         .describe("Tool action policies (e.g. Bash: allow, Edit: ask)"),
@@ -1001,12 +1014,12 @@ export namespace Config {
                     .object({
                       disabled: z.boolean().optional().describe("Disable this variant for the model"),
                     })
-                    .catchall(z.unknown()),
+                    .catchall(z.unknown())
                 )
                 .optional()
                 .describe("Variant-specific configuration"),
             })
-            .passthrough(),
+            .passthrough()
         )
         .optional(),
       options: z
@@ -1046,7 +1059,7 @@ export namespace Config {
         .enum(["manual", "auto", "disabled"])
         .optional()
         .describe(
-          "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing",
+          "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing"
         ),
       autoshare: z
         .boolean()
@@ -1056,17 +1069,17 @@ export namespace Config {
         .union([z.boolean(), z.literal("notify")])
         .optional()
         .describe(
-          "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",
+          "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications"
         ),
       model: ModelId.describe("Model to use in the format of provider/model, eg anthropic/claude-2").optional(),
       small_model: ModelId.describe(
-        "Small model to use for tasks like title generation in the format of provider/model",
+        "Small model to use for tasks like title generation in the format of provider/model"
       ).optional(),
       default_agent: z
         .string()
         .optional()
         .describe(
-          "Default agent to use when none is specified. Falls back to 'planner' if not set or if the specified agent is invalid.",
+          "Default agent to use when none is specified. Falls back to 'planner' if not set or if the specified agent is invalid."
         ),
       username: z
         .string()
@@ -1090,7 +1103,7 @@ export namespace Config {
                 enabled: z.boolean(),
               })
               .strict(),
-          ]),
+          ])
         )
         .optional()
         .describe("MCP (Model Context Protocol) server configurations"),
@@ -1104,7 +1117,7 @@ export namespace Config {
               command: z.array(z.string()).optional(),
               environment: z.record(z.string(), z.string()).optional(),
               extensions: z.array(z.string()).optional(),
-            }),
+            })
           ),
         ])
         .optional(),
@@ -1124,15 +1137,15 @@ export namespace Config {
                 env: z.record(z.string(), z.string()).optional(),
                 initialization: z.record(z.string(), z.any()).optional(),
               }),
-            ]),
+            ])
           ),
         ])
         .optional()
         .refine(
-          (data) => {
+          data => {
             if (!data) return true
             if (typeof data === "boolean") return true
-            const serverIds = new Set(Object.values(LSPServer).map((s) => s.id))
+            const serverIds = new Set(Object.values(LSPServer).map(s => s.id))
 
             return Object.entries(data).every(([id, config]) => {
               if (config.disabled) return true
@@ -1142,7 +1155,7 @@ export namespace Config {
           },
           {
             error: "For custom LSP servers, 'extensions' array is required.",
-          },
+          }
         ),
       disable_lsp_download: z.boolean().optional().describe("Disable automatic LSP server downloads"),
       disable_filetime_check: z.boolean().optional().describe("Disable file modification time checks"),
@@ -1166,14 +1179,14 @@ export namespace Config {
           prompt: z.string().optional().describe("Prompt used for session compaction"),
         })
         .refine(
-          (value) => {
+          value => {
             const hasProvider = value.provider !== undefined
             const hasModel = value.model !== undefined
             return hasProvider === hasModel
           },
           {
             error: "compaction.provider and compaction.model must be set together",
-          },
+          }
         )
         .optional(),
       experimental: z
@@ -1198,7 +1211,10 @@ export namespace Config {
           disable_filewatcher: z.boolean().optional().describe("Disable the file watcher"),
           icon_discovery: z.boolean().optional().describe("Enable icon discovery for projects"),
           exa: z.boolean().optional().describe("Enable Exa search integration"),
-          context7_api_key: z.string().optional().describe("Context7 API key — enables the docs tool for library documentation search"),
+          context7_api_key: z
+            .string()
+            .optional()
+            .describe("Context7 API key — enables the docs tool for library documentation search"),
           bash_default_timeout_ms: z
             .number()
             .int()
@@ -1241,9 +1257,9 @@ export namespace Config {
 
   async function loadFile(filepath: string): Promise<Info> {
     log.info("loading", { path: filepath })
-    let text = await Bun.file(filepath)
+    const text = await Bun.file(filepath)
       .text()
-      .catch((err) => {
+      .catch(err => {
         if (err.code === "ENOENT") return
         throw new JsonError({ path: filepath }, { cause: err })
       })
@@ -1262,7 +1278,7 @@ export namespace Config {
       const lines = text.split("\n")
 
       for (const match of fileMatches) {
-        const lineIndex = lines.findIndex((line) => line.includes(match))
+        const lineIndex = lines.findIndex(line => line.includes(match))
         if (lineIndex !== -1 && (lines[lineIndex] ?? "").trim().startsWith("//")) {
           continue // Skip if line is commented
         }
@@ -1274,7 +1290,7 @@ export namespace Config {
         const fileContent = (
           await Bun.file(resolvedPath)
             .text()
-            .catch((error) => {
+            .catch(error => {
               const errMsg = `bad file reference: "${match}"`
               if (error.code === "ENOENT") {
                 throw new InvalidError(
@@ -1282,7 +1298,7 @@ export namespace Config {
                     path: configFilepath,
                     message: errMsg + ` ${resolvedPath} does not exist`,
                   },
-                  { cause: error },
+                  { cause: error }
                 )
               }
               throw new InvalidError({ path: configFilepath, message: errMsg }, { cause: error })
@@ -1308,8 +1324,8 @@ export namespace Config {
     if (parsed.success) {
       if (!parsed.data.$schema) {
         parsed.data.$schema = configSchemaURL
-        await Bun.write(configFilepath, formatJsonConfig(parsed.data)).catch((e) =>
-          log.warn("failed to write schema metadata to config", { error: e }),
+        await Bun.write(configFilepath, formatJsonConfig(parsed.data)).catch(e =>
+          log.warn("failed to write schema metadata to config", { error: e })
         )
       }
       return parsed.data
@@ -1325,7 +1341,7 @@ export namespace Config {
     z.object({
       path: z.string(),
       message: z.string().optional(),
-    }),
+    })
   )
 
   export const ConfigDirectoryTypoError = NamedError.create(
@@ -1334,7 +1350,7 @@ export namespace Config {
       path: z.string(),
       dir: z.string(),
       suggestion: z.string(),
-    }),
+    })
   )
 
   export const ConflictError = NamedError.create(
@@ -1342,7 +1358,7 @@ export namespace Config {
     z.object({
       scope: z.enum(["global", "project"]),
       files: z.array(z.string()).min(2),
-    }),
+    })
   )
 
   export const InvalidError = NamedError.create(
@@ -1351,11 +1367,11 @@ export namespace Config {
       path: z.string(),
       issues: z.custom<z.core.$ZodIssue[]>().optional(),
       message: z.string().optional(),
-    }),
+    })
   )
 
   export async function get() {
-    return state().then((x) => x.config)
+    return state().then(x => x.config)
   }
 
   export async function getGlobal() {
@@ -1388,7 +1404,7 @@ export namespace Config {
   }
 
   function globalConfigFile() {
-    const candidates = configFiles.map((file) => path.join(Global.Path.config, file))
+    const candidates = configFiles.map(file => path.join(Global.Path.config, file))
     for (const file of candidates) {
       if (existsSync(file)) return file
     }
@@ -1419,7 +1435,7 @@ export namespace Config {
     const filepath = globalConfigFile()
     const before = await Bun.file(filepath)
       .text()
-      .catch((err) => {
+      .catch(err => {
         if (err.code === "ENOENT") return ""
         throw new JsonError({ path: filepath }, { cause: err })
       })
@@ -1473,7 +1489,9 @@ export namespace Config {
    */
   export async function migrateGlobal(): Promise<void> {
     const filepath = globalConfigFile()
-    const rawText = await Bun.file(filepath).text().catch(() => "")
+    const rawText = await Bun.file(filepath)
+      .text()
+      .catch(() => "")
     if (!rawText.trim()) return
 
     let existing: Info
@@ -1501,6 +1519,6 @@ export namespace Config {
   }
 
   export async function directories() {
-    return state().then((x) => x.directories)
+    return state().then(x => x.directories)
   }
 }
