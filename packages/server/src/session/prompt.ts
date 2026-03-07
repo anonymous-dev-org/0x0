@@ -43,7 +43,6 @@ import { SessionRevert } from "./revert"
 import { SessionStatus } from "./status"
 import { SessionSummary } from "./summary"
 
-// @ts-expect-error
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 export namespace SessionPrompt {
