@@ -27,3 +27,5 @@ target
 0x0-dev
 logs/
 *.bun-build
+
+.zeroxzero

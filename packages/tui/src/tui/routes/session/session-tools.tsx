@@ -1,39 +1,39 @@
-import path from "path"
-import stripAnsi from "strip-ansi"
-import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
-import { Dynamic } from "solid-js/web"
-import { BoxRenderable, RGBA, TextAttributes } from "@opentui/core"
-import { useRenderer, type JSX } from "@opentui/solid"
-import type { Tool } from "@anonymous-dev/0x0-server/tool/tool"
-import type { ReadTool } from "@anonymous-dev/0x0-server/tool/read"
-import type { WriteTool } from "@anonymous-dev/0x0-server/tool/write"
-import { BashTool } from "@anonymous-dev/0x0-server/tool/bash"
-import type { SearchTool } from "@anonymous-dev/0x0-server/tool/search"
-import type { SearchRemoteTool } from "@anonymous-dev/0x0-server/tool/search_remote"
+import { Global } from "@anonymous-dev/0x0-server/core/global"
+import type { AssistantMessage, ToolPart } from "@anonymous-dev/0x0-server/server/types"
+import type { ApplyPatchTool } from "@anonymous-dev/0x0-server/tool/apply_patch"
+import type { BashTool } from "@anonymous-dev/0x0-server/tool/bash"
+import type { EditTool } from "@anonymous-dev/0x0-server/tool/edit"
 import type { GlobTool } from "@anonymous-dev/0x0-server/tool/glob"
-import { TodoWriteTool } from "@anonymous-dev/0x0-server/tool/todo"
 import type { GrepTool } from "@anonymous-dev/0x0-server/tool/grep"
 import type { ListTool } from "@anonymous-dev/0x0-server/tool/ls"
-import type { EditTool } from "@anonymous-dev/0x0-server/tool/edit"
-import type { ApplyPatchTool } from "@anonymous-dev/0x0-server/tool/apply_patch"
-import type { WebFetchTool } from "@anonymous-dev/0x0-server/tool/webfetch"
-import type { TaskTool } from "@anonymous-dev/0x0-server/tool/task"
-import type { QuestionTool } from "@anonymous-dev/0x0-server/tool/question"
-import type { SkillTool } from "@anonymous-dev/0x0-server/tool/skill"
 import type { LspTool } from "@anonymous-dev/0x0-server/tool/lsp"
-import type { AssistantMessage, ToolPart } from "@anonymous-dev/0x0-server/server/types"
-import { theme, themeState } from "@tui/state/theme"
-import { sync } from "@tui/state/sync"
-import { route } from "@tui/state/route"
-import { local } from "@tui/state/local"
-import { keybind } from "@tui/state/keybind"
+import type { QuestionTool } from "@anonymous-dev/0x0-server/tool/question"
+import type { ReadTool } from "@anonymous-dev/0x0-server/tool/read"
+import type { SearchTool } from "@anonymous-dev/0x0-server/tool/search"
+import type { SearchRemoteTool } from "@anonymous-dev/0x0-server/tool/search_remote"
+import type { SkillTool } from "@anonymous-dev/0x0-server/tool/skill"
+import type { TaskTool } from "@anonymous-dev/0x0-server/tool/task"
+import type { TodoWriteTool } from "@anonymous-dev/0x0-server/tool/todo"
+import type { Tool } from "@anonymous-dev/0x0-server/tool/tool"
+import type { WebFetchTool } from "@anonymous-dev/0x0-server/tool/webfetch"
+import type { WriteTool } from "@anonymous-dev/0x0-server/tool/write"
+import { Filesystem } from "@anonymous-dev/0x0-server/util/filesystem"
+import { Locale } from "@anonymous-dev/0x0-server/util/locale"
+import { type BoxRenderable, type RGBA, TextAttributes } from "@opentui/core"
+import { type JSX, useRenderer } from "@opentui/solid"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
+import { keybind } from "@tui/state/keybind"
+import { local } from "@tui/state/local"
+import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
+import { theme, themeState } from "@tui/state/theme"
+import path from "path"
+import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
+import { Dynamic } from "solid-js/web"
+import stripAnsi from "strip-ansi"
 import { TodoItem } from "../../component/todo-item"
-import { Locale } from "@anonymous-dev/0x0-server/util/locale"
-import { Global } from "@anonymous-dev/0x0-server/core/global"
-import { Filesystem } from "@anonymous-dev/0x0-server/util/filesystem"
-import { normalizePath, toolInput, filetype } from "./session-tool-format"
+import { filetype, normalizePath, toolInput } from "./session-tool-format"
 
 export type SessionToolContext = {
   width: number
@@ -142,8 +142,7 @@ function InlineTool(props: {
           setMargin(1)
           return
         }
-      }}
-    >
+      }}>
       <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
         <Show fallback={<>~ {props.pending}</>} when={props.complete}>
           <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
@@ -182,16 +181,14 @@ function BlockTool(props: {
       onMouseUp={() => {
         if (renderer.getSelection()?.getSelectedText()) return
         props.onClick?.()
-      }}
-    >
+      }}>
       <Show
         when={props.spinner}
         fallback={
           <text paddingLeft={3} fg={theme.textMuted}>
             {props.title}
           </text>
-        }
-      >
+        }>
         <Spinner color={theme.textMuted}>{props.title.replace(/^# /, "")}</Spinner>
       </Show>
       {props.children}
@@ -245,8 +242,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
           title={title()}
           part={props.part}
           spinner={isRunning()}
-          onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
-        >
+          onClick={overflow() ? () => setExpanded(prev => !prev) : undefined}>
           <box gap={1}>
             <text fg={theme.text}>$ {props.input.command}</text>
             <Show when={output()}>
@@ -264,8 +260,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
           pending="Writing command..."
           complete={props.input.command}
           part={props.part}
-          ctx={props.ctx}
-        >
+          ctx={props.ctx}>
           {props.input.command}
         </InlineTool>
       </Match>
@@ -300,7 +295,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
           </line_number>
           <Show when={diagnostics().length}>
             <For each={diagnostics()}>
-              {(diagnostic) => (
+              {diagnostic => (
                 <text fg={theme.error}>
                   Error [{diagnostic.range.start.line}:{diagnostic.range.start.character}]: {diagnostic.message}
                 </text>
@@ -315,8 +310,7 @@ function Write(props: ToolProps<typeof WriteTool>) {
           pending="Preparing write..."
           complete={props.input.filePath}
           part={props.part}
-          ctx={props.ctx}
-        >
+          ctx={props.ctx}>
           Write {normalizePath(props.input.filePath!)}
         </InlineTool>
       </Match>
@@ -345,8 +339,7 @@ function Search(props: ToolProps<typeof SearchTool>) {
           pending="Searching content..."
           complete={props.input.pattern}
           part={props.part}
-          ctx={props.ctx}
-        >
+          ctx={props.ctx}>
           Search content "{props.input.pattern}"{" "}
           <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
           <Show when={props.input.include}>include={props.input.include} </Show>
@@ -354,8 +347,7 @@ function Search(props: ToolProps<typeof SearchTool>) {
             ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
           </Show>
         </InlineTool>
-      }
-    >
+      }>
       <InlineTool icon="✱" pending="Finding files..." complete={props.input.pattern} part={props.part} ctx={props.ctx}>
         Search files "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
         <Show when={props.metadata.count !== undefined}>
@@ -380,7 +372,7 @@ function Read(props: ToolProps<typeof ReadTool>) {
         Read {normalizePath(props.input.filePath!)} {toolInput(props.input as Record<string, unknown>, ["filePath"])}
       </InlineTool>
       <For each={loaded()}>
-        {(filepath) => (
+        {filepath => (
           <box paddingLeft={3}>
             <text paddingLeft={3} fg={theme.textMuted}>
               ↳ Loaded {normalizePath(filepath)}
@@ -399,8 +391,7 @@ function Grep(props: ToolProps<typeof GrepTool>) {
       pending="Searching content..."
       complete={props.input.pattern}
       part={props.part}
-      ctx={props.ctx}
-    >
+      ctx={props.ctx}>
       Grep "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
       <Show when={props.metadata.matches}>
         ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
@@ -422,8 +413,7 @@ function List(props: ToolProps<typeof ListTool>) {
       pending="Listing directory..."
       complete={props.input.path !== undefined}
       part={props.part}
-      ctx={props.ctx}
-    >
+      ctx={props.ctx}>
       List {dir()}
     </InlineTool>
   )
@@ -491,14 +481,14 @@ function Task(props: ToolProps<typeof TaskTool>) {
   const tools = createMemo(() => {
     const sessionID = props.metadata.sessionId
     const msgs = sync.data.message[sessionID ?? ""] ?? []
-    return msgs.flatMap((msg) =>
+    return msgs.flatMap(msg =>
       (sync.data.part[msg.id] ?? [])
         .filter((part): part is ToolPart => part.type === "tool")
-        .map((part) => ({ tool: part.tool, state: part.state })),
+        .map(part => ({ tool: part.tool, state: part.state }))
     )
   })
 
-  const current = () => tools().findLast((x) => x.state.status !== "pending")
+  const current = () => tools().findLast(x => x.state.status !== "pending")
 
   const isRunning = () => props.part.state.status === "running"
 
@@ -512,13 +502,12 @@ function Task(props: ToolProps<typeof TaskTool>) {
               : "# " + Locale.titlecase(props.input.agent ?? "unknown") + " Task"
           }
           onClick={
-            props.metadata.sessionId
+            props.metadata.sessionId && mode() !== "handoff"
               ? () => navigate({ type: "session", sessionID: props.metadata.sessionId! })
               : undefined
           }
           part={props.part}
-          spinner={isRunning()}
-        >
+          spinner={isRunning()}>
           <box>
             <Show
               when={mode() === "handoff"}
@@ -526,8 +515,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
                 <text style={{ fg: theme.textMuted }}>
                   {props.input.description} ({tools().length} toolcalls)
                 </text>
-              }
-            >
+              }>
               <text style={{ fg: theme.textMuted }}>
                 ↪ Handed off to {Locale.titlecase(targetAgent() ?? "unknown")}
               </text>
@@ -536,7 +524,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
               </Show>
             </Show>
             <Show when={mode() !== "handoff" && current()}>
-              {(item) => {
+              {item => {
                 const state = item().state
                 const title =
                   state.status === "completed" && typeof (state as Record<string, unknown>).title === "string"
@@ -560,8 +548,7 @@ function Task(props: ToolProps<typeof TaskTool>) {
               <>
                 {props.input.agent} Task {props.input.description}
               </>
-            }
-          >
+            }>
             Handoff to {props.input.agent} {props.input.description}
           </Show>
         </InlineTool>
@@ -586,7 +573,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
   const diagnostics = createMemo(() => {
     const filePath = Filesystem.normalizePath(props.input.filePath ?? "")
     const arr = props.metadata.diagnostics?.[filePath] ?? []
-    return arr.filter((x) => x.severity === 1).slice(0, 3)
+    return arr.filter(x => x.severity === 1).slice(0, 3)
   })
 
   return (
@@ -617,7 +604,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
           <Show when={diagnostics().length}>
             <box>
               <For each={diagnostics()}>
-                {(diagnostic) => (
+                {diagnostic => (
                   <text fg={theme.error}>
                     Error [{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}]{" "}
                     {diagnostic.message}
@@ -634,8 +621,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
           pending="Preparing edit..."
           complete={props.input.filePath}
           part={props.part}
-          ctx={props.ctx}
-        >
+          ctx={props.ctx}>
           Edit {normalizePath(props.input.filePath!)} {toolInput({ replaceAll: props.input.replaceAll })}
         </InlineTool>
       </Match>
@@ -691,7 +677,7 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
     <Switch>
       <Match when={files().length > 0}>
         <For each={files()}>
-          {(file) => (
+          {file => (
             <BlockTool title={title(file)} part={props.part}>
               <Show
                 when={file.type !== "delete"}
@@ -699,8 +685,7 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
                   <text fg={theme.diffRemoved}>
                     -{file.deletions} line{file.deletions !== 1 ? "s" : ""}
                   </text>
-                }
-              >
+                }>
                 <Diff diff={file.diff} filePath={file.filePath} />
               </Show>
             </BlockTool>
@@ -722,9 +707,7 @@ function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
       <Match when={props.metadata.todos?.length}>
         <BlockTool title="# Todos" part={props.part}>
           <box>
-            <For each={props.input.todos ?? []}>
-              {(todo) => <TodoItem status={todo.status} content={todo.content} />}
-            </For>
+            <For each={props.input.todos ?? []}>{todo => <TodoItem status={todo.status} content={todo.content} />}</For>
           </box>
         </BlockTool>
       </Match>
@@ -777,8 +760,7 @@ function Lsp(props: ToolProps<typeof LspTool>) {
       pending="Querying language server..."
       complete={props.input.operation}
       part={props.part}
-      ctx={props.ctx}
-    >
+      ctx={props.ctx}>
       {props.input.operation} {normalizePath(props.input.filePath)}:{props.input.line}:{props.input.character}
     </InlineTool>
   )

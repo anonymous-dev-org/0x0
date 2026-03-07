@@ -1,19 +1,15 @@
 import z from "zod"
-import { Bus } from "@/core/bus"
-import { TuiEvent } from "@/core/bus/tui-event"
 import { Config } from "@/core/config/config"
 import { Identifier } from "@/core/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/runtime/agent/agent"
 import { defer } from "@/util/defer"
-import { NamedError } from "@/util/error"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { Session } from "../session"
 import { SessionCompaction } from "../session/compaction"
 import { MessageV2 } from "../session/message-v2"
 import { SessionPrompt } from "../session/prompt"
-import { Todo } from "../session/todo"
 import DESCRIPTION from "./task.txt"
 import { Tool } from "./tool"
 
@@ -116,16 +112,6 @@ export const TaskTool = Tool.define("task", async ctx => {
           )
           .at(-1)?.metadata?.filepath as string | undefined
 
-        // Create child session for the target agent
-        const childSession = await Session.create({
-          parentID: ctx.sessionID,
-          title: params.description + ` (@${agent.name} agent)`,
-        })
-
-        // Copy todos from parent to child
-        const todos = await Todo.get(ctx.sessionID)
-        if (todos.length) await Todo.update({ sessionID: childSession.id, todos })
-
         // Build handoff prompt
         const promptLines = [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`]
         if (planFilePath) {
@@ -137,27 +123,23 @@ export const TaskTool = Tool.define("task", async ctx => {
         }
         const handoffPromptText = promptLines.join("\n")
 
-        // Fire-and-forget: start prompt loop on child session
-        SessionPrompt.prompt({
-          sessionID: childSession.id,
+        // Inject a user message into the SAME session with the target agent.
+        // noReply: true means we just create the message and return immediately.
+        // The prompt loop detects the new user message on its next iteration,
+        // sees the agent change via cliSessionAgent mismatch, and starts a
+        // fresh LLM conversation automatically.
+        await SessionPrompt.prompt({
+          sessionID: ctx.sessionID,
           agent: agent.name,
           model,
+          noReply: true,
           parts: [{ type: "text", text: handoffPromptText }],
-        }).catch(e => {
-          log.error("handoff prompt error", { sessionID: childSession.id, error: e })
-          Bus.publish(Session.Event.Error, {
-            sessionID: childSession.id,
-            error: new NamedError.Unknown({ message: e instanceof Error ? e.message : String(e) }).toObject(),
-          })
         })
-
-        // Navigate TUI to the new child session
-        Bus.publish(TuiEvent.SessionSelect, { sessionID: childSession.id })
 
         return {
           title: `Handoff to ${agent.name}`,
           metadata: {
-            sessionId: childSession.id,
+            sessionId: undefined as string | undefined,
             model,
             handoff: {
               switched: true,
@@ -166,12 +148,7 @@ export const TaskTool = Tool.define("task", async ctx => {
               reason: params.description,
             },
           },
-          output: [
-            "<handoff_result>",
-            `Handed off to @${agent.name}`,
-            `New session: ${childSession.id}`,
-            "</handoff_result>",
-          ].join("\n"),
+          output: ["<handoff_result>", `Handed off to @${agent.name}`, "</handoff_result>"].join("\n"),
         }
       }
 
