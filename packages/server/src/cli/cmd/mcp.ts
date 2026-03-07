@@ -1,19 +1,21 @@
-import { cmd } from "./cmd"
+import * as prompts from "@clack/prompts"
+import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
-import * as prompts from "@clack/prompts"
-import { UI } from "../ui"
+import fs from "fs/promises"
+import path from "path"
+import YAML from "yaml"
+import { Bus } from "@/core/bus"
+import { Config } from "@/core/config/config"
+import { Global } from "@/core/global"
+import { Installation } from "@/core/installation"
 import { MCP } from "@/integration/mcp"
 import { McpAuth } from "@/integration/mcp/auth"
 import { McpOAuthProvider } from "@/integration/mcp/oauth-provider"
-import { Config } from "@/core/config/config"
 import { Instance } from "../../project/instance"
-import { Installation } from "@/core/installation"
-import path from "path"
-import fs from "fs/promises"
-import { Global } from "@/core/global"
-import { Bus } from "@/core/bus"
+import { UI } from "../ui"
+import { cmd } from "./cmd"
+
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
     case "authenticated":
@@ -51,7 +53,7 @@ function isMcpRemote(config: McpEntry): config is McpRemote {
 export const McpCommand = cmd({
   command: "mcp",
   describe: "manage MCP (Model Context Protocol) servers",
-  builder: (yargs) =>
+  builder: yargs =>
     yargs
       .command(McpAddCommand)
       .command(McpListCommand)
@@ -78,7 +80,7 @@ export const McpListCommand = cmd({
         const statuses = await MCP.status()
 
         const servers = Object.entries(mcpServers).filter((entry): entry is [string, McpConfigured] =>
-          isMcpConfigured(entry[1]),
+          isMcpConfigured(entry[1])
         )
 
         if (servers.length === 0) {
@@ -123,7 +125,7 @@ export const McpListCommand = cmd({
 
           const typeHint = serverConfig.type === "remote" ? serverConfig.url : serverConfig.command.join(" ")
           prompts.log.info(
-            `${statusIcon} ${name} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
+            `${statusIcon} ${name} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`
           )
         }
 
@@ -136,7 +138,7 @@ export const McpListCommand = cmd({
 export const McpAuthCommand = cmd({
   command: "auth [name]",
   describe: "authenticate with an OAuth-enabled MCP server",
-  builder: (yargs) =>
+  builder: yargs =>
     yargs
       .positional("name", {
         describe: "name of the MCP server",
@@ -155,7 +157,7 @@ export const McpAuthCommand = cmd({
 
         // Get OAuth-capable servers (remote servers with oauth not explicitly disabled)
         const oauthServers = Object.entries(mcpServers).filter(
-          (entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false,
+          (entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false
         )
 
         if (oauthServers.length === 0) {
@@ -184,7 +186,7 @@ mcp:
                 value: name,
                 hint: url,
               }
-            }),
+            })
           )
 
           const selected = await prompts.select({
@@ -226,7 +228,7 @@ mcp:
         spinner.start("Starting OAuth flow...")
 
         // Subscribe to browser open failure events to show URL for manual opening
-        const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, (evt) => {
+        const unsubscribe = Bus.subscribe(MCP.BrowserOpenFailed, evt => {
           if (evt.properties.mcpName === serverName) {
             spinner.stop("Could not open browser automatically")
             prompts.log.warn("Please open this URL in your browser to authenticate:")
@@ -290,7 +292,7 @@ export const McpAuthListCommand = cmd({
 
         // Get OAuth-capable servers
         const oauthServers = Object.entries(mcpServers).filter(
-          (entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false,
+          (entry): entry is [string, McpRemote] => isMcpRemote(entry[1]) && entry[1].oauth !== false
         )
 
         if (oauthServers.length === 0) {
@@ -317,7 +319,7 @@ export const McpAuthListCommand = cmd({
 export const McpLogoutCommand = cmd({
   command: "logout [name]",
   describe: "remove OAuth credentials for an MCP server",
-  builder: (yargs) =>
+  builder: yargs =>
     yargs.positional("name", {
       describe: "name of the MCP server",
       type: "string",
@@ -343,7 +345,7 @@ export const McpLogoutCommand = cmd({
         if (!serverName) {
           const selected = await prompts.select({
             message: "Select MCP server to logout",
-            options: serverNames.map((name) => {
+            options: serverNames.map(name => {
               const entry = credentials[name]
               const hasTokens = !!entry?.tokens
               const hasClient = !!entry?.clientInfo
@@ -442,7 +444,7 @@ export const McpAddCommand = cmd({
 
         const name = await prompts.text({
           message: "Enter MCP server name",
-          validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+          validate: x => (x && x.length > 0 ? undefined : "Required"),
         })
         if (prompts.isCancel(name)) throw new UI.CancelledError()
 
@@ -467,7 +469,7 @@ export const McpAddCommand = cmd({
           const command = await prompts.text({
             message: "Enter command to run",
             placeholder: "e.g., 0x0 x @modelcontextprotocol/server-filesystem",
-            validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+            validate: x => (x && x.length > 0 ? undefined : "Required"),
           })
           if (prompts.isCancel(command)) throw new UI.CancelledError()
 
@@ -486,7 +488,7 @@ export const McpAddCommand = cmd({
           const url = await prompts.text({
             message: "Enter MCP server URL",
             placeholder: "e.g., https://example.com/mcp",
-            validate: (x) => {
+            validate: x => {
               if (!x) return "Required"
               if (x.length === 0) return "Required"
               const isValid = URL.canParse(x)
@@ -513,7 +515,7 @@ export const McpAddCommand = cmd({
             if (hasClientId) {
               const clientId = await prompts.text({
                 message: "Enter client ID",
-                validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+                validate: x => (x && x.length > 0 ? undefined : "Required"),
               })
               if (prompts.isCancel(clientId)) throw new UI.CancelledError()
 
@@ -567,7 +569,7 @@ export const McpAddCommand = cmd({
 export const McpDebugCommand = cmd({
   command: "debug <name>",
   describe: "debug OAuth connection for an MCP server",
-  builder: (yargs) =>
+  builder: yargs =>
     yargs.positional("name", {
       describe: "name of the MCP server",
       type: "string",
@@ -676,7 +678,7 @@ export const McpDebugCommand = cmd({
               },
               {
                 onRedirect: async () => {},
-              },
+              }
             )
 
             prompts.log.info("Testing OAuth flow (without completing authorization)...")

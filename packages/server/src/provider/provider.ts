@@ -1,12 +1,11 @@
-import z from "zod"
 import fuzzysort from "fuzzysort"
-import { Config } from "@/core/config/config"
 import { sortBy } from "remeda"
+import z from "zod"
+import { Config } from "@/core/config/config"
 import { NamedError } from "@/util/error"
 import { ProviderAuth } from "./auth"
 
 export namespace Provider {
-
   // ─────────────────────────────────────────────────────────────────────────────
   // Types
   // ─────────────────────────────────────────────────────────────────────────────
@@ -91,9 +90,41 @@ export namespace Provider {
   }
 
   const CODEX_MODELS: Record<string, Model> = {
+    "gpt-5.4": makeModel("codex", "gpt-5.4", "GPT-5.4", {
+      reasoning: true,
+      limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5.3-codex": makeModel("codex", "gpt-5.3-codex", "GPT-5.3 Codex", {
+      reasoning: true,
+      limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5.3-codex-spark": makeModel("codex", "gpt-5.3-codex-spark", "GPT-5.3 Codex Spark", {
+      reasoning: true,
+      limit: { context: 128_000, output: 64_000 },
+    }),
+    "gpt-5.2-codex": makeModel("codex", "gpt-5.2-codex", "GPT-5.2 Codex", {
+      reasoning: true,
+      limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5.1-codex-max": makeModel("codex", "gpt-5.1-codex-max", "GPT-5.1 Codex Max", {
+      reasoning: true,
+      limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5.1-codex": makeModel("codex", "gpt-5.1-codex", "GPT-5.1 Codex", {
+      reasoning: true,
+      limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5.1-codex-mini": makeModel("codex", "gpt-5.1-codex-mini", "GPT-5.1 Codex Mini", {
+      reasoning: true,
+      limit: { context: 200_000, output: 64_000 },
+    }),
     "gpt-5-codex": makeModel("codex", "gpt-5-codex", "GPT-5 Codex", {
       reasoning: true,
       limit: { context: 400_000, input: 272_000, output: 128_000 },
+    }),
+    "gpt-5-codex-mini": makeModel("codex", "gpt-5-codex-mini", "GPT-5 Codex Mini", {
+      reasoning: true,
+      limit: { context: 200_000, output: 64_000 },
     }),
     o3: makeModel("codex", "o3", "o3", {
       reasoning: true,
@@ -154,14 +185,14 @@ export namespace Provider {
     if (!provider) {
       const suggestions = fuzzysort
         .go(providerID, Object.keys(providers), { limit: 3, threshold: -10000 })
-        .map((m) => m.target)
+        .map(m => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
     const model = provider.models[modelID]
     if (!model) {
       const suggestions = fuzzysort
         .go(modelID, Object.keys(provider.models), { limit: 3, threshold: -10000 })
-        .map((m) => `${providerID}/${m.target}`)
+        .map(m => `${providerID}/${m.target}`)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
     return model
@@ -169,7 +200,7 @@ export namespace Provider {
 
   export async function closest(
     providerID: string,
-    query: string[],
+    query: string[]
   ): Promise<{ providerID: string; modelID: string } | undefined> {
     const providers = await list()
     const provider = providers[providerID]
@@ -204,19 +235,30 @@ export namespace Provider {
   }
 
   // Lower index = higher priority. Models not in the list sort after all listed ones.
-  const SORT_PRIORITY = ["sonnet", "gpt-5-codex", "opus", "o3", "o4-mini", "haiku"]
+  const SORT_PRIORITY = [
+    "sonnet",
+    "gpt-5.4",
+    "gpt-5.3-codex",
+    "gpt-5.2-codex",
+    "gpt-5.1-codex",
+    "gpt-5-codex",
+    "opus",
+    "o3",
+    "o4-mini",
+    "haiku",
+  ]
 
   export function sort(models: Model[]): Model[] {
     return sortBy(
       models,
       [
-        (model) => {
-          const idx = SORT_PRIORITY.findIndex((filter) => model.id.includes(filter))
+        model => {
+          const idx = SORT_PRIORITY.findIndex(filter => model.id.includes(filter))
           return idx === -1 ? SORT_PRIORITY.length : idx
         },
         "asc",
       ],
-      [(model) => model.id, "asc"],
+      [model => model.id, "asc"]
     )
   }
 
@@ -257,14 +299,14 @@ export namespace Provider {
       providerID: z.string(),
       modelID: z.string(),
       suggestions: z.array(z.string()).optional(),
-    }),
+    })
   )
 
   export const InitError = NamedError.create(
     "ProviderInitError",
     z.object({
       providerID: z.string(),
-    }),
+    })
   )
 
   export const ConfiguredModelError = NamedError.create(
@@ -274,6 +316,6 @@ export namespace Provider {
       model: z.string(),
       message: z.string(),
       suggestions: z.array(z.string()).optional(),
-    }),
+    })
   )
 }
