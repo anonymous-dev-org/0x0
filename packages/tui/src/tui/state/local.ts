@@ -24,6 +24,12 @@ type LocalState = {
 
 let _state: LocalState
 
+const THINKING_LEVELS_DEFAULT = ["low", "medium", "high"] as const
+const THINKING_LEVELS: Record<string, readonly string[]> = {
+  "claude-code": ["low", "medium", "high"],
+  "codex-app-server": ["low", "medium", "high", "xhigh"],
+}
+
 function isModelValid(model: { providerID: string; modelID: string }) {
   const provider = sync.data.provider.find(x => x.id === model.providerID)
   return !!provider?.models[model.modelID]
@@ -451,19 +457,29 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       },
     },
     thinkingEffort: {
-      current() {
-        return modelStore.thinkingEffort[agent.current().name]
+      levels(): readonly string[] {
+        const m = currentModel()
+        if (!m) return THINKING_LEVELS_DEFAULT
+        return THINKING_LEVELS[m.providerID] ?? THINKING_LEVELS_DEFAULT
       },
-      set(value: string | undefined) {
+      current(): string {
+        const explicit = modelStore.thinkingEffort[agent.current().name]
+        if (explicit) return explicit
+        return agent.current().thinkingEffort ?? "medium"
+      },
+      set(value: string) {
         setModelStore("thinkingEffort", agent.current().name, value)
         save()
       },
-      cycle() {
-        const options = [undefined, "low", "medium", "high"] as const
+      cycle(direction: 1 | -1 = 1) {
+        const levels = this.levels()
         const current = this.current()
-        const idx = options.findIndex(x => x === current)
-        const next = options[(idx + 1) % options.length]
-        this.set(next)
+        const idx = levels.indexOf(current)
+        let next = idx + direction
+        if (next < 0) next = levels.length - 1
+        if (next >= levels.length) next = 0
+        const value = levels[next]
+        if (value) this.set(value)
       },
     },
   }

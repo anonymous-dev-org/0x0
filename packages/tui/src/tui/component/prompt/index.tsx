@@ -610,6 +610,18 @@ export function Prompt(props: PromptProps) {
         return
       }
     }
+    if (store.mode === "normal" && !autocomplete.visible && input.plainText === "") {
+      if (e.name === "left") {
+        local.model.thinkingEffort.cycle(-1)
+        e.preventDefault()
+        return
+      }
+      if (e.name === "right") {
+        local.model.thinkingEffort.cycle(1)
+        e.preventDefault()
+        return
+      }
+    }
     if (store.mode === "normal") autocomplete.onKeyDown(e)
     if (!autocomplete.visible) {
       if (
@@ -798,7 +810,7 @@ export function Prompt(props: PromptProps) {
                     ·
                   </text>
                   <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                    think:{local.model.thinkingEffort.current() ?? "auto"}
+                    think:{local.model.thinkingEffort.current()}
                   </text>
                 </box>
               </Show>

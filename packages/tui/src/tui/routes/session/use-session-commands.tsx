@@ -1,22 +1,22 @@
+import type { ScrollBoxRenderable } from "@opentui/core"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useCommandDialog } from "@tui/component/dialog-command"
+import { local } from "@tui/state/local"
+import { route } from "@tui/state/route"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
 import path from "path"
 import { batch } from "solid-js"
-import { type ScrollBoxRenderable } from "@opentui/core"
-import { route } from "@tui/state/route"
-import { sync } from "@tui/state/sync"
-import { sdk } from "@tui/state/sdk"
-import { local } from "@tui/state/local"
-import { useCommandDialog } from "@tui/component/dialog-command"
-import { useToast } from "../../ui/toast"
-import { useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { type useDialog } from "../../ui/dialog"
-import { type PromptInfo } from "../../component/prompt/history"
-import { Clipboard } from "../../util/clipboard"
-import { DialogTimeline } from "./dialog-timeline"
-import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
+import type { PromptInfo } from "../../component/prompt/history"
+import type { useDialog } from "../../ui/dialog"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
-import { formatTranscript } from "../../util/transcript"
+import { useToast } from "../../ui/toast"
+import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
+import { formatTranscript } from "../../util/transcript"
+import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
+import { DialogTimeline } from "./dialog-timeline"
 import { useSessionSettings } from "./session-settings"
 
 export function useSessionCommands(props: {
@@ -45,7 +45,7 @@ export function useSessionCommands(props: {
 
   const scrollTo = (messageID: string) => {
     const scroll = props.scroll()
-    const child = scroll.getChildren().find((c) => c.id === messageID)
+    const child = scroll.getChildren().find(c => c.id === messageID)
     if (child) scroll.scrollBy(child.y - scroll.y - 1)
   }
 
@@ -60,7 +60,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "share",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         await sdk.client.session[":sessionID"].share
           .$post({
             param: { sessionID: route.data.sessionID },
@@ -71,7 +71,7 @@ export function useSessionCommands(props: {
               successMessage: "Share URL copied to clipboard!",
               successVariant: "success",
               errorMessage: "Failed to copy URL to clipboard",
-            }),
+            })
           )
           .catch(() => toast.show({ message: "Failed to share session", variant: "error" }))
         dialog.clear()
@@ -85,7 +85,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "rename",
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         dialog.show({
           title: "Rename Session",
           size: "medium",
@@ -101,7 +101,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "timeline",
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         dialog.show({
           title: "Timeline",
           size: "large",
@@ -109,7 +109,7 @@ export function useSessionCommands(props: {
             <DialogTimeline
               onMove={scrollTo}
               sessionID={route.data.sessionID}
-              setPrompt={(promptInfo) => props.setPrompt(promptInfo)}
+              setPrompt={promptInfo => props.setPrompt(promptInfo)}
             />
           ),
         })
@@ -123,7 +123,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "fork",
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         dialog.show({
           title: "Fork from message",
           size: "large",
@@ -140,7 +140,7 @@ export function useSessionCommands(props: {
         name: "compact",
         aliases: ["summarize"],
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         const selectedModel = local.model.current()
         if (!selectedModel) {
           toast.show({
@@ -170,7 +170,7 @@ export function useSessionCommands(props: {
         name: "caffeinate",
         aliases: ["awake", "nosleep"],
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         const res = await sdk.client.session[":sessionID"].caffeinate
           .$post({
             param: { sessionID: route.data.sessionID },
@@ -204,7 +204,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "unshare",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         await sdk.client.session[":sessionID"].share
           .$delete({
             param: { sessionID: route.data.sessionID },
@@ -222,13 +222,15 @@ export function useSessionCommands(props: {
       slash: {
         name: "undo",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         const status = sync.data.session_status?.[route.data.sessionID]
         if (status?.type !== "idle") {
-          await sdk.client.session[":sessionID"].abort.$post({ param: { sessionID: route.data.sessionID } } as any).catch(() => {})
+          await sdk.client.session[":sessionID"].abort
+            .$post({ param: { sessionID: route.data.sessionID } } as any)
+            .catch(() => {})
         }
         const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
+        const message = messages().findLast(x => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
         sdk.client.session[":sessionID"].revert
           .$post({
@@ -248,8 +250,8 @@ export function useSessionCommands(props: {
               if (part.type === "file") agg.parts.push(part)
               return agg
             },
-            { input: "", parts: [] as PromptInfo["parts"] },
-          ),
+            { input: "", parts: [] as PromptInfo["parts"] }
+          )
         )
         dialog.clear()
       },
@@ -263,11 +265,11 @@ export function useSessionCommands(props: {
       slash: {
         name: "redo",
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         dialog.clear()
         const messageID = session()?.revert?.messageID
         if (!messageID) return
-        const message = messages().find((x) => x.role === "user" && x.id > messageID)
+        const message = messages().find(x => x.role === "user" && x.id > messageID)
         if (!message) {
           sdk.client.session[":sessionID"].unrevert.$post({
             param: { sessionID: route.data.sessionID },
@@ -286,7 +288,7 @@ export function useSessionCommands(props: {
       value: "session.sidebar.toggle",
       keybind: "sidebar_toggle",
       category: "Session",
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         batch(() => {
           const isVisible = sidebarVisible()
           settings.setSidebar(() => (isVisible ? "hide" : "auto"))
@@ -300,8 +302,8 @@ export function useSessionCommands(props: {
       value: "session.toggle.conceal",
       keybind: "messages_toggle_conceal",
       category: "Session",
-      onSelect: (dialog) => {
-        settings.setConceal((prev) => !prev)
+      onSelect: dialog => {
+        settings.setConceal(prev => !prev)
         dialog.clear()
       },
     },
@@ -313,8 +315,8 @@ export function useSessionCommands(props: {
         name: "timestamps",
         aliases: ["toggle-timestamps"],
       },
-      onSelect: (dialog) => {
-        settings.setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
+      onSelect: dialog => {
+        settings.setTimestamps(prev => (prev === "show" ? "hide" : "show"))
         dialog.clear()
       },
     },
@@ -327,20 +329,20 @@ export function useSessionCommands(props: {
         name: "thinking",
         aliases: ["toggle-thinking"],
       },
-      onSelect: (dialog) => {
-        settings.setShowThinking((prev) => !prev)
+      onSelect: dialog => {
+        settings.setShowThinking(prev => !prev)
         dialog.clear()
       },
     },
     {
-      title: `Thinking effort: ${local.model.thinkingEffort.current() ?? "off"}`,
+      title: `Thinking effort: ${local.model.thinkingEffort.current()}`,
       value: "session.thinking.effort",
       category: "Model",
       slash: {
         name: "think",
         aliases: ["thinking-effort"],
       },
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         local.model.thinkingEffort.cycle()
         dialog.clear()
       },
@@ -353,8 +355,8 @@ export function useSessionCommands(props: {
       slash: {
         name: "details",
       },
-      onSelect: (dialog) => {
-        settings.setShowDetails((prev) => !prev)
+      onSelect: dialog => {
+        settings.setShowDetails(prev => !prev)
         dialog.clear()
       },
     },
@@ -363,19 +365,47 @@ export function useSessionCommands(props: {
       value: "session.toggle.scrollbar",
       keybind: "scrollbar_toggle",
       category: "Session",
-      onSelect: (dialog) => {
-        settings.setShowScrollbar((prev) => !prev)
+      onSelect: dialog => {
+        settings.setShowScrollbar(prev => !prev)
         dialog.clear()
       },
     },
-    ...([
-      { title: "Page up", value: "session.page.up", keybind: "messages_page_up", amount: (s: ScrollBoxRenderable) => -s.height / 2 },
-      { title: "Page down", value: "session.page.down", keybind: "messages_page_down", amount: (s: ScrollBoxRenderable) => s.height / 2 },
-      { title: "Half page up", value: "session.half.page.up", keybind: "messages_half_page_up", amount: (s: ScrollBoxRenderable) => -s.height / 4 },
-      { title: "Half page down", value: "session.half.page.down", keybind: "messages_half_page_down", amount: (s: ScrollBoxRenderable) => s.height / 4 },
-      { title: "Line up", value: "session.line.up", keybind: "messages_line_up", amount: () => -1, disabled: true },
-      { title: "Line down", value: "session.line.down", keybind: "messages_line_down", amount: () => 1, disabled: true },
-    ] as const).map((cmd) => ({
+    ...(
+      [
+        {
+          title: "Page up",
+          value: "session.page.up",
+          keybind: "messages_page_up",
+          amount: (s: ScrollBoxRenderable) => -s.height / 2,
+        },
+        {
+          title: "Page down",
+          value: "session.page.down",
+          keybind: "messages_page_down",
+          amount: (s: ScrollBoxRenderable) => s.height / 2,
+        },
+        {
+          title: "Half page up",
+          value: "session.half.page.up",
+          keybind: "messages_half_page_up",
+          amount: (s: ScrollBoxRenderable) => -s.height / 4,
+        },
+        {
+          title: "Half page down",
+          value: "session.half.page.down",
+          keybind: "messages_half_page_down",
+          amount: (s: ScrollBoxRenderable) => s.height / 4,
+        },
+        { title: "Line up", value: "session.line.up", keybind: "messages_line_up", amount: () => -1, disabled: true },
+        {
+          title: "Line down",
+          value: "session.line.down",
+          keybind: "messages_line_down",
+          amount: () => 1,
+          disabled: true,
+        },
+      ] as const
+    ).map(cmd => ({
       title: cmd.title,
       value: cmd.value,
       keybind: cmd.keybind,
@@ -394,7 +424,7 @@ export function useSessionCommands(props: {
       keybind: "messages_first" as const,
       category: "Session",
       hidden: true,
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         props.scroll().scrollTo(0)
         dialog.clear()
       },
@@ -405,7 +435,7 @@ export function useSessionCommands(props: {
       keybind: "messages_last" as const,
       category: "Session",
       hidden: true,
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         const scroll = props.scroll()
         scroll.scrollTo(scroll.scrollHeight)
         dialog.clear()
@@ -428,9 +458,7 @@ export function useSessionCommands(props: {
           const parts = sync.data.part[message.id]
           if (!parts || !Array.isArray(parts)) continue
 
-          const hasValidTextPart = parts.some(
-            (part) => part && part.type === "text" && !part.synthetic && !part.ignored,
-          )
+          const hasValidTextPart = parts.some(part => part && part.type === "text" && !part.synthetic && !part.ignored)
 
           if (hasValidTextPart) {
             scrollTo(message.id)
@@ -445,7 +473,7 @@ export function useSessionCommands(props: {
       keybind: "messages_next" as const,
       category: "Session",
       hidden: true,
-      onSelect: (dialog) => props.scrollToMessage("next", dialog),
+      onSelect: dialog => props.scrollToMessage("next", dialog),
     },
     {
       title: "Previous message",
@@ -453,17 +481,17 @@ export function useSessionCommands(props: {
       keybind: "messages_previous" as const,
       category: "Session",
       hidden: true,
-      onSelect: (dialog) => props.scrollToMessage("prev", dialog),
+      onSelect: dialog => props.scrollToMessage("prev", dialog),
     },
     {
       title: "Copy last assistant message",
       value: "messages.copy",
       keybind: "messages_copy" as const,
       category: "Session",
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         const revertID = session()?.revert?.messageID
         const lastAssistantMessage = messages().findLast(
-          (msg) => msg.role === "assistant" && (!revertID || msg.id < revertID),
+          msg => msg.role === "assistant" && (!revertID || msg.id < revertID)
         )
         if (!lastAssistantMessage) {
           toast.show({ message: "No assistant messages found", variant: "error" })
@@ -472,7 +500,7 @@ export function useSessionCommands(props: {
         }
 
         const parts = sync.data.part[lastAssistantMessage.id] ?? []
-        const textParts = parts.filter((part) => part.type === "text")
+        const textParts = parts.filter(part => part.type === "text")
         if (textParts.length === 0) {
           toast.show({ message: "No text parts found in last assistant message", variant: "error" })
           dialog.clear()
@@ -480,7 +508,7 @@ export function useSessionCommands(props: {
         }
 
         const text = textParts
-          .map((part) => part.text)
+          .map(part => part.text)
           .join("\n")
           .trim()
         if (!text) {
@@ -504,19 +532,19 @@ export function useSessionCommands(props: {
       slash: {
         name: "copy",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         try {
           const sessionData = session()
           if (!sessionData) return
           const sessionMessages = messages()
           const transcript = formatTranscript(
             sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
+            sessionMessages.map(msg => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
             {
               thinking: settings.showThinking(),
               toolDetails: settings.showDetails(),
               assistantMetadata: settings.showAssistantMetadata(),
-            },
+            }
           )
           await Clipboard.copyWithToast(transcript, toast, {
             successMessage: "Session transcript copied to clipboard!",
@@ -537,7 +565,7 @@ export function useSessionCommands(props: {
       slash: {
         name: "export",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         try {
           const sessionData = session()
           if (!sessionData) return
@@ -551,19 +579,19 @@ export function useSessionCommands(props: {
             settings.showThinking(),
             settings.showDetails(),
             settings.showAssistantMetadata(),
-            false,
+            false
           )
 
           if (options === null) return
 
           const transcript = formatTranscript(
             sessionData,
-            sessionMessages.map((msg) => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
+            sessionMessages.map(msg => ({ info: msg, parts: sync.data.part[msg.id] ?? [] })),
             {
               thinking: options.thinking,
               toolDetails: options.toolDetails,
               assistantMetadata: options.assistantMetadata,
-            },
+            }
           )
 
           if (options.openWithoutSaving) {
