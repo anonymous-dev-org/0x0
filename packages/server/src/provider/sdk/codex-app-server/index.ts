@@ -173,12 +173,12 @@ export async function* codexAppServerStream(input: CodexStreamInput): AsyncGener
       codex = new CodexClass({
         codexPathOverride: codexPath,
         config: {
-          include_apply_patch_tool: false,
-          tools_web_search: false,
-          tools_view_image: false,
           web_search: "disabled",
           features: {
             shell_tool: false,
+          },
+          tools: {
+            view_image: false,
           },
           mcp_servers: {
             tools: {

@@ -137,158 +137,176 @@ function jsonRpcError(id: string | number | undefined, code: number, message: st
 // ─── Route ───────────────────────────────────────────────────────────────────
 
 export const ToolBridgeRoutes = lazy(() =>
-  new Hono().post("/:bridgeId", async c => {
-    const bridgeId = c.req.param("bridgeId")
-    const bridge = bridges.get(bridgeId)
-    if (!bridge) {
-      return c.json(jsonRpcError(undefined, -32000, `Bridge ${bridgeId} not found`), 404)
-    }
+  new Hono()
+    .get("/:bridgeId", c => {
+      return c.json({ error: "Method Not Allowed. Use POST for MCP JSON-RPC." }, 405)
+    })
+    .post("/:bridgeId", async c => {
+      const bridgeId = c.req.param("bridgeId")
+      const bridge = bridges.get(bridgeId)
+      if (!bridge) {
+        return c.json(jsonRpcError(undefined, -32000, `Bridge ${bridgeId} not found`), 404)
+      }
 
-    let body: JsonRpcRequest
-    try {
-      body = await c.req.json<JsonRpcRequest>()
-    } catch {
-      return c.json(jsonRpcError(undefined, -32700, "Parse error"), 400)
-    }
+      let body: JsonRpcRequest
+      try {
+        body = await c.req.json<JsonRpcRequest>()
+      } catch {
+        return c.json(jsonRpcError(undefined, -32700, "Parse error"), 400)
+      }
 
-    const { method, id, params } = body
+      const { method, id, params } = body
+      log.debug("MCP request", { bridgeId, method })
 
-    switch (method) {
-      case "initialize": {
-        return c.json(
-          jsonRpcOk(id, {
-            protocolVersion: "2024-11-05",
-            capabilities: { tools: {} },
-            serverInfo: { name: "tools", version: "1.0.0" },
+      switch (method) {
+        case "initialize": {
+          return c.json(
+            jsonRpcOk(id, {
+              protocolVersion: "2024-11-05",
+              capabilities: { tools: {}, resources: {}, prompts: {} },
+              serverInfo: { name: "tools", version: "1.0.0" },
+            })
+          )
+        }
+
+        case "notifications/initialized": {
+          // Client acknowledging initialization — no response needed
+          return c.json(jsonRpcOk(id, {}))
+        }
+
+        case "tools/list": {
+          const tools = bridge.tools.map(t => {
+            const sdkName = REGISTRY_ID_TO_SDK_NAME[t.id] ?? t.id
+            return {
+              name: sdkName,
+              description: t.description,
+              inputSchema: z.toJSONSchema(t.parameters),
+            }
           })
-        )
-      }
-
-      case "notifications/initialized": {
-        // Client acknowledging initialization — no response needed
-        return c.json(jsonRpcOk(id, {}))
-      }
-
-      case "tools/list": {
-        const tools = bridge.tools.map(t => {
-          const sdkName = REGISTRY_ID_TO_SDK_NAME[t.id] ?? t.id
-          return {
-            name: sdkName,
-            description: t.description,
-            inputSchema: z.toJSONSchema(t.parameters),
-          }
-        })
-        return c.json(jsonRpcOk(id, { tools }))
-      }
-
-      case "tools/call": {
-        const toolName = (params as any)?.name as string
-        const toolArgs = ((params as any)?.arguments ?? {}) as Record<string, unknown>
-
-        if (!toolName) {
-          return c.json(jsonRpcError(id, -32602, "Missing tool name"))
+          return c.json(jsonRpcOk(id, { tools }))
         }
 
-        // Map SDK name → registry ID
-        const registryId = SDK_NAME_TO_REGISTRY_ID[toolName] ?? toolName.toLowerCase()
-        const toolInfo = bridge.tools.find(t => t.id === registryId)
-        if (!toolInfo) {
-          return c.json(jsonRpcError(id, -32602, `Tool "${toolName}" not found`))
-        }
+        case "tools/call": {
+          const toolName = (params as any)?.name as string
+          const toolArgs = ((params as any)?.arguments ?? {}) as Record<string, unknown>
 
-        // Check if this is the question tool — route through Question.ask
-        if (registryId === "question") {
-          return await handleQuestionTool(c, id, bridge, toolArgs)
-        }
-
-        // Permission gate
-        const agentActions = bridge.agent.actions ?? {}
-        const sdkName = REGISTRY_ID_TO_SDK_NAME[registryId] ?? toolName
-        const policy = agentActions[sdkName]
-
-        if (policy !== "allow") {
-          // Need to check permission rules
-          const session = await Session.get(bridge.sessionID).catch(() => null)
-          const ruleset = PermissionNext.merge(bridge.agent.permission, session?.permission ?? [])
-          const rule = PermissionNext.evaluate(toolPermission(sdkName), toolPattern(sdkName, toolArgs), ruleset)
-
-          if (rule.action === "deny") {
-            return c.json(
-              jsonRpcOk(id, {
-                content: [{ type: "text", text: `Tool "${toolName}" denied by permission policy.` }],
-                isError: true,
-              })
-            )
+          if (!toolName) {
+            return c.json(jsonRpcError(id, -32602, "Missing tool name"))
           }
 
-          if (rule.action === "ask") {
-            try {
-              await PermissionNext.ask({
-                sessionID: bridge.sessionID,
-                permission: toolPermission(sdkName),
-                patterns: [toolPattern(sdkName, toolArgs)],
-                metadata: { tool: sdkName, provider: "claude-code", agent: bridge.agentName },
-                always: ["*"],
-                ruleset,
-              })
-            } catch (e) {
-              const msg = e instanceof Error ? e.message : "Permission denied."
+          // Map SDK name → registry ID
+          const registryId = SDK_NAME_TO_REGISTRY_ID[toolName] ?? toolName.toLowerCase()
+          const toolInfo = bridge.tools.find(t => t.id === registryId)
+          if (!toolInfo) {
+            return c.json(jsonRpcError(id, -32602, `Tool "${toolName}" not found`))
+          }
+
+          // Check if this is the question tool — route through Question.ask
+          if (registryId === "question") {
+            return await handleQuestionTool(c, id, bridge, toolArgs)
+          }
+
+          // Permission gate
+          const agentActions = bridge.agent.actions ?? {}
+          const sdkName = REGISTRY_ID_TO_SDK_NAME[registryId] ?? toolName
+          const policy = agentActions[sdkName]
+
+          if (policy !== "allow") {
+            // Need to check permission rules
+            const session = await Session.get(bridge.sessionID).catch(() => null)
+            const ruleset = PermissionNext.merge(bridge.agent.permission, session?.permission ?? [])
+            const rule = PermissionNext.evaluate(toolPermission(sdkName), toolPattern(sdkName, toolArgs), ruleset)
+
+            if (rule.action === "deny") {
               return c.json(
                 jsonRpcOk(id, {
-                  content: [{ type: "text", text: msg }],
+                  content: [{ type: "text", text: `Tool "${toolName}" denied by permission policy.` }],
                   isError: true,
                 })
               )
             }
+
+            if (rule.action === "ask") {
+              try {
+                await PermissionNext.ask({
+                  sessionID: bridge.sessionID,
+                  permission: toolPermission(sdkName),
+                  patterns: [toolPattern(sdkName, toolArgs)],
+                  metadata: { tool: sdkName, provider: "claude-code", agent: bridge.agentName },
+                  always: ["*"],
+                  ruleset,
+                })
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : "Permission denied."
+                return c.json(
+                  jsonRpcOk(id, {
+                    content: [{ type: "text", text: msg }],
+                    isError: true,
+                  })
+                )
+              }
+            }
+          }
+
+          // Build Tool.Context
+          const messageID = `bridge-${bridgeId}`
+          const callID = crypto.randomUUID()
+          const ctx: Tool.Context = {
+            sessionID: bridge.sessionID,
+            messageID,
+            agent: bridge.agentName,
+            abort: bridge.abort,
+            callID,
+            messages: [],
+            metadata: () => {},
+            ask: async req => {
+              const session = await Session.get(bridge.sessionID).catch(() => null)
+              await PermissionNext.ask({
+                ...req,
+                sessionID: bridge.sessionID,
+                tool: { messageID, callID },
+                ruleset: PermissionNext.merge(bridge.agent.permission, session?.permission ?? []),
+              })
+            },
+          }
+
+          // Execute
+          try {
+            const result = await toolInfo.execute(toolArgs, ctx)
+            return c.json(
+              jsonRpcOk(id, {
+                content: [{ type: "text", text: result.output }],
+              })
+            )
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            return c.json(
+              jsonRpcOk(id, {
+                content: [{ type: "text", text: msg }],
+                isError: true,
+              })
+            )
           }
         }
 
-        // Build Tool.Context
-        const messageID = `bridge-${bridgeId}`
-        const callID = crypto.randomUUID()
-        const ctx: Tool.Context = {
-          sessionID: bridge.sessionID,
-          messageID,
-          agent: bridge.agentName,
-          abort: bridge.abort,
-          callID,
-          messages: [],
-          metadata: () => {},
-          ask: async req => {
-            const session = await Session.get(bridge.sessionID).catch(() => null)
-            await PermissionNext.ask({
-              ...req,
-              sessionID: bridge.sessionID,
-              tool: { messageID, callID },
-              ruleset: PermissionNext.merge(bridge.agent.permission, session?.permission ?? []),
-            })
-          },
+        case "resources/list": {
+          return c.json(jsonRpcOk(id, { resources: [] }))
         }
 
-        // Execute
-        try {
-          const result = await toolInfo.execute(toolArgs, ctx)
-          return c.json(
-            jsonRpcOk(id, {
-              content: [{ type: "text", text: result.output }],
-            })
-          )
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
-          return c.json(
-            jsonRpcOk(id, {
-              content: [{ type: "text", text: msg }],
-              isError: true,
-            })
-          )
+        case "resources/templates/list": {
+          return c.json(jsonRpcOk(id, { resourceTemplates: [] }))
+        }
+
+        case "prompts/list": {
+          return c.json(jsonRpcOk(id, { prompts: [] }))
+        }
+
+        default: {
+          log.debug("unhandled MCP method", { bridgeId, method })
+          return c.json(jsonRpcError(id, -32601, `Method not found: ${method}`))
         }
       }
-
-      default: {
-        return c.json(jsonRpcError(id, -32601, `Method not found: ${method}`))
-      }
-    }
-  })
+    })
 )
 
 async function handleQuestionTool(
