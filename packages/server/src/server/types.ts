@@ -3,20 +3,20 @@
 
 export type { Event } from "@/core/bus/bus-event"
 
-import type { Session as SessionMod } from "@/session"
-import type { MessageV2 } from "@/session/message-v2"
 import type { Config as ConfigMod } from "@/core/config/config"
+import type { LSP } from "@/integration/lsp"
+import type { MCP } from "@/integration/mcp"
+import type { PermissionNext } from "@/permission/next"
+import type { Vcs } from "@/project/vcs"
 import type { Provider as ProviderMod } from "@/provider/provider"
 import type { Agent as AgentMod } from "@/runtime/agent/agent"
 import type { Command as CommandMod } from "@/runtime/command"
-import type { Todo as TodoMod } from "@/session/todo"
-import type { SessionStatus as SessionStatusMod } from "@/session/status"
-import type { PermissionNext } from "@/permission/next"
-import type { Question } from "@/runtime/question"
-import type { Vcs } from "@/project/vcs"
-import type { LSP } from "@/integration/lsp"
-import type { MCP } from "@/integration/mcp"
 import type { Format } from "@/runtime/format"
+import type { Question } from "@/runtime/question"
+import type { Session as SessionMod } from "@/session"
+import type { MessageV2 } from "@/session/message-v2"
+import type { SessionStatus as SessionStatusMod } from "@/session/status"
+import type { Todo as TodoMod } from "@/session/todo"
 import type { Snapshot } from "@/workspace/snapshot"
 
 // Session
@@ -94,6 +94,7 @@ export type Path = {
   config: string
   worktree: string
   directory: string
+  worktreeName?: string
 }
 
 // Session message response

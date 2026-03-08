@@ -1,3 +1,4 @@
+import path from "node:path"
 import { Hono } from "hono"
 import { streamSSE } from "hono/streaming"
 import { describeRoute, resolver, validator } from "hono-openapi"
@@ -64,6 +65,7 @@ export const AppRoutes = lazy(() =>
                       config: z.string(),
                       worktree: z.string(),
                       directory: z.string(),
+                      worktreeName: z.string().optional(),
                     })
                     .meta({
                       ref: "Path",
@@ -75,12 +77,21 @@ export const AppRoutes = lazy(() =>
         },
       }),
       async c => {
+        const sandbox = Instance.worktree
+        const repoRoot = Instance.project.worktree
+        let worktreeName: string | undefined
+        if (sandbox !== repoRoot && sandbox !== "/") {
+          const sandboxBase = path.basename(sandbox)
+          const repoBase = path.basename(repoRoot)
+          worktreeName = sandboxBase.startsWith(repoBase + "-") ? sandboxBase.slice(repoBase.length + 1) : sandboxBase
+        }
         return c.json({
           home: Global.Path.home,
           state: Global.Path.state,
           config: Global.Path.config,
-          worktree: Instance.worktree,
+          worktree: sandbox,
           directory: Instance.directory,
+          ...(worktreeName && { worktreeName }),
         })
       }
     )
