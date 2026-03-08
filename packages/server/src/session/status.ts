@@ -1,7 +1,7 @@
-import { BusEvent } from "@/core/bus/bus-event"
-import { Bus } from "@/core/bus"
-import { Instance } from "@/project/instance"
 import z from "zod"
+import { Bus } from "@/core/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Instance } from "@/project/instance"
 
 export namespace SessionStatus {
   export const Info = z
@@ -17,7 +17,7 @@ export namespace SessionStatus {
       }),
       z.object({
         type: z.literal("busy"),
-        phase: z.enum(["thinking", "writing", "tool"]).optional(),
+        phase: z.enum(["thinking", "writing", "tool", "waiting"]).optional(),
         detail: z.string().optional(),
       }),
     ])
@@ -32,14 +32,14 @@ export namespace SessionStatus {
       z.object({
         sessionID: z.string(),
         status: Info,
-      }),
+      })
     ),
     // deprecated
     Idle: BusEvent.define(
       "session.idle",
       z.object({
         sessionID: z.string(),
-      }),
+      })
     ),
   }
 

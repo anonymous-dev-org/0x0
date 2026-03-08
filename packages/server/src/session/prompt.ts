@@ -16,6 +16,7 @@ import { MCP } from "@/integration/mcp"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/runtime/agent/agent"
 import { Command } from "@/runtime/command"
+import { Question } from "@/runtime/question"
 import { InvalidTool } from "@/tool/invalid"
 import { TaskTool } from "@/tool/task"
 import type { Tool } from "@/tool/tool"
@@ -646,6 +647,22 @@ export namespace SessionPrompt {
         model,
       })
       if (result === "stop") break
+
+      // After the model turn ends, check for pending questions registered
+      // during this turn. Wait for the user's answer, update the tool part
+      // metadata with answers (for inline display), then inject a synthetic
+      // user message with the answers and continue the loop.
+      const pendingQuestions = await Question.listBySession(sessionID)
+      if (pendingQuestions.length > 0) {
+        const questionHandled = await handlePendingQuestions({
+          sessionID,
+          pendingQuestions,
+          lastUser,
+          processor,
+          abort,
+        })
+        if (!questionHandled) break
+      }
     }
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
@@ -657,6 +674,83 @@ export namespace SessionPrompt {
     }
     throw new Error("Impossible")
   })
+
+  /**
+   * Waits for the user to answer pending questions, updates tool part metadata
+   * with answers for inline display, and injects a synthetic user message.
+   * Returns true if answers were provided, false if the user dismissed (go idle).
+   */
+  async function handlePendingQuestions(input: {
+    sessionID: string
+    pendingQuestions: Question.Request[]
+    lastUser: MessageV2.User
+    processor: SessionProcessor.Info
+    abort: AbortSignal
+  }): Promise<boolean> {
+    SessionStatus.set(input.sessionID, { type: "busy", phase: "waiting" })
+
+    const allAnswers: Array<{ request: Question.Request; answers: Question.Answer[] }> = []
+
+    for (const request of input.pendingQuestions) {
+      if (input.abort.aborted) return false
+
+      try {
+        const answers = await Question.waitForAnswer(request.id)
+        allAnswers.push({ request, answers })
+      } catch (e) {
+        if (e instanceof Question.RejectedError) {
+          log.info("question dismissed", { requestID: request.id, sessionID: input.sessionID })
+          // Reject remaining questions for this session
+          await Question.rejectBySession(input.sessionID)
+          return false
+        }
+        throw e
+      }
+    }
+
+    // Update tool parts with answers metadata for inline display
+    for (const { request, answers } of allAnswers) {
+      if (!request.tool) continue
+      const toolPart = input.processor.partFromToolCall(request.tool.callID)
+      if (!toolPart || toolPart.state.status !== "completed") continue
+
+      await Session.updatePart({
+        ...toolPart,
+        state: {
+          ...toolPart.state,
+          metadata: {
+            ...toolPart.state.metadata,
+            answers,
+          },
+        },
+      } satisfies MessageV2.ToolPart)
+    }
+
+    // Build synthetic user message with all answers
+    const answerLines = allAnswers.flatMap(({ request, answers }) =>
+      request.questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
+    )
+
+    const syntheticUserMsg: MessageV2.User = {
+      id: Identifier.ascending("message"),
+      sessionID: input.sessionID,
+      role: "user",
+      time: { created: Date.now() },
+      agent: input.lastUser.agent,
+      model: input.lastUser.model,
+    }
+    await Session.updateMessage(syntheticUserMsg)
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID: syntheticUserMsg.id,
+      sessionID: input.sessionID,
+      type: "text",
+      text: `The user answered your questions:\n\n${answerLines.join("\n\n")}\n\nContinue with the user's answers in mind.`,
+      synthetic: true,
+    } satisfies MessageV2.TextPart)
+
+    return true
+  }
 
   async function lastModel(sessionID: string) {
     for await (const item of MessageV2.stream(sessionID)) {

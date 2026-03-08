@@ -1,13 +1,12 @@
 import { Hono } from "hono"
-import { streamSSE } from "hono/streaming"
-import { lazy } from "../../util/lazy"
-import { Log } from "../../util/log"
+import z from "zod"
 import { PermissionNext } from "@/permission/next"
+import type { Agent } from "@/runtime/agent/agent"
 import { Question } from "@/runtime/question"
 import { Session } from "@/session"
 import type { Tool } from "@/tool/tool"
-import type { Agent } from "@/runtime/agent/agent"
-import z from "zod"
+import { lazy } from "../../util/lazy"
+import { Log } from "../../util/log"
 
 const log = Log.create({ service: "tool-bridge" })
 
@@ -36,18 +35,25 @@ for (const [registryId, sdkName] of Object.entries(REGISTRY_ID_TO_SDK_NAME)) {
 
 function toolPermission(sdkName: string): string {
   switch (sdkName) {
-    case "Bash": return "bash"
+    case "Bash":
+      return "bash"
     case "Edit":
     case "Write":
     case "MultiEdit":
-    case "NotebookEdit": return "edit"
-    case "Read": return "read"
+    case "NotebookEdit":
+      return "edit"
+    case "Read":
+      return "read"
     case "Glob":
-    case "Grep": return "search"
-    case "Task": return "task"
+    case "Grep":
+      return "search"
+    case "Task":
+      return "task"
     case "WebFetch":
-    case "WebSearch": return "web"
-    default: return sdkName.toLowerCase()
+    case "WebSearch":
+      return "web"
+    default:
+      return sdkName.toLowerCase()
   }
 }
 
@@ -60,18 +66,27 @@ function toolPattern(sdkName: string, input: Record<string, unknown>): string {
     return "*"
   }
   switch (sdkName) {
-    case "Bash": return field("command")
+    case "Bash":
+      return field("command")
     case "Edit":
     case "Write":
     case "MultiEdit":
-    case "NotebookEdit": return field("file_path", "path")
-    case "Read": return field("file_path")
-    case "Glob": return field("pattern")
-    case "Grep": return field("path", "pattern")
-    case "Task": return field("prompt", "description")
-    case "WebFetch": return field("url")
-    case "WebSearch": return field("query")
-    default: return "*"
+    case "NotebookEdit":
+      return field("file_path", "path")
+    case "Read":
+      return field("file_path")
+    case "Glob":
+      return field("pattern")
+    case "Grep":
+      return field("path", "pattern")
+    case "Task":
+      return field("prompt", "description")
+    case "WebFetch":
+      return field("url")
+    case "WebSearch":
+      return field("query")
+    default:
+      return "*"
   }
 }
 
@@ -98,10 +113,6 @@ export function registerBridge(id: string, ctx: BridgeContext) {
 }
 
 export function unregisterBridge(id: string) {
-  const bridge = bridges.get(id)
-  if (bridge) {
-    Question.rejectBySession(bridge.sessionID)
-  }
   bridges.delete(id)
   log.info("bridge unregistered", { id })
 }
@@ -126,7 +137,7 @@ function jsonRpcError(id: string | number | undefined, code: number, message: st
 // ─── Route ───────────────────────────────────────────────────────────────────
 
 export const ToolBridgeRoutes = lazy(() =>
-  new Hono().post("/:bridgeId", async (c) => {
+  new Hono().post("/:bridgeId", async c => {
     const bridgeId = c.req.param("bridgeId")
     const bridge = bridges.get(bridgeId)
     if (!bridge) {
@@ -144,11 +155,13 @@ export const ToolBridgeRoutes = lazy(() =>
 
     switch (method) {
       case "initialize": {
-        return c.json(jsonRpcOk(id, {
-          protocolVersion: "2024-11-05",
-          capabilities: { tools: {} },
-          serverInfo: { name: "tools", version: "1.0.0" },
-        }))
+        return c.json(
+          jsonRpcOk(id, {
+            protocolVersion: "2024-11-05",
+            capabilities: { tools: {} },
+            serverInfo: { name: "tools", version: "1.0.0" },
+          })
+        )
       }
 
       case "notifications/initialized": {
@@ -157,7 +170,7 @@ export const ToolBridgeRoutes = lazy(() =>
       }
 
       case "tools/list": {
-        const tools = bridge.tools.map((t) => {
+        const tools = bridge.tools.map(t => {
           const sdkName = REGISTRY_ID_TO_SDK_NAME[t.id] ?? t.id
           return {
             name: sdkName,
@@ -178,7 +191,7 @@ export const ToolBridgeRoutes = lazy(() =>
 
         // Map SDK name → registry ID
         const registryId = SDK_NAME_TO_REGISTRY_ID[toolName] ?? toolName.toLowerCase()
-        const toolInfo = bridge.tools.find((t) => t.id === registryId)
+        const toolInfo = bridge.tools.find(t => t.id === registryId)
         if (!toolInfo) {
           return c.json(jsonRpcError(id, -32602, `Tool "${toolName}" not found`))
         }
@@ -197,17 +210,15 @@ export const ToolBridgeRoutes = lazy(() =>
           // Need to check permission rules
           const session = await Session.get(bridge.sessionID).catch(() => null)
           const ruleset = PermissionNext.merge(bridge.agent.permission, session?.permission ?? [])
-          const rule = PermissionNext.evaluate(
-            toolPermission(sdkName),
-            toolPattern(sdkName, toolArgs),
-            ruleset,
-          )
+          const rule = PermissionNext.evaluate(toolPermission(sdkName), toolPattern(sdkName, toolArgs), ruleset)
 
           if (rule.action === "deny") {
-            return c.json(jsonRpcOk(id, {
-              content: [{ type: "text", text: `Tool "${toolName}" denied by permission policy.` }],
-              isError: true,
-            }))
+            return c.json(
+              jsonRpcOk(id, {
+                content: [{ type: "text", text: `Tool "${toolName}" denied by permission policy.` }],
+                isError: true,
+              })
+            )
           }
 
           if (rule.action === "ask") {
@@ -222,10 +233,12 @@ export const ToolBridgeRoutes = lazy(() =>
               })
             } catch (e) {
               const msg = e instanceof Error ? e.message : "Permission denied."
-              return c.json(jsonRpcOk(id, {
-                content: [{ type: "text", text: msg }],
-                isError: true,
-              }))
+              return c.json(
+                jsonRpcOk(id, {
+                  content: [{ type: "text", text: msg }],
+                  isError: true,
+                })
+              )
             }
           }
         }
@@ -241,7 +254,7 @@ export const ToolBridgeRoutes = lazy(() =>
           callID,
           messages: [],
           metadata: () => {},
-          ask: async (req) => {
+          ask: async req => {
             const session = await Session.get(bridge.sessionID).catch(() => null)
             await PermissionNext.ask({
               ...req,
@@ -255,15 +268,19 @@ export const ToolBridgeRoutes = lazy(() =>
         // Execute
         try {
           const result = await toolInfo.execute(toolArgs, ctx)
-          return c.json(jsonRpcOk(id, {
-            content: [{ type: "text", text: result.output }],
-          }))
+          return c.json(
+            jsonRpcOk(id, {
+              content: [{ type: "text", text: result.output }],
+            })
+          )
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
-          return c.json(jsonRpcOk(id, {
-            content: [{ type: "text", text: msg }],
-            isError: true,
-          }))
+          return c.json(
+            jsonRpcOk(id, {
+              content: [{ type: "text", text: msg }],
+              isError: true,
+            })
+          )
         }
       }
 
@@ -271,14 +288,14 @@ export const ToolBridgeRoutes = lazy(() =>
         return c.json(jsonRpcError(id, -32601, `Method not found: ${method}`))
       }
     }
-  }),
+  })
 )
 
 async function handleQuestionTool(
   c: import("hono").Context,
   rpcId: string | number | undefined,
   bridge: BridgeContext,
-  toolArgs: Record<string, unknown>,
+  toolArgs: Record<string, unknown>
 ) {
   const rawQuestions = toolArgs.questions as
     | Array<{
@@ -291,82 +308,35 @@ async function handleQuestionTool(
     | undefined
 
   if (!rawQuestions?.length) {
-    return c.json(jsonRpcOk(rpcId, {
-      content: [{ type: "text", text: "No questions provided." }],
-      isError: true,
-    }))
+    return c.json(
+      jsonRpcOk(rpcId, {
+        content: [{ type: "text", text: "No questions provided." }],
+        isError: true,
+      })
+    )
   }
 
-  // Use SSE streaming to keep the connection alive while waiting for user input.
-  // The MCP Streamable HTTP spec allows SSE responses to POST requests.
-  // Without this, the MCP client's 60s request timeout kills the connection
-  // before the user has time to answer.
-  return streamSSE(c, async (stream) => {
-    let keepaliveTimer: ReturnType<typeof setTimeout> | undefined
-
-    const cleanup = () => {
-      if (keepaliveTimer !== undefined) {
-        clearTimeout(keepaliveTimer)
-        keepaliveTimer = undefined
-      }
-    }
-
-    // Reject the pending question immediately when the client disconnects so
-    // the Promise in Question.ask() rejects rather than hanging until
-    // unregisterBridge runs.
-    stream.onAbort(() => {
-      cleanup()
-      Question.rejectBySession(bridge.sessionID).catch(() => {})
-    })
-
-    // Send SSE comment pings every 25s to keep the transport alive.
-    // Using the comment format (": ping") rather than a JSON-RPC notification
-    // ensures the MCP client never mistakes a keepalive for the actual tool
-    // response — SSE comments are universally ignored by all SSE parsers.
-    const scheduleKeepalive = () => {
-      keepaliveTimer = setTimeout(async () => {
-        if (stream.closed) return
-        await stream.write(": ping\n\n")
-        scheduleKeepalive()
-      }, 25_000)
-    }
-    scheduleKeepalive()
-
-    try {
-      const answers = await Question.ask({
-        sessionID: bridge.sessionID,
-        questions: rawQuestions.map((q) => ({
-          question: q.question,
-          header: q.header,
-          options: q.options,
-          multiple: q.multiSelect ?? q.multiple,
-        })),
-      })
-
-      const answerMap: Record<string, string> = {}
-      for (let i = 0; i < rawQuestions.length; i++) {
-        answerMap[rawQuestions[i]!.question] = (answers[i] ?? []).join(", ")
-      }
-
-      await stream.writeSSE({
-        event: "message",
-        data: JSON.stringify(jsonRpcOk(rpcId, {
-          content: [{ type: "text", text: `The user answered your questions: ${JSON.stringify(answerMap)}. Continue with these answers in mind.` }],
-        })),
-      })
-    } catch (e) {
-      const msg = e instanceof Question.RejectedError
-        ? "The user dismissed this question without answering."
-        : e instanceof Error ? e.message : "Failed to ask question."
-      await stream.writeSSE({
-        event: "message",
-        data: JSON.stringify(jsonRpcOk(rpcId, {
-          content: [{ type: "text", text: msg }],
-          isError: true,
-        })),
-      })
-    } finally {
-      cleanup()
-    }
+  // Non-blocking: register the question and return immediately.
+  // The session prompt loop will detect pending questions after the model turn
+  // ends, wait for the user's answer, and inject it as a synthetic user message.
+  await Question.register({
+    sessionID: bridge.sessionID,
+    questions: rawQuestions.map(q => ({
+      question: q.question,
+      header: q.header,
+      options: q.options,
+      multiple: q.multiSelect ?? q.multiple,
+    })),
   })
+
+  return c.json(
+    jsonRpcOk(rpcId, {
+      content: [
+        {
+          type: "text",
+          text: "Question has been registered and will be shown to the user. Your turn is now ending — the user's answer will be provided in the next message.",
+        },
+      ],
+    })
+  )
 }
