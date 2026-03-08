@@ -1,16 +1,16 @@
-import { BusEvent } from "@/core/bus/bus-event"
-import z from "zod"
-import { NamedError } from "@/util/error"
 import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
-import { Identifier } from "@/core/id/id"
-import { LSP } from "@/integration/lsp"
-import { Snapshot } from "@/workspace/snapshot"
-import { fn } from "@/util/fn"
-import { Storage } from "@/core/storage/storage"
+import type { SystemError } from "bun"
 import { STATUS_CODES } from "http"
-import { iife } from "@/util/iife"
-import { type SystemError } from "bun"
+import z from "zod"
+import { BusEvent } from "@/core/bus/bus-event"
+import { Identifier } from "@/core/id/id"
+import { Storage } from "@/core/storage/storage"
+import { LSP } from "@/integration/lsp"
 import type { Provider } from "@/provider/provider"
+import { NamedError } from "@/util/error"
+import { fn } from "@/util/fn"
+import { iife } from "@/util/iife"
+import { Snapshot } from "@/workspace/snapshot"
 
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -20,7 +20,7 @@ export namespace MessageV2 {
     z.object({
       providerID: z.string(),
       message: z.string(),
-    }),
+    })
   )
   export const APIError = NamedError.create(
     "APIError",
@@ -31,7 +31,7 @@ export namespace MessageV2 {
       responseHeaders: z.record(z.string(), z.string()).optional(),
       responseBody: z.string().optional(),
       metadata: z.record(z.string(), z.string()).optional(),
-    }),
+    })
   )
   export type APIError = z.infer<typeof APIError.Schema>
 
@@ -316,6 +316,7 @@ export namespace MessageV2 {
       })
       .optional(),
     agent: z.string(),
+    agentMode: z.enum(["plan", "build"]).optional(),
     model: z.object({
       providerID: z.string(),
       modelID: z.string(),
@@ -404,21 +405,21 @@ export namespace MessageV2 {
       "message.updated",
       z.object({
         info: Info,
-      }),
+      })
     ),
     Removed: BusEvent.define(
       "message.removed",
       z.object({
         sessionID: z.string(),
         messageID: z.string(),
-      }),
+      })
     ),
     PartUpdated: BusEvent.define(
       "message.part.updated",
       z.object({
         part: Part,
         delta: z.string().optional(),
-      }),
+      })
     ),
     PartRemoved: BusEvent.define(
       "message.part.removed",
@@ -426,7 +427,7 @@ export namespace MessageV2 {
         sessionID: z.string(),
         messageID: z.string(),
         partID: z.string(),
-      }),
+      })
     ),
   }
 
@@ -461,7 +462,7 @@ export namespace MessageV2 {
           text: string
           attachments?: Array<{ mime: string; url: string }>
         }
-        const attachments = (outputObject.attachments ?? []).filter((attachment) => {
+        const attachments = (outputObject.attachments ?? []).filter(attachment => {
           return attachment.url.startsWith("data:") && attachment.url.includes(",")
         })
 
@@ -469,7 +470,7 @@ export namespace MessageV2 {
           type: "content",
           value: [
             { type: "text", text: outputObject.text },
-            ...attachments.map((attachment) => ({
+            ...attachments.map(attachment => ({
               type: "media",
               mediaType: attachment.mime,
               data: iife(() => {
@@ -532,7 +533,7 @@ export namespace MessageV2 {
           msg.info.error &&
           !(
             MessageV2.AbortedError.isInstance(msg.info.error) &&
-            msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
+            msg.parts.some(part => part.type !== "step-start" && part.type !== "reasoning")
           )
         ) {
           continue
@@ -564,7 +565,7 @@ export namespace MessageV2 {
               const isMediaAttachment = (a: { mime: string }) =>
                 a.mime.startsWith("image/") || a.mime === "application/pdf"
               const mediaAttachments = attachments.filter(isMediaAttachment)
-              const nonMediaAttachments = attachments.filter((a) => !isMediaAttachment(a))
+              const nonMediaAttachments = attachments.filter(a => !isMediaAttachment(a))
               if (!supportsMediaInToolResults && mediaAttachments.length > 0) {
                 media.push(...mediaAttachments)
               }
@@ -629,7 +630,7 @@ export namespace MessageV2 {
                   type: "text" as const,
                   text: "Attached image(s) from tool result:",
                 },
-                ...media.map((attachment) => ({
+                ...media.map(attachment => ({
                   type: "file" as const,
                   url: attachment.url,
                   mediaType: attachment.mime,
@@ -641,14 +642,14 @@ export namespace MessageV2 {
       }
     }
 
-    const tools = Object.fromEntries(Array.from(toolNames).map((toolName) => [toolName, { toModelOutput }]))
+    const tools = Object.fromEntries(Array.from(toolNames).map(toolName => [toolName, { toModelOutput }]))
 
     return convertToModelMessages(
-      result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")),
+      result.filter(msg => msg.parts.some(part => part.type !== "step-start")),
       {
         //@ts-expect-error (convertToModelMessages expects a ToolSet but only actually needs tools[name]?.toModelOutput)
         tools,
-      },
+      }
     )
   }
 
@@ -662,7 +663,7 @@ export namespace MessageV2 {
     }
   })
 
-  export const parts = fn(Identifier.schema("message"), async (messageID) => {
+  export const parts = fn(Identifier.schema("message"), async messageID => {
     const result = [] as MessageV2.Part[]
     for (const item of await Storage.list(["part", messageID])) {
       const read = await Storage.read<MessageV2.Part>(item)
@@ -682,7 +683,7 @@ export namespace MessageV2 {
         info: await Storage.read<MessageV2.Info>(["message", input.sessionID, input.messageID]),
         parts: await parts(input.messageID),
       }
-    },
+    }
   )
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
@@ -690,11 +691,7 @@ export namespace MessageV2 {
     const completed = new Set<string>()
     for await (const msg of stream) {
       result.push(msg)
-      if (
-        msg.info.role === "user" &&
-        completed.has(msg.info.id) &&
-        msg.parts.some((part) => part.type === "compaction")
-      )
+      if (msg.info.role === "user" && completed.has(msg.info.id) && msg.parts.some(part => part.type === "compaction"))
         break
       if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish) completed.add(msg.info.parentID)
     }
@@ -716,7 +713,7 @@ export namespace MessageV2 {
           { message: e.message },
           {
             cause: e,
-          },
+          }
         ).toObject()
       case MessageV2.OutputLengthError.isInstance(e):
         return e
@@ -726,7 +723,7 @@ export namespace MessageV2 {
             providerID: ctx.providerID,
             message: e.message,
           },
-          { cause: e },
+          { cause: e }
         ).toObject()
       case (e as SystemError)?.code === "ECONNRESET":
         return new MessageV2.APIError(
@@ -739,11 +736,11 @@ export namespace MessageV2 {
               message: (e as SystemError).message ?? "",
             },
           },
-          { cause: e },
+          { cause: e }
         ).toObject()
-      case APICallError.isInstance(e):
+      case APICallError.isInstance(e): {
         const message = iife(() => {
-          let msg = e.message
+          const msg = e.message
           if (msg === "") {
             if (e.responseBody) return e.responseBody
             if (e.statusCode) {
@@ -778,8 +775,9 @@ export namespace MessageV2 {
             responseBody: e.responseBody,
             metadata,
           },
-          { cause: e },
+          { cause: e }
         ).toObject()
+      }
       case e instanceof Error:
         return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
       default:

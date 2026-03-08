@@ -1,17 +1,17 @@
-import { useRenderer } from "@opentui/solid"
-import { useCommandDialog } from "@tui/component/dialog-command"
-import { useConnected } from "@tui/component/dialog-model"
-import { local } from "@tui/state/local"
-import { sync } from "@tui/state/sync"
-import { useDialog } from "@tui/ui/dialog"
-import { kv } from "@tui/state/kv"
+import type { useRenderer } from "@opentui/solid"
+import type { useCommandDialog } from "@tui/component/dialog-command"
+import type { useConnected } from "@tui/component/dialog-model"
+import type { exit } from "@tui/state/exit"
+import type { kv } from "@tui/state/kv"
+import type { local } from "@tui/state/local"
+import type { promptRef } from "@tui/state/prompt"
 import type { RouteContext } from "@tui/state/route"
-import { promptRef } from "@tui/state/prompt"
-import { sdk } from "@tui/state/sdk"
-import { useToast } from "../ui/toast"
-import { exit } from "@tui/state/exit"
-import { DialogAlert } from "../ui/dialog-alert"
+import type { sdk } from "@tui/state/sdk"
+import type { sync } from "@tui/state/sync"
+import type { useDialog } from "@tui/ui/dialog"
 import type { Accessor, Component, Setter } from "solid-js"
+import { DialogAlert } from "../ui/dialog-alert"
+import type { useToast } from "../ui/toast"
 
 type Loader<T> = () => Promise<T>
 
@@ -34,18 +34,18 @@ export function registerAppCommands(props: {
   toast: ReturnType<typeof useToast>
 }) {
   const load = {
-    session: () => import("@tui/component/dialog-session-list").then((x) => x.DialogSessionList),
-    model: () => import("@tui/component/dialog-model").then((x) => x.DialogModel),
-    agent: () => import("@tui/component/dialog-agent").then((x) => x.DialogAgent),
-    mcp: () => import("@tui/component/dialog-mcp").then((x) => x.DialogMcp),
-    provider: () => import("@tui/component/dialog-provider").then((x) => x.DialogProvider),
-    status: () => import("@tui/component/dialog-status").then((x) => x.DialogStatus),
-    help: () => import("../ui/dialog-help").then((x) => x.DialogHelp),
-    open: () => import("open").then((x) => x.default),
+    session: () => import("@tui/component/dialog-session-list").then(x => x.DialogSessionList),
+    model: () => import("@tui/component/dialog-model").then(x => x.DialogModel),
+    agent: () => import("@tui/component/dialog-agent").then(x => x.DialogAgent),
+    mcp: () => import("@tui/component/dialog-mcp").then(x => x.DialogMcp),
+    provider: () => import("@tui/component/dialog-provider").then(x => x.DialogProvider),
+    status: () => import("@tui/component/dialog-status").then(x => x.DialogStatus),
+    help: () => import("../ui/dialog-help").then(x => x.DialogHelp),
+    open: () => import("open").then(x => x.default),
   }
 
   const show = (title: string, input: Loader<Component>, size?: "medium" | "large") => async () => {
-    const Dialog = await input().catch((error) => {
+    const Dialog = await input().catch(error => {
       console.error(`failed to load ${title} dialog`, error)
       return undefined
     })
@@ -85,7 +85,10 @@ export function registerAppCommands(props: {
       onSelect: async () => {
         const current = props.promptRef.current
         const currentPrompt = current?.current?.input ? current.current : undefined
-        const result = await props.sdk.client.session.$post({ json: {} } as any).then((res: any) => res.json()).catch(() => undefined)
+        const result = await props.sdk.client.session
+          .$post({ json: {} } as any)
+          .then((res: any) => res.json())
+          .catch(() => undefined)
         if (!result?.id) {
           props.toast.show({
             variant: "error",
@@ -170,9 +173,12 @@ export function registerAppCommands(props: {
       slash: {
         name: "prompt",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         const currentAgent = props.local.agent.current().name
-        const response = await props.sdk.client.prompt.$post({ json: { agent: currentAgent } } as any).then((res: any) => res.json()).catch(() => undefined)
+        const response = await props.sdk.client.prompt
+          .$post({ json: { agent: currentAgent } } as any)
+          .then((res: any) => res.json())
+          .catch(() => undefined)
         if (!response?.prompt) {
           props.toast.show({
             variant: "error",
@@ -194,13 +200,17 @@ export function registerAppCommands(props: {
       onSelect: show("MCPs", load.mcp),
     },
     {
-      title: "Agent cycle",
+      title: "Mode / Agent cycle",
       value: "agent.cycle",
       keybind: "agent_cycle",
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        props.local.agent.move(1)
+        if (props.local.agent.hasModes()) {
+          props.local.agent.cycleMode()
+        } else {
+          props.local.agent.move(1)
+        }
       },
     },
     {
@@ -214,13 +224,17 @@ export function registerAppCommands(props: {
       },
     },
     {
-      title: "Agent cycle reverse",
+      title: "Mode / Agent cycle reverse",
       value: "agent.cycle.reverse",
       keybind: "agent_cycle_reverse",
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        props.local.agent.move(-1)
+        if (props.local.agent.hasModes()) {
+          props.local.agent.cycleMode()
+        } else {
+          props.local.agent.move(-1)
+        }
       },
     },
     {
@@ -247,7 +261,7 @@ export function registerAppCommands(props: {
     {
       title: "Toggle appearance",
       value: "theme.switch_mode",
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         props.setMode(props.mode() === "dark" ? "light" : "dark")
         dialog.clear()
       },
@@ -260,12 +274,12 @@ export function registerAppCommands(props: {
       slash: {
         name: "reset",
       },
-      onSelect: async (dialog) => {
+      onSelect: async dialog => {
         const { DialogConfirm } = await import("../ui/dialog-confirm")
         const confirmed = await DialogConfirm.show(
           dialog,
           "Reset config",
-          "This will overwrite your global config with defaults. All customizations (MCP servers, providers, keybinds, etc.) will be lost. Continue?",
+          "This will overwrite your global config with defaults. All customizations (MCP servers, providers, keybinds, etc.) will be lost. Continue?"
         )
         if (!confirmed) return
         const result = await props.sdk.client.global.config.reset
@@ -292,7 +306,7 @@ export function registerAppCommands(props: {
       title: "Open docs",
       value: "docs.open",
       onSelect: async () => {
-        const open = await load.open().catch((error) => {
+        const open = await load.open().catch(error => {
           console.error("failed to load open module", error)
           return undefined
         })
@@ -304,7 +318,7 @@ export function registerAppCommands(props: {
           props.dialog.clear()
           return
         }
-        await open("https://zeroxzero.ai/docs").catch((error) => {
+        await open("https://zeroxzero.ai/docs").catch(error => {
           console.error("failed to open docs", error)
           props.toast.show({
             variant: "error",
@@ -345,8 +359,8 @@ export function registerAppCommands(props: {
       value: "terminal.title.toggle",
       keybind: "terminal_title_toggle",
       category: "System",
-      onSelect: (dialog) => {
-        props.setTerminalTitleEnabled((prev) => {
+      onSelect: dialog => {
+        props.setTerminalTitleEnabled(prev => {
           const next = !prev
           props.kv.set("terminal_title_enabled", next)
           if (!next) props.renderer.setTerminalTitle("")
@@ -359,7 +373,7 @@ export function registerAppCommands(props: {
       title: props.kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
       value: "app.toggle.animations",
       category: "System",
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         props.kv.set("animations_enabled", !props.kv.get("animations_enabled", true))
         dialog.clear()
       },
@@ -368,7 +382,7 @@ export function registerAppCommands(props: {
       title: props.kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
       value: "app.toggle.diffwrap",
       category: "System",
-      onSelect: (dialog) => {
+      onSelect: dialog => {
         const current = props.kv.get("diff_wrap_mode", "word")
         props.kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
         dialog.clear()

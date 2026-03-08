@@ -18,10 +18,10 @@ test("loads config with defaults when no files exist", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.agent?.builder?.name).toBe("Builder")
-      expect(config.agent?.planner?.name).toBe("Planner")
-      expect(config.agent?.builder?.model).toBeUndefined()
-      expect(config.agent?.planner?.model).toBeUndefined()
+      expect(config.agent?.default?.name).toBe("Default")
+      expect(config.default_agent).toBe("default")
+      expect(config.agent?.default?.plan).toBeDefined()
+      expect(config.agent?.default?.build).toBeDefined()
     },
   })
 })

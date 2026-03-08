@@ -127,9 +127,12 @@ export const TaskTool = Tool.define("task", async ctx => {
         // The prompt loop detects the new user message on its next iteration,
         // sees the agent change via cliSessionAgent mismatch, and starts a
         // fresh LLM conversation automatically.
+        // If the target agent has modes, default to its first mode.
+        const targetMode = agent.modes.length > 0 ? agent.modes[0] : undefined
         await SessionPrompt.prompt({
           sessionID: ctx.sessionID,
           agent: agent.name,
+          agentMode: targetMode,
           model,
           noReply: true,
           parts: [{ type: "text", text: handoffPromptText }],

@@ -61,7 +61,9 @@ export namespace LLM {
     user: MessageV2.User
   }): Promise<string[]> {
     const skill = input.system.find(item => !!item?.trim())
-    const agentPrompt = [input.agent.prompt, transparencySection(input.agent)].filter(Boolean).join("\n\n")
+    const agentPrompt = [input.agent.modePrompt, input.agent.prompt, transparencySection(input.agent)]
+      .filter(Boolean)
+      .join("\n\n")
     return SystemPrompt.compose({ agent: agentPrompt, skill })
   }
 
@@ -74,14 +76,20 @@ export namespace LLM {
         : "(default: ask for all)"
     const knowledgeBase = agent.knowledgeBase ?? []
     const knowledge = knowledgeBase.length > 0 ? knowledgeBase.join("\n- ") : "(none)"
-    return [
+    const lines = [
       "## Effective Agent Configuration",
       `- Agent ID: ${agent.name}`,
       `- Agent Name: ${agent.displayName ?? agent.name}`,
+    ]
+    if (agent.agentMode) {
+      lines.push(`- Agent Mode: ${agent.agentMode}`)
+    }
+    lines.push(
       `- Actions: ${actionsStr}`,
       `- Thinking Effort: ${agent.thinkingEffort ?? "(unset)"}`,
-      `- Knowledge Base:\n- ${knowledge}`,
-    ].join("\n")
+      `- Knowledge Base:\n- ${knowledge}`
+    )
+    return lines.join("\n")
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

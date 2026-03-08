@@ -1,5 +1,5 @@
-import { For } from "solid-js"
 import { theme } from "@tui/state/theme"
+import { For } from "solid-js"
 
 type TipPart = { text: string; highlight: boolean }
 
@@ -17,7 +17,7 @@ function parse(tip: string): TipPart[] {
       acc.index = start + match[0].length
       return acc
     },
-    { parts, index: 0 },
+    { parts, index: 0 }
   )
 
   if (state.index < tip.length) {
@@ -37,7 +37,7 @@ export function Tips() {
       </text>
       <text flexShrink={1}>
         <For each={parts}>
-          {(part) => <span style={{ fg: part.highlight ? theme.text : theme.textMuted }}>{part.text}</span>}
+          {part => <span style={{ fg: part.highlight ? theme.text : theme.textMuted }}>{part.text}</span>}
         </For>
       </text>
     </box>
@@ -47,7 +47,7 @@ export function Tips() {
 const TIPS = [
   "Type {highlight}@{/highlight} followed by a filename to fuzzy search and attach files",
   "Start a message with {highlight}!{/highlight} to run shell commands directly (e.g., {highlight}!ls -la{/highlight})",
-  "Press {highlight}Tab{/highlight} to cycle to the next agent",
+  "Press {highlight}Tab{/highlight} to cycle between plan and build modes",
   "Use {highlight}/undo{/highlight} to revert the last message and file changes",
   "Use {highlight}/redo{/highlight} to restore previously undone messages and file changes",
   "Run {highlight}/share{/highlight} to create a public link to your conversation at zeroxzero.ai",

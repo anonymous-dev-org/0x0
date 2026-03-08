@@ -1,17 +1,17 @@
-import { createStore } from "solid-js/store"
-import { batch, createEffect, createMemo } from "solid-js"
-import { sync } from "@tui/state/sync"
-import { theme } from "@tui/state/theme"
-import { uniqueBy } from "remeda"
-import path from "path"
 import { Global } from "@anonymous-dev/0x0-server/core/global"
-import { useToast } from "../ui/toast"
 import { Provider } from "@anonymous-dev/0x0-server/provider/provider"
+import type { Agent as AgentInfo } from "@anonymous-dev/0x0-server/server/types"
+import { Locale } from "@anonymous-dev/0x0-server/util/locale"
+import { RGBA } from "@opentui/core"
 import { args } from "@tui/state/args"
 import { sdk } from "@tui/state/sdk"
-import { RGBA } from "@opentui/core"
-import { Locale } from "@anonymous-dev/0x0-server/util/locale"
-import type { Agent as AgentInfo } from "@anonymous-dev/0x0-server/server/types"
+import { sync } from "@tui/state/sync"
+import { theme } from "@tui/state/theme"
+import path from "path"
+import { uniqueBy } from "remeda"
+import { batch, createEffect, createMemo } from "solid-js"
+import { createStore } from "solid-js/store"
+import { useToast } from "../ui/toast"
 
 type LocalState = {
   model: ReturnType<typeof createModel>
@@ -25,7 +25,7 @@ type LocalState = {
 let _state: LocalState
 
 function isModelValid(model: { providerID: string; modelID: string }) {
-  const provider = sync.data.provider.find((x) => x.id === model.providerID)
+  const provider = sync.data.provider.find(x => x.id === model.providerID)
   return !!provider?.models[model.modelID]
 }
 
@@ -40,33 +40,47 @@ function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: s
 function createAgent() {
   const toast = useToast()
   const fallbackAgent: AgentInfo = {
-    name: "planner",
+    name: "default",
     mode: "primary",
     permission: [],
     options: {},
     actions: {},
     knowledgeBase: [],
   }
-  const agents = createMemo(() => sync.data.agent.filter((x) => !x.hidden))
+  const agents = createMemo(() => sync.data.agent.filter(x => !x.hidden))
   const preferred = createMemo(() => {
     const list = agents()
     if (list.length === 0) return ""
 
     const configured = sync.data.config.default_agent
-    if (configured && list.some((x) => x.name === configured)) return configured
-    if (list.some((x) => x.name === "planner")) return "planner"
+    if (configured && list.some(x => x.name === configured)) return configured
+    if (list.some(x => x.name === "default")) return "default"
     return list[0]?.name ?? ""
   })
   const [agentStore, setAgentStore] = createStore<{
     current: string
+    mode: "plan" | "build" | undefined
   }>({
     current: preferred(),
+    mode: undefined,
+  })
+
+  // When agent changes (or on init), set mode to first available mode
+  createEffect(() => {
+    const agent = agents().find(x => x.name === agentStore.current)
+    if (!agent) return
+    const modes = agent.modes ?? []
+    if (modes.length > 0) {
+      setAgentStore("mode", modes[0])
+    } else {
+      setAgentStore("mode", undefined)
+    }
   })
 
   createEffect(() => {
     const list = agents()
     if (list.length === 0) return
-    if (list.some((x) => x.name === agentStore.current)) return
+    if (list.some(x => x.name === agentStore.current)) return
     setAgentStore("current", preferred())
   })
   const colors = createMemo(() => [
@@ -83,11 +97,11 @@ function createAgent() {
       return agents()
     },
     current() {
-      return agents().find((x) => x.name === agentStore.current) ?? agents()[0] ?? fallbackAgent
+      return agents().find(x => x.name === agentStore.current) ?? agents()[0] ?? fallbackAgent
     },
     set(name: string) {
       if (agents().length === 0) return
-      if (!agents().some((x) => x.name === name))
+      if (!agents().some(x => x.name === name))
         return toast.show({
           variant: "warning",
           message: `Agent not found: ${name}`,
@@ -98,7 +112,7 @@ function createAgent() {
     move(direction: 1 | -1) {
       if (agents().length === 0) return
       batch(() => {
-        let next = agents().findIndex((x) => x.name === agentStore.current) + direction
+        let next = agents().findIndex(x => x.name === agentStore.current) + direction
         if (next < 0) next = agents().length - 1
         if (next >= agents().length) next = 0
         const value = agents()[next]
@@ -106,14 +120,30 @@ function createAgent() {
         setAgentStore("current", value.name)
       })
     },
+    currentMode(): "plan" | "build" | undefined {
+      return agentStore.mode
+    },
+    hasModes(): boolean {
+      const agent = agents().find(x => x.name === agentStore.current)
+      return (agent?.modes ?? []).length > 0
+    },
+    cycleMode() {
+      const agent = agents().find(x => x.name === agentStore.current)
+      const modes = agent?.modes ?? []
+      if (modes.length < 2) return
+      const current = agentStore.mode
+      const index = current ? modes.indexOf(current) : -1
+      const next = modes[(index + 1) % modes.length]
+      if (next) setAgentStore("mode", next)
+    },
     label(name: string) {
-      const agent = agents().find((item) => item.name === name)
+      const agent = agents().find(item => item.name === name)
       if (!agent) return Locale.titlecase(name)
       const configuredName = sync.data.config.agent?.[agent.name]?.name
       return configuredName ?? Locale.titlecase(agent.name)
     },
     color(name: string) {
-      const index = agents().findIndex((x) => x.name === name)
+      const index = agents().findIndex(x => x.name === name)
       if (index === -1) return colors()[0]
       const agent = agents()[index]
 
@@ -171,13 +201,13 @@ function createModel(agent: ReturnType<typeof createAgent>) {
         favorite: modelStore.favorite,
         variant: modelStore.variant,
         thinkingEffort: modelStore.thinkingEffort,
-      }),
+      })
     )
   }
 
   file
     .json()
-    .then((x) => {
+    .then(x => {
       if (Array.isArray(x.recent)) setModelStore("recent", x.recent)
       if (Array.isArray(x.favorite)) setModelStore("favorite", x.favorite)
       if (typeof x.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
@@ -235,7 +265,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       getFirstValidModel(
         () => modelStore.model[a.name],
         () => a.model,
-        fallbackModel,
+        fallbackModel
       ) ?? undefined
     )
   })
@@ -252,11 +282,11 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       return modelStore.favorite
     },
     list() {
-      return sync.data.provider.flatMap((provider) =>
-        Object.values(provider.models).map((model) => ({
+      return sync.data.provider.flatMap(provider =>
+        Object.values(provider.models).map(model => ({
           ...model,
           provider,
-        })),
+        }))
       )
     },
     parsed: createMemo(() => {
@@ -268,7 +298,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
           reasoning: false,
         }
       }
-      const provider = sync.data.provider.find((x) => x.id === value.providerID)
+      const provider = sync.data.provider.find(x => x.id === value.providerID)
       const info = provider?.models[value.modelID]
       return {
         provider: provider?.name ?? value.providerID,
@@ -280,7 +310,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       const current = currentModel()
       if (!current) return
       const recent = modelStore.recent
-      const index = recent.findIndex((x) => x.providerID === current.providerID && x.modelID === current.modelID)
+      const index = recent.findIndex(x => x.providerID === current.providerID && x.modelID === current.modelID)
       if (index === -1) return
       let next = index + direction
       if (next < 0) next = recent.length - 1
@@ -290,7 +320,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       this.set({ ...val })
     },
     cycleFavorite(direction: 1 | -1) {
-      const favorites = modelStore.favorite.filter((item) => isModelValid(item))
+      const favorites = modelStore.favorite.filter(item => isModelValid(item))
       if (!favorites.length) {
         toast.show({
           variant: "info",
@@ -302,7 +332,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       const current = currentModel()
       let index = -1
       if (current) {
-        index = favorites.findIndex((x) => x.providerID === current.providerID && x.modelID === current.modelID)
+        index = favorites.findIndex(x => x.providerID === current.providerID && x.modelID === current.modelID)
       }
       if (index === -1) {
         index = direction === 1 ? 0 : favorites.length - 1
@@ -314,11 +344,11 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       const next = favorites[index]
       if (!next) return
       this.set({ ...next })
-      const uniq = uniqueBy([next, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
+      const uniq = uniqueBy([next, ...modelStore.recent], x => `${x.providerID}/${x.modelID}`)
       if (uniq.length > 10) uniq.pop()
       setModelStore(
         "recent",
-        uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
+        uniq.map(x => ({ providerID: x.providerID, modelID: x.modelID }))
       )
       save()
     },
@@ -334,18 +364,18 @@ function createModel(agent: ReturnType<typeof createAgent>) {
         }
         const currentAgent = agent.current()
         setModelStore("model", currentAgent.name, model)
-        const provider = sync.data.provider.find((x) => x.id === model.providerID)
+        const provider = sync.data.provider.find(x => x.id === model.providerID)
         const variants = Object.keys(provider?.models[model.modelID]?.variants ?? {})
         const variant = modelStore.variant[currentAgent.name]
         if (variant && !variants.includes(variant)) {
           setModelStore("variant", currentAgent.name, undefined)
         }
         if (options?.recent) {
-          const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
+          const uniq = uniqueBy([model, ...modelStore.recent], x => `${x.providerID}/${x.modelID}`)
           if (uniq.length > 10) uniq.pop()
           setModelStore(
             "recent",
-            uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
+            uniq.map(x => ({ providerID: x.providerID, modelID: x.modelID }))
           )
           save()
         }
@@ -361,15 +391,13 @@ function createModel(agent: ReturnType<typeof createAgent>) {
           })
           return
         }
-        const exists = modelStore.favorite.some(
-          (x) => x.providerID === model.providerID && x.modelID === model.modelID,
-        )
+        const exists = modelStore.favorite.some(x => x.providerID === model.providerID && x.modelID === model.modelID)
         const next = exists
-          ? modelStore.favorite.filter((x) => x.providerID !== model.providerID || x.modelID !== model.modelID)
+          ? modelStore.favorite.filter(x => x.providerID !== model.providerID || x.modelID !== model.modelID)
           : [model, ...modelStore.favorite]
         setModelStore(
           "favorite",
-          next.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
+          next.map(x => ({ providerID: x.providerID, modelID: x.modelID }))
         )
         save()
       })
@@ -382,7 +410,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
         const legacyKey = `${m.providerID}/${m.modelID}`
         const value = modelStore.variant[agentName] ?? modelStore.variant[legacyKey]
         if (!value) return undefined
-        const provider = sync.data.provider.find((x) => x.id === m.providerID)
+        const provider = sync.data.provider.find(x => x.id === m.providerID)
         const model = provider?.models[m.modelID]
         if (model?.variants && value in model.variants) {
           return value
@@ -392,7 +420,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       list() {
         const m = currentModel()
         if (!m) return []
-        const provider = sync.data.provider.find((x) => x.id === m.providerID)
+        const provider = sync.data.provider.find(x => x.id === m.providerID)
         const info = provider?.models[m.modelID]
         if (!info?.variants) return []
         return Object.keys(info.variants)
@@ -431,7 +459,7 @@ function createModel(agent: ReturnType<typeof createAgent>) {
       cycle() {
         const options = [undefined, "low", "medium", "high"] as const
         const current = this.current()
-        const idx = options.findIndex((x) => x === current)
+        const idx = options.findIndex(x => x === current)
         const next = options[(idx + 1) % options.length]
         this.set(next)
       },

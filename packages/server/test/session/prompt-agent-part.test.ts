@@ -17,7 +17,7 @@ describe("session.prompt agent mention handling", () => {
 
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
-          agent: "builder",
+          agent: "default",
           model: {
             providerID: "openai",
             modelID: "gpt-5",
@@ -33,12 +33,12 @@ describe("session.prompt agent mention handling", () => {
 
         const text = msg.parts
           .filter((part): part is (typeof msg.parts)[number] & { type: "text" } => part.type === "text")
-          .map((part) => part.text)
+          .map(part => part.text)
           .join("\n")
 
         expect(text).toContain("hello")
         expect(text).not.toContain("call the task tool")
-        expect(msg.parts.some((part) => part.type === "agent")).toBe(true)
+        expect(msg.parts.some(part => part.type === "agent")).toBe(true)
 
         await Session.remove(session.id)
       },

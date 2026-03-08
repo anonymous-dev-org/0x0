@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import { ReadTool } from "../../src/tool/read"
-import { Instance } from "../../src/project/instance"
-import { tmpdir } from "../fixture/fixture"
 import { PermissionNext } from "../../src/permission/next"
+import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/runtime/agent/agent"
+import { ReadTool } from "../../src/tool/read"
+import { tmpdir } from "../fixture/fixture"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 
@@ -22,7 +22,7 @@ const ctx = {
 describe("tool.read external_directory permission", () => {
   test("allows reading absolute path inside project directory", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "test.txt"), "hello world")
       },
     })
@@ -38,7 +38,7 @@ describe("tool.read external_directory permission", () => {
 
   test("allows reading file in subdirectory inside project directory", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "subdir", "test.txt"), "nested content")
       },
     })
@@ -54,7 +54,7 @@ describe("tool.read external_directory permission", () => {
 
   test("asks for external_directory permission when reading absolute path outside project", async () => {
     await using outerTmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "secret.txt"), "secret data")
       },
     })
@@ -71,9 +71,9 @@ describe("tool.read external_directory permission", () => {
           },
         }
         await read.execute({ filePath: path.join(outerTmp.path, "secret.txt") }, testCtx)
-        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        const extDirReq = requests.find(r => r.permission === "external_directory")
         expect(extDirReq).toBeDefined()
-        expect(extDirReq!.patterns.some((p) => p.includes(outerTmp.path))).toBe(true)
+        expect(extDirReq!.patterns.some(p => p.includes(outerTmp.path))).toBe(true)
       },
     })
   })
@@ -93,7 +93,7 @@ describe("tool.read external_directory permission", () => {
         }
         // This will fail because file doesn't exist, but we can check if permission was asked
         await read.execute({ filePath: "../outside.txt" }, testCtx).catch(() => {})
-        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        const extDirReq = requests.find(r => r.permission === "external_directory")
         expect(extDirReq).toBeDefined()
       },
     })
@@ -102,7 +102,7 @@ describe("tool.read external_directory permission", () => {
   test("does not ask for external_directory permission when reading inside project", async () => {
     await using tmp = await tmpdir({
       git: true,
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "internal.txt"), "internal content")
       },
     })
@@ -118,7 +118,7 @@ describe("tool.read external_directory permission", () => {
           },
         }
         await read.execute({ filePath: path.join(tmp.path, "internal.txt") }, testCtx)
-        const extDirReq = requests.find((r) => r.permission === "external_directory")
+        const extDirReq = requests.find(r => r.permission === "external_directory")
         expect(extDirReq).toBeUndefined()
       },
     })
@@ -136,10 +136,10 @@ describe("tool.read env file permissions", () => {
     ["environment.ts", false],
   ]
 
-  describe.each(["builder", "planner"])("agent=%s", (agentName) => {
+  describe.each(["default"])("agent=%s", agentName => {
     test.each(cases)("%s asks=%s", async (filename, shouldAsk) => {
       await using tmp = await tmpdir({
-        init: (dir) => Bun.write(path.join(dir, filename), "content"),
+        init: dir => Bun.write(path.join(dir, filename), "content"),
       })
       await Instance.provide({
         directory: tmp.path,
@@ -172,7 +172,7 @@ describe("tool.read env file permissions", () => {
 describe("tool.read truncation", () => {
   test("truncates large file by bytes and sets truncated metadata", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         const base = await Bun.file(path.join(FIXTURES_DIR, "models-api.json")).text()
         const target = 60 * 1024
         const content = base.length >= target ? base : base.repeat(Math.ceil(target / base.length))
@@ -193,7 +193,7 @@ describe("tool.read truncation", () => {
 
   test("truncates by line count when limit is specified", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
         await Bun.write(path.join(dir, "many-lines.txt"), lines)
       },
@@ -214,7 +214,7 @@ describe("tool.read truncation", () => {
 
   test("does not truncate small file", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "small.txt"), "hello world")
       },
     })
@@ -231,7 +231,7 @@ describe("tool.read truncation", () => {
 
   test("respects offset parameter", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         const lines = Array.from({ length: 20 }, (_, i) => `line${i}`).join("\n")
         await Bun.write(path.join(dir, "offset.txt"), lines)
       },
@@ -251,7 +251,7 @@ describe("tool.read truncation", () => {
 
   test("truncates long lines", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         const longLine = "x".repeat(3000)
         await Bun.write(path.join(dir, "long-line.txt"), longLine)
       },
@@ -269,11 +269,11 @@ describe("tool.read truncation", () => {
 
   test("image files set truncated to false", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         // 1x1 red PNG
         const png = Buffer.from(
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
-          "base64",
+          "base64"
         )
         await Bun.write(path.join(dir, "image.png"), png)
       },
@@ -306,7 +306,7 @@ describe("tool.read truncation", () => {
 
   test(".fbs files (FlatBuffers schema) are read as text, not images", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         // FlatBuffers schema content
         const fbsContent = `namespace MyGame;
 
@@ -337,7 +337,7 @@ root_type Monster;`
 describe("tool.read loaded instructions", () => {
   test("loads AGENTS.md from parent directory and includes in metadata", async () => {
     await using tmp = await tmpdir({
-      init: async (dir) => {
+      init: async dir => {
         await Bun.write(path.join(dir, "subdir", "AGENTS.md"), "# Test Instructions\nDo something special.")
         await Bun.write(path.join(dir, "subdir", "nested", "test.txt"), "test content")
       },

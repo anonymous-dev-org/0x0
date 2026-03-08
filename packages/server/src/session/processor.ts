@@ -1,13 +1,13 @@
-import { MessageV2 } from "./message-v2"
-import { Log } from "@/util/log"
-import { Identifier } from "@/core/id/id"
-import { Session } from "."
-import { Snapshot } from "@/workspace/snapshot"
-import { SessionSummary } from "./summary"
 import { Bus } from "@/core/bus"
-import { SessionStatus } from "./status"
+import { Identifier } from "@/core/id/id"
 import type { Provider } from "@/provider/provider"
+import { Log } from "@/util/log"
+import { Snapshot } from "@/workspace/snapshot"
+import { Session } from "."
 import { LLM } from "./llm"
+import { MessageV2 } from "./message-v2"
+import { SessionStatus } from "./status"
+import { SessionSummary } from "./summary"
 
 function providerToolPattern(toolName: string, input: Record<string, unknown>): string {
   function field(...keys: string[]): string {
@@ -18,18 +18,27 @@ function providerToolPattern(toolName: string, input: Record<string, unknown>): 
     return "*"
   }
   switch (toolName) {
-    case "Bash": return field("command")
+    case "Bash":
+      return field("command")
     case "Edit":
     case "Write":
     case "MultiEdit":
-    case "NotebookEdit": return field("file_path", "path")
-    case "Read": return field("file_path")
-    case "Glob": return field("pattern")
-    case "Grep": return field("path", "pattern")
-    case "Task": return field("prompt", "description")
-    case "WebFetch": return field("url")
-    case "WebSearch": return field("query")
-    default: return "*"
+    case "NotebookEdit":
+      return field("file_path", "path")
+    case "Read":
+      return field("file_path")
+    case "Glob":
+      return field("pattern")
+    case "Grep":
+      return field("path", "pattern")
+    case "Task":
+      return field("prompt", "description")
+    case "WebFetch":
+      return field("url")
+    case "WebSearch":
+      return field("query")
+    default:
+      return "*"
   }
 }
 
@@ -81,16 +90,16 @@ export namespace SessionProcessor {
         // CLI/Codex session so the model doesn't carry stale context from the
         // previous agent (e.g. planner permissions leaking into builder).
         const sessionInfo = await Session.get(input.sessionID).catch(() => null)
+        // Include mode in the agent key so switching modes gets a fresh CLI session
+        const agentKey = streamInput.agent.agentMode
+          ? `${streamInput.agent.name}:${streamInput.agent.agentMode}`
+          : streamInput.agent.name
         const cliSessionId =
           streamInput.cliSessionId ??
-          (sessionInfo?.cliSessionAgent === streamInput.agent.name
-            ? sessionInfo?.cliSessionId
-            : undefined)
+          (sessionInfo?.cliSessionAgent === agentKey ? sessionInfo?.cliSessionId : undefined)
         const codexThreadId =
           streamInput.codexThreadId ??
-          (sessionInfo?.codexThreadAgent === streamInput.agent.name
-            ? sessionInfo?.codexThreadId
-            : undefined)
+          (sessionInfo?.codexThreadAgent === agentKey ? sessionInfo?.codexThreadId : undefined)
 
         const enrichedInput: LLM.StreamInput = {
           ...streamInput,
@@ -196,9 +205,15 @@ export namespace SessionProcessor {
                     const parsed = JSON.parse(raw)
                     if (typeof parsed === "object" && parsed !== null) {
                       const extracted = providerToolPattern(toolPart.tool, parsed)
-                      if (extracted !== "*" && toolPart.state.status === "running" && toolPart.state.title !== extracted) {
+                      if (
+                        extracted !== "*" &&
+                        toolPart.state.status === "running" &&
+                        toolPart.state.title !== extracted
+                      ) {
                         toolPart.state = { ...toolPart.state, title: extracted }
-                        Session.updatePart(toolPart).catch((e) => log.warn("failed to update tool part title", { error: e }))
+                        Session.updatePart(toolPart).catch(e =>
+                          log.warn("failed to update tool part title", { error: e })
+                        )
                       }
                     }
                   } catch {}
@@ -210,10 +225,7 @@ export namespace SessionProcessor {
                 setPhase("thinking")
                 const toolPart = toolParts[event.id]
                 if (toolPart) {
-                  const startTime =
-                    toolPart.state.status === "running"
-                      ? toolPart.state.time.start
-                      : Date.now()
+                  const startTime = toolPart.state.status === "running" ? toolPart.state.time.start : Date.now()
 
                   // Transition pending → running → completed in one shot
                   let currentInput =
@@ -275,7 +287,7 @@ export namespace SessionProcessor {
                     sessionID: input.assistantMessage.sessionID,
                     type: "patch",
                     hash: event.id,
-                    files: event.files.map((f) => f.path),
+                    files: event.files.map(f => f.path),
                   })
                 }
                 break
@@ -333,14 +345,14 @@ export namespace SessionProcessor {
 
               case "done": {
                 if (event.cliSessionId || event.codexThreadId) {
-                  await Session.update(input.sessionID, (draft) => {
+                  await Session.update(input.sessionID, draft => {
                     if (event.cliSessionId) {
                       draft.cliSessionId = event.cliSessionId
-                      draft.cliSessionAgent = streamInput.agent.name
+                      draft.cliSessionAgent = agentKey
                     }
                     if (event.codexThreadId) {
                       draft.codexThreadId = event.codexThreadId
-                      draft.codexThreadAgent = streamInput.agent.name
+                      draft.codexThreadAgent = agentKey
                     }
                   })
                 }
@@ -407,8 +419,8 @@ export namespace SessionProcessor {
       if (!currentText) return
       currentText.text = currentText.text.trimEnd()
       currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
-      Session.updatePart(currentText).catch((e) =>
-        log.error("failed to persist finalized text part", { error: e, messageID: currentText!.messageID }),
+      Session.updatePart(currentText).catch(e =>
+        log.error("failed to persist finalized text part", { error: e, messageID: currentText!.messageID })
       )
       currentText = undefined
     }
@@ -417,8 +429,8 @@ export namespace SessionProcessor {
       for (const part of Object.values(currentReasoning)) {
         part.text = part.text.trimEnd()
         part.time = { start: part.time.start, end: Date.now() }
-        Session.updatePart(part).catch((e) =>
-          log.error("failed to persist finalized reasoning part", { error: e, messageID: part.messageID }),
+        Session.updatePart(part).catch(e =>
+          log.error("failed to persist finalized reasoning part", { error: e, messageID: part.messageID })
         )
       }
       currentReasoning = {}
@@ -434,12 +446,11 @@ export namespace SessionProcessor {
               input: toolPart.state.input,
               error: "Tool execution aborted",
               time: {
-                start:
-                  "time" in toolPart.state && toolPart.state.time ? toolPart.state.time.start : Date.now(),
+                start: "time" in toolPart.state && toolPart.state.time ? toolPart.state.time.start : Date.now(),
                 end: Date.now(),
               },
             },
-          }).catch((e) => log.error("failed to mark tool as aborted", { error: e, toolCallID: id }))
+          }).catch(e => log.error("failed to mark tool as aborted", { error: e, toolCallID: id }))
         }
         delete toolParts[id]
       }

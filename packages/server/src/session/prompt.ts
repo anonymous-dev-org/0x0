@@ -108,6 +108,7 @@ export namespace SessionPrompt {
       })
       .optional(),
     agent: z.string().optional(),
+    agentMode: z.enum(["plan", "build"]).optional(),
     noReply: z.boolean().optional(),
     tools: z
       .record(z.string(), z.boolean())
@@ -539,8 +540,14 @@ export namespace SessionPrompt {
         continue
       }
 
-      // normal processing
-      const agent = await Agent.get(lastUser.agent)
+      // normal processing — resolve agent with mode + provider context
+      const agent = await Agent.resolve({
+        agent: lastUser.agent,
+        agentMode: lastUser.agentMode,
+        providerID: lastUser.model.providerID,
+        modelID: lastUser.model.modelID,
+        thinkingEffort: lastUser.thinkingEffort,
+      })
       if (!agent) throw new Error(`Agent not found: ${lastUser.agent}`)
       const maxSteps = agent.steps ?? Infinity
       const isLastStep = step >= maxSteps
@@ -827,8 +834,9 @@ export namespace SessionPrompt {
   }
 
   async function createUserMessage(input: PromptInput) {
-    const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
-    if (!agent) throw new Error(`Agent not found: ${input.agent}`)
+    const agentName = input.agent ?? (await Agent.defaultAgent())
+    const agent = await Agent.get(agentName)
+    if (!agent) throw new Error(`Agent not found: ${agentName}`)
 
     const resolved = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const model = { providerID: resolved.providerID ?? "", modelID: resolved.modelID }
@@ -850,6 +858,7 @@ export namespace SessionPrompt {
       },
       tools: input.tools,
       agent: agent.name,
+      agentMode: input.agentMode,
       model,
       system: input.system,
       variant,
