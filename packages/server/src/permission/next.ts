@@ -170,14 +170,15 @@ export namespace PermissionNext {
       resolvePending = resolve
       rejectPending = reject
     })
-    pending[request.id] = {
+    const entry = {
       info: request,
       promise,
       resolve: resolvePending,
       reject: rejectPending,
     }
+    pending[request.id] = entry
     Bus.publish(Event.Asked, request)
-    return pending[request.id]
+    return entry
   }
 
   export const request = fn(

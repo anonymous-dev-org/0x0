@@ -470,9 +470,7 @@ export namespace SessionProcessor {
               state: {
                 status: "pending",
                 input: toolPart.state.input,
-                time: {
-                  start: toolPart.state.time ? toolPart.state.time.start : Date.now(),
-                },
+                raw: toolPart.state.status === "running" ? toolPart.state.metadata?.raw ?? "" : toolPart.state.raw,
               },
             }).catch(e => log.error("failed to mark tool as pending", { error: e, toolCallID: id }))
             delete toolParts[id]

@@ -842,8 +842,8 @@ export namespace SessionPrompt {
             ...match,
             state: {
               status: "pending",
-              input: match.state.status === "running" ? match.state.input : {},
-              time: { start: match.state.status === "running" ? match.state.time.start : Date.now() },
+              input: match.state.input,
+              raw: match.state.status === "running" ? match.state.metadata?.raw ?? "" : match.state.raw,
             },
           })
         }
