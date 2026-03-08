@@ -1,21 +1,22 @@
-import { BusEvent } from "@/core/bus/bus-event"
-import { Bus } from "@/core/bus"
-import { Log } from "../../util/log"
-import { describeRoute, validator, resolver } from "hono-openapi"
 import { Hono } from "hono"
 import { streamSSE } from "hono/streaming"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { Bus } from "@/core/bus"
+import { BusEvent } from "@/core/bus/bus-event"
+import { GlobalBus } from "@/core/bus/global"
+import { Global } from "@/core/global"
 import { LSP } from "@/integration/lsp"
+import { Skill } from "@/integration/skill/skill"
+import { Agent } from "@/runtime/agent/agent"
+import { Command } from "@/runtime/command"
 import { Format } from "@/runtime/format"
+import { LLM } from "@/session/llm"
+import { SystemPrompt } from "@/session/system"
 import { Instance } from "../../project/instance"
 import { Vcs } from "../../project/vcs"
-import { Agent } from "@/runtime/agent/agent"
-import { Skill } from "@/integration/skill/skill"
-import { Command } from "@/runtime/command"
-import { Global } from "@/core/global"
 import { lazy } from "../../util/lazy"
-import { SystemPrompt } from "@/session/system"
-import { LLM } from "@/session/llm"
+import { Log } from "../../util/log"
 import { errors } from "../error"
 
 const log = Log.create({ service: "server" })
@@ -39,17 +40,16 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         await Instance.dispose()
         return c.json(true)
-      },
+      }
     )
     .get(
       "/path",
       describeRoute({
         summary: "Get paths",
-        description:
-          "Retrieve the current working directory and related path information for the zeroxzero instance.",
+        description: "Retrieve the current working directory and related path information for the zeroxzero instance.",
         operationId: "path.get",
         responses: {
           200: {
@@ -67,14 +67,14 @@ export const AppRoutes = lazy(() =>
                     })
                     .meta({
                       ref: "Path",
-                    }),
+                    })
                 ),
               },
             },
           },
         },
       }),
-      async (c) => {
+      async c => {
         return c.json({
           home: Global.Path.home,
           state: Global.Path.state,
@@ -82,14 +82,13 @@ export const AppRoutes = lazy(() =>
           worktree: Instance.worktree,
           directory: Instance.directory,
         })
-      },
+      }
     )
     .get(
       "/vcs",
       describeRoute({
         summary: "Get VCS info",
-        description:
-          "Retrieve version control system (VCS) information for the current project, such as git branch.",
+        description: "Retrieve version control system (VCS) information for the current project, such as git branch.",
         operationId: "vcs.get",
         responses: {
           200: {
@@ -102,12 +101,12 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const branch = await Vcs.branch()
         return c.json({
           branch,
         })
-      },
+      }
     )
     .get(
       "/command",
@@ -126,10 +125,10 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const commands = await Command.list()
         return c.json(commands)
-      },
+      }
     )
     .post(
       "/log",
@@ -159,9 +158,9 @@ export const AppRoutes = lazy(() =>
             .record(z.string(), z.any())
             .optional()
             .meta({ description: "Additional metadata for the log entry" }),
-        }),
+        })
       ),
-      async (c) => {
+      async c => {
         const { service, level, message, extra } = c.req.valid("json")
         const logger = Log.create({ service })
 
@@ -181,7 +180,7 @@ export const AppRoutes = lazy(() =>
         }
 
         return c.json(true)
-      },
+      }
     )
     .get(
       "/agent",
@@ -200,10 +199,10 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const modes = await Agent.list()
         return c.json(modes)
-      },
+      }
     )
     .post(
       "/prompt",
@@ -221,7 +220,7 @@ export const AppRoutes = lazy(() =>
                     agent: z.string(),
                     parts: z.array(z.string()),
                     prompt: z.string(),
-                  }),
+                  })
                 ),
               },
             },
@@ -229,7 +228,7 @@ export const AppRoutes = lazy(() =>
         },
       }),
       validator("json", z.object({ agent: z.string() })),
-      async (c) => {
+      async c => {
         const { agent: agentID } = c.req.valid("json")
         const agent = await Agent.get(agentID)
         if (!agent) {
@@ -243,7 +242,7 @@ export const AppRoutes = lazy(() =>
           parts,
           prompt: parts.join("\n\n"),
         })
-      },
+      }
     )
     .get(
       "/skill",
@@ -262,10 +261,10 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const skills = await Skill.all()
         return c.json(skills)
-      },
+      }
     )
     .get(
       "/lsp",
@@ -284,9 +283,9 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         return c.json(await LSP.status())
-      },
+      }
     )
     .get(
       "/formatter",
@@ -305,9 +304,9 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         return c.json(await Format.status())
-      },
+      }
     )
     .get(
       "/event",
@@ -326,16 +325,16 @@ export const AppRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         log.info("event connected")
-        return streamSSE(c, async (stream) => {
+        return streamSSE(c, async stream => {
           stream.writeSSE({
             data: JSON.stringify({
               type: "server.connected",
               properties: {},
             }),
           })
-          const unsub = Bus.subscribeAll(async (event) => {
+          const unsub = Bus.subscribeAll(async event => {
             await stream.writeSSE({
               data: JSON.stringify(event),
             })
@@ -343,6 +342,17 @@ export const AppRoutes = lazy(() =>
               stream.close()
             }
           })
+
+          // Forward events from worktree Instances that share this project
+          // but run in a different Instance context (different directory)
+          const currentDir = Instance.directory
+          const globalHandler = (msg: { directory?: string; payload: unknown }) => {
+            if (msg.directory === currentDir) return
+            stream.writeSSE({
+              data: JSON.stringify(msg.payload),
+            })
+          }
+          GlobalBus.on("event", globalHandler)
 
           // Send heartbeat every 30s to prevent WKWebView timeout (60s default)
           const heartbeat = setInterval(() => {
@@ -354,15 +364,16 @@ export const AppRoutes = lazy(() =>
             })
           }, 30000)
 
-          await new Promise<void>((resolve) => {
+          await new Promise<void>(resolve => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
               unsub()
+              GlobalBus.off("event", globalHandler)
               resolve()
               log.info("event disconnected")
             })
           })
         })
-      },
-    ),
+      }
+    )
 )
