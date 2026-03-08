@@ -88,7 +88,11 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         toast.show({ variant: "error", message })
         return
       }
-      // Modal removal happens via the server's question.replied SSE event hitting the sync store
+
+      // Server confirmed the answer was staged and the question committed.
+      // Remove locally so the modal closes immediately rather than waiting
+      // for the SSE question.replied event (which may be delayed or dropped).
+      removeFromSyncStore()
     } catch {
       toast.show({ variant: "error", message: "Failed to submit answers — network error" })
     } finally {

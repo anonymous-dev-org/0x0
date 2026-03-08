@@ -76,13 +76,16 @@ export const QuestionRoutes = lazy(() =>
           answers: json.answers,
         })
 
-        // Resume the assistant loop in the background (failures surface via session.error event)
-        if (staged.info.role === "user" && staged.info.model) {
-          SessionPrompt.resumeInteractionLoopInBackground({
-            sessionID: request.sessionID,
-            providerID: staged.info.model.providerID,
-          })
+        // Resume the assistant loop in the background (failures surface via session.error event).
+        // stageInteractionResponse always creates a user message with a model, so narrow the type.
+        const userInfo = staged.info
+        if (userInfo.role !== "user" || !userInfo.model) {
+          throw new Error("stageInteractionResponse returned unexpected message type")
         }
+        SessionPrompt.resumeInteractionLoopInBackground({
+          sessionID: request.sessionID,
+          providerID: userInfo.model.providerID,
+        })
 
         return c.json(true)
       }
