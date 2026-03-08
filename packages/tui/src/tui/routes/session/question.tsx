@@ -8,7 +8,7 @@ import { sdk } from "@tui/state/sdk"
 import { sync } from "@tui/state/sync"
 import { theme, tint } from "@tui/state/theme"
 import { batch, createMemo, For, Show } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, produce } from "solid-js/store"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
@@ -53,7 +53,23 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     return store.answers[store.tab]?.includes(value) ?? false
   })
 
+  function removeFromSyncStore() {
+    const sessionID = props.request.sessionID
+    const requestID = props.request.id
+    sync.set(
+      "question",
+      sessionID,
+      produce((draft: QuestionRequest[]) => {
+        const index = draft.findIndex(q => q.id === requestID)
+        if (index !== -1) draft.splice(index, 1)
+      })
+    )
+  }
+
   function replyAndResume(answers: QuestionAnswer[]) {
+    // 0. Optimistically remove from local store so modal hides immediately
+    removeFromSyncStore()
+
     // 1. Tell the server to clean up the pending question
     sdk.client.question[":requestID"].reply.$post({
       param: { requestID: props.request.id },
@@ -87,6 +103,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   }
 
   function reject() {
+    removeFromSyncStore()
     sdk.client.question[":requestID"].reject.$post({
       param: { requestID: props.request.id },
     } as never)
