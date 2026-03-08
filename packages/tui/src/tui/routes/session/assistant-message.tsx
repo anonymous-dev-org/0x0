@@ -1,20 +1,20 @@
-import { createMemo, For, Match, Show, Switch } from "solid-js"
-import { Dynamic } from "solid-js/web"
-import { RGBA, TextAttributes } from "@opentui/core"
-import { tint, theme, themeState } from "@tui/state/theme"
-import { local } from "@tui/state/local"
-import { sync } from "@tui/state/sync"
-import { SplitBorder } from "@tui/component/border"
-import { Locale } from "@anonymous-dev/0x0-server/util/locale"
-import { useSessionContext, normalizeReasoningText } from "./session-context"
-import { SessionTool } from "./session-tools"
 import type {
   AssistantMessage as AssistantMessageType,
   Part,
-  ToolPart as ToolPartType,
-  TextPart as TextPartType,
   ReasoningPart as ReasoningPartType,
+  TextPart as TextPartType,
+  ToolPart as ToolPartType,
 } from "@anonymous-dev/0x0-server/server/types"
+import { Locale } from "@anonymous-dev/0x0-server/util/locale"
+import { RGBA, TextAttributes } from "@opentui/core"
+import { SplitBorder } from "@tui/component/border"
+import { local } from "@tui/state/local"
+import { sync } from "@tui/state/sync"
+import { theme, themeState, tint } from "@tui/state/theme"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { Dynamic } from "solid-js/web"
+import { normalizeReasoningText, useSessionContext } from "./session-context"
+import { SessionTool } from "./session-tools"
 
 const PART_MAPPING = {
   text: TextPart,
@@ -28,8 +28,13 @@ export function AssistantMessage(props: { message: AssistantMessageType; parts: 
 
   const final = () => props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
 
+  const agentMode = createMemo(() => {
+    const parent = messages().find(x => x.role === "user" && x.id === props.message.parentID)
+    return parent?.role === "user" ? parent.agentMode : undefined
+  })
+
   const rail = createMemo(() => {
-    const raw = local.agent.color(props.message.agent) ?? theme.primary
+    const raw = local.agent.color(props.message.agent, agentMode()) ?? theme.primary
     const color = RGBA.fromInts(Math.round(raw.r * 255), Math.round(raw.g * 255), Math.round(raw.b * 255), 255)
     const dark = theme.text.r * 0.299 + theme.text.g * 0.587 + theme.text.b * 0.114 > 0.5
     if (dark) return color
@@ -43,7 +48,7 @@ export function AssistantMessage(props: { message: AssistantMessageType; parts: 
   const duration = () => {
     if (!final()) return 0
     if (!props.message.time.completed) return 0
-    const user = messages().find((x) => x.role === "user" && x.id === props.message.parentID)
+    const user = messages().find(x => x.role === "user" && x.id === props.message.parentID)
     if (!user || !user.time) return 0
     return props.message.time.completed - user.time.created
   }
@@ -103,8 +108,7 @@ export function AssistantMessage(props: { message: AssistantMessageType; parts: 
           marginTop={1}
           backgroundColor={theme.backgroundPanel}
           customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.error}
-        >
+          borderColor={theme.error}>
           <text fg={theme.textMuted}>{props.message.error?.data.message}</text>
         </box>
       </Show>
@@ -117,8 +121,7 @@ export function AssistantMessage(props: { message: AssistantMessageType; parts: 
           marginTop={1}
           backgroundColor={theme.backgroundPanel}
           customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.warning}
-        >
+          borderColor={theme.warning}>
           <text fg={theme.textMuted}>{retryMessage()}</text>
         </box>
       </Show>
@@ -134,7 +137,9 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPartType; message:
   return (
     <Show when={ctx.showThinking() && text()}>
       <box paddingLeft={3} marginTop={1} flexShrink={0}>
-        <text fg={theme.textMuted} attributes={TextAttributes.DIM | TextAttributes.ITALIC}>thinking</text>
+        <text fg={theme.textMuted} attributes={TextAttributes.DIM | TextAttributes.ITALIC}>
+          thinking
+        </text>
         <code
           filetype="markdown"
           drawUnstyledText={false}
@@ -206,7 +211,7 @@ function ToolPart(props: { last: boolean; part: ToolPartType; message: Assistant
     },
     get permission() {
       const permissions = sync.data.permission[props.message.sessionID] ?? []
-      const permissionIndex = permissions.findIndex((x) => x.tool?.callID === props.part.callID)
+      const permissionIndex = permissions.findIndex(x => x.tool?.callID === props.part.callID)
       return permissions[permissionIndex] ?? {}
     },
     get tool() {

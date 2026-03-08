@@ -143,8 +143,8 @@ function createAgent() {
       return configuredName ?? Locale.titlecase(agent.name)
     },
     color(name: string, mode?: "plan" | "build") {
-      if (mode === "plan") return theme.primary
-      if (mode === "build") return theme.success
+      if (mode === "plan") return RGBA.fromHex("#5B9CF5")
+      if (mode === "build") return RGBA.fromHex("#4EC98B")
       const index = agents().findIndex(x => x.name === name)
       if (index === -1) return colors()[0]
       const agent = agents()[index]

@@ -1,41 +1,41 @@
-import { createEffect, createMemo, createSignal, Match, on, Show, Switch } from "solid-js"
-import { route } from "@tui/state/route"
-import { sync } from "@tui/state/sync"
-import { theme } from "@tui/state/theme"
-import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, RGBA } from "@opentui/core"
-import { Prompt, type PromptRef } from "@tui/component/prompt"
+import { UI } from "@anonymous-dev/0x0-server/cli/ui.ts"
 import type {
   AssistantMessage as AssistantMessageType,
-  UserMessage as UserMessageType,
   ToolPart as ToolPartType,
+  UserMessage as UserMessageType,
 } from "@anonymous-dev/0x0-server/server/types"
-import { local } from "@tui/state/local"
 import { Locale } from "@anonymous-dev/0x0-server/util/locale"
+import { addDefaultParsers, MacOSScrollAccel, RGBA, type ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { sdk } from "@tui/state/sdk"
-import { keybind } from "@tui/state/keybind"
-import { parsePatch } from "diff"
-import { useDialog } from "../../ui/dialog"
-import { DialogMessage } from "./dialog-message"
-import { Sidebar } from "./sidebar"
-import parsers from "../../../../parsers-config.ts"
-import { Toast, useToast } from "../../ui/toast"
-import { Footer } from "./footer.tsx"
-import { promptRef } from "@tui/state/prompt"
+import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { exit } from "@tui/state/exit"
+import { keybind } from "@tui/state/keybind"
+import { local } from "@tui/state/local"
+import { promptRef } from "@tui/state/prompt"
+import { route } from "@tui/state/route"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
+import { theme } from "@tui/state/theme"
+import { parsePatch } from "diff"
+import { createEffect, createMemo, createSignal, Match, on, Show, Switch } from "solid-js"
+import parsers from "../../../../parsers-config.ts"
+import { Logo } from "../../component/logo"
+import { useDialog } from "../../ui/dialog"
+import { Toast, useToast } from "../../ui/toast"
+import { shouldShowAssistantHeader } from "./assistant-header"
+import { AssistantMessage } from "./assistant-message"
+import { DialogMessage } from "./dialog-message"
+import { Footer } from "./footer.tsx"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
-import { UI } from "@anonymous-dev/0x0-server/cli/ui.ts"
-import { Logo } from "../../component/logo"
-import { useSessionCommands } from "./use-session-commands"
-import { SessionMessages } from "./session-messages"
-import { shouldShowAssistantHeader } from "./assistant-header"
-import { SessionContext, CustomSpeedScroll } from "./session-context"
-import { Thinking } from "./thinking"
-import { UserMessage } from "./user-message"
-import { AssistantMessage } from "./assistant-message"
-import { SessionSettingsProvider, useSessionSettings } from "./session-settings"
 import { RevertMarker } from "./revert-marker"
+import { CustomSpeedScroll, SessionContext } from "./session-context"
+import { SessionMessages } from "./session-messages"
+import { SessionSettingsProvider, useSessionSettings } from "./session-settings"
+import { Sidebar } from "./sidebar"
+import { Thinking } from "./thinking"
+import { useSessionCommands } from "./use-session-commands"
+import { UserMessage } from "./user-message"
 
 addDefaultParsers(parsers.parsers)
 
@@ -54,21 +54,21 @@ function SessionInner() {
   const children = createMemo(() => {
     const parentID = session()?.parentID ?? session()?.id
     return sync.data.session
-      .filter((x) => x.parentID === parentID || x.id === parentID)
+      .filter(x => x.parentID === parentID || x.id === parentID)
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.data.sessionID] ?? [])
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.permission[x.id] ?? [])
+    return children().flatMap(x => sync.data.permission[x.id] ?? [])
   })
   const questions = createMemo(() => {
     if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.question[x.id] ?? [])
+    return children().flatMap(x => sync.data.question[x.id] ?? [])
   })
 
   const pending = () => {
-    return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
+    return messages().findLast(x => x.role === "assistant" && !x.time.completed)?.id
   }
 
   const latestToolPart = (sessionID: string, runningOnly: boolean) => {
@@ -119,7 +119,7 @@ function SessionInner() {
   createEffect(
     on(
       () => route.data.sessionID,
-      (sessionID) => {
+      sessionID => {
         version += 1
         const current = version
         sync.session
@@ -128,24 +128,27 @@ function SessionInner() {
             if (current !== version) return
             if (scroll) scroll.scrollBy(100_000)
           })
-          .catch((e) => {
+          .catch(e => {
             if (current !== version) return
             console.error(e)
             toast.show({
               message: `Session not found: ${sessionID}`,
               variant: "error",
             })
-            return sdk.client.session.$post({ json: {} } as any).then((res: any) => res.json()).then((data: any) => {
-              if (current !== version) return
-              if (!data?.id) return
-              navigate({
-                type: "session",
-                sessionID: data.id,
+            return sdk.client.session
+              .$post({ json: {} } as any)
+              .then((res: any) => res.json())
+              .then((data: any) => {
+                if (current !== version) return
+                if (!data?.id) return
+                navigate({
+                  type: "session",
+                  sessionID: data.id,
+                })
               })
-            })
           })
-      },
-    ),
+      }
+    )
   )
 
   let scroll: ScrollBoxRenderable
@@ -159,11 +162,11 @@ function SessionInner() {
         `  \u2588\u2580\u2580\u2588  ${UI.Style.TEXT_DIM}${title}${UI.Style.TEXT_NORMAL}`,
         `  \u2588  \u2588  ${UI.Style.TEXT_DIM}0x0 -s ${session()?.id}${UI.Style.TEXT_NORMAL}`,
         `  \u2580\u2580\u2580\u2580  `,
-      ].join("\n"),
+      ].join("\n")
     )
   })
 
-  useKeyboard((evt) => {
+  useKeyboard(evt => {
     if (!session()?.parentID) return
     if (keybind.match("app_exit", evt)) {
       exit()
@@ -177,24 +180,24 @@ function SessionInner() {
     const scrollTop = scroll.y
 
     const visibleMessages = children
-      .filter((c) => {
+      .filter(c => {
         if (!c.id) return false
-        const message = messagesList.find((m) => m.id === c.id)
+        const message = messagesList.find(m => m.id === c.id)
         if (!message) return false
 
         const parts = sync.data.part[message.id]
         if (!parts || !Array.isArray(parts)) return false
 
-        return parts.some((part) => part && part.type === "text" && !part.synthetic && !part.ignored)
+        return parts.some(part => part && part.type === "text" && !part.synthetic && !part.ignored)
       })
       .sort((a, b) => a.y - b.y)
 
     if (visibleMessages.length === 0) return null
 
     if (direction === "next") {
-      return visibleMessages.find((c) => c.y > scrollTop + 10)?.id ?? null
+      return visibleMessages.find(c => c.y > scrollTop + 10)?.id ?? null
     }
-    return [...visibleMessages].reverse().find((c) => c.y < scrollTop - 10)?.id ?? null
+    return [...visibleMessages].reverse().find(c => c.y < scrollTop - 10)?.id ?? null
   }
 
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
@@ -206,7 +209,7 @@ function SessionInner() {
       return
     }
 
-    const child = scroll.getChildren().find((c) => c.id === targetID)
+    const child = scroll.getChildren().find(c => c.id === targetID)
     if (child) scroll.scrollBy(child.y - scroll.y - 1)
     dialog.clear()
   }
@@ -222,9 +225,9 @@ function SessionInner() {
   const busy = () => status().type === "busy" || status().type === "retry"
   const thinkingColor = createMemo(() => {
     const pendingID = pending()
-    const message = pendingID ? messages().find((entry) => entry.id === pendingID) : undefined
+    const message = pendingID ? messages().find(entry => entry.id === pendingID) : undefined
     const agent = message?.role === "assistant" ? message.agent : undefined
-    return local.agent.color(agent ?? local.agent.current().name)
+    return local.agent.color(agent ?? local.agent.current().name, local.agent.currentMode())
   })
   const [interrupt, setInterrupt] = createSignal(0)
   const [caffeinated, setCaffeinated] = createSignal(false)
@@ -235,7 +238,7 @@ function SessionInner() {
       if (wasBusy && !isBusy && caffeinated()) {
         setCaffeinated(false)
       }
-    }),
+    })
   )
 
   const revertInfo = () => session()?.revert
@@ -246,19 +249,13 @@ function SessionInner() {
 
     try {
       const patches = parsePatch(diffText)
-      return patches.map((patch) => {
+      return patches.map(patch => {
         const filename = patch.newFileName || patch.oldFileName || "unknown"
         const cleanFilename = filename.replace(/^[ab]\//, "")
         return {
           filename: cleanFilename,
-          additions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("+")).length,
-            0,
-          ),
-          deletions: patch.hunks.reduce(
-            (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith("-")).length,
-            0,
-          ),
+          additions: patch.hunks.reduce((sum, hunk) => sum + hunk.lines.filter(line => line.startsWith("+")).length, 0),
+          deletions: patch.hunks.reduce((sum, hunk) => sum + hunk.lines.filter(line => line.startsWith("-")).length, 0),
         }
       })
     } catch (error) {
@@ -272,7 +269,7 @@ function SessionInner() {
     if (!info.messageID) return
     return {
       messageID: info.messageID,
-      reverted: messages().filter((x) => x.id >= info.messageID! && x.role === "user"),
+      reverted: messages().filter(x => x.id >= info.messageID! && x.role === "user"),
       diff: info.diff,
       diffFiles: revertDiffFiles(),
     }
@@ -283,7 +280,7 @@ function SessionInner() {
 
   useSessionCommands({
     scroll: () => scroll,
-    setPrompt: (promptInfo) => prompt.set(promptInfo),
+    setPrompt: promptInfo => prompt.set(promptInfo),
     toBottom,
     scrollToMessage,
     caffeinated,
@@ -294,7 +291,12 @@ function SessionInner() {
   createEffect(on(() => route.data.sessionID, toBottom))
 
   // reset caffeinated state on session change
-  createEffect(on(() => route.data.sessionID, () => setCaffeinated(false)))
+  createEffect(
+    on(
+      () => route.data.sessionID,
+      () => setCaffeinated(false)
+    )
+  )
 
   return (
     <SessionContext.Provider
@@ -312,13 +314,12 @@ function SessionInner() {
         showAssistantMetadata: settings.showAssistantMetadata,
         diffWrapMode: settings.diffWrapMode,
         sync,
-      }}
-    >
+      }}>
       <box flexDirection="row" width={dimensions().width} height={dimensions().height}>
         <box flexGrow={1} gap={1}>
           <Show when={session()}>
             <scrollbox
-              ref={(r) => (scroll = r)}
+              ref={r => (scroll = r)}
               viewportOptions={{
                 paddingRight: settings.showScrollbar() ? 1 : 0,
               }}
@@ -333,8 +334,7 @@ function SessionInner() {
               stickyScroll={true}
               stickyStart="bottom"
               flexGrow={1}
-              scrollAcceleration={scrollAcceleration()}
-            >
+              scrollAcceleration={scrollAcceleration()}>
               <Show when={messages().length === 0}>
                 <box flexGrow={1} justifyContent="center" alignItems="center" paddingLeft={1}>
                   <Logo />
@@ -344,10 +344,7 @@ function SessionInner() {
                 messages={messages() as (AssistantMessageType | UserMessageType)[]}
                 revertMessageID={revert()?.messageID}
                 renderRevertMarker={() => (
-                  <RevertMarker
-                    reverted={revert()!.reverted}
-                    diffFiles={revert()!.diffFiles}
-                  />
+                  <RevertMarker reverted={revert()!.reverted} diffFiles={revert()!.diffFiles} />
                 )}
                 renderUser={(message, index) => (
                   <UserMessage
@@ -360,7 +357,7 @@ function SessionInner() {
                           <DialogMessage
                             messageID={message.id}
                             sessionID={route.data.sessionID}
-                            setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                            setPrompt={promptInfo => prompt.set(promptInfo)}
                           />
                         ),
                       })
@@ -396,16 +393,14 @@ function SessionInner() {
                 textMuted={theme.textMuted}
                 primary={theme.primary}
               />
-              <Show when={permissions()[0]}>
-                {(req) => <PermissionPrompt request={req()} />}
-              </Show>
+              <Show when={permissions()[0]}>{req => <PermissionPrompt request={req()} />}</Show>
               <Show when={permissions().length === 0 && questions()[0]}>
-                {(req) => <QuestionPrompt request={req()} />}
+                {req => <QuestionPrompt request={req()} />}
               </Show>
               <Prompt
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
                 onInterruptChange={setInterrupt}
-                ref={(r) => {
+                ref={r => {
                   prompt = r
                   promptRef.set(r)
                   if (route.data.initialPrompt) {
@@ -438,8 +433,7 @@ function SessionInner() {
                 right={0}
                 bottom={0}
                 alignItems="flex-end"
-                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
-              >
+                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}>
                 <Sidebar sessionID={route.data.sessionID} />
               </box>
             </Match>

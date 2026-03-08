@@ -794,14 +794,12 @@ export function Prompt(props: PromptProps) {
                       {local.model.variant.current()}
                     </text>
                   </Show>
-                  <Show when={local.model.thinkingEffort.current()}>
-                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                      ·
-                    </text>
-                    <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-                      think:{local.model.thinkingEffort.current()}
-                    </text>
-                  </Show>
+                  <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                    ·
+                  </text>
+                  <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
+                    think:{local.model.thinkingEffort.current() ?? "auto"}
+                  </text>
                 </box>
               </Show>
             </box>
