@@ -244,20 +244,6 @@ export namespace Session {
     log.info("created", result)
     await Storage.write(["session", Instance.project.id, result.id], result)
 
-    if (Instance.project.vcs === "git") {
-      try {
-        const branchInfo = await Branch.create({
-          slug: result.slug,
-          title: input.title,
-          projectId: Instance.project.id,
-        })
-        result.branch = branchInfo
-        await Storage.write(["session", Instance.project.id, result.id], result)
-      } catch (e) {
-        log.warn("failed to create branch for session", { error: e, sessionID: result.id })
-      }
-    }
-
     Bus.publish(Event.Created, {
       info: result,
     })

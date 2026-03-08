@@ -34,6 +34,7 @@ import { ReadTool } from "../tool/read"
 import { ToolRegistry } from "../tool/registry"
 import { defer } from "../util/defer"
 import { Log } from "../util/log"
+import { Branch } from "../workspace/branch"
 import { Session } from "."
 import { SessionCompaction } from "./compaction"
 import { InstructionPrompt } from "./instruction"
@@ -302,7 +303,7 @@ export namespace SessionPrompt {
 
     let step = 0
     const session = await Session.get(sessionID)
-    const sessionCwd = session.branch?.worktree
+    let sessionCwd = session.branch?.worktree
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -338,13 +339,31 @@ export namespace SessionPrompt {
       }
 
       step++
-      if (step === 1)
-        ensureTitle({
+      if (step === 1) {
+        await ensureTitle({
           session,
           modelID: lastUser.model.modelID,
           providerID: lastUser.model.providerID,
           history: msgs,
         })
+        if (Instance.project.vcs === "git" && !session.branch) {
+          try {
+            const updatedSession = await Session.get(sessionID)
+            const branchInfo = await Branch.create({
+              slug: session.slug,
+              title: Session.isDefaultTitle(updatedSession.title) ? undefined : updatedSession.title,
+              projectId: Instance.project.id,
+            })
+            session.branch = branchInfo
+            sessionCwd = branchInfo.worktree
+            await Session.update(sessionID, draft => {
+              draft.branch = branchInfo
+            })
+          } catch (e) {
+            log.warn("failed to create branch for session", { error: e, sessionID })
+          }
+        }
+      }
 
       const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
       const config = await Config.get()
