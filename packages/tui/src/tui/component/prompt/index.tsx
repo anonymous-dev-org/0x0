@@ -29,6 +29,7 @@ import { Clipboard } from "../../util/clipboard"
 import { useCommandDialog } from "../dialog-command"
 import { DialogSkill } from "../dialog-skill"
 import { DialogStash } from "../dialog-stash"
+import { DialogWorktree } from "../dialog-worktree"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Autocomplete, type AutocompleteRef } from "./autocomplete"
 import { type PromptInfo, usePromptHistory } from "./history"
@@ -435,6 +436,15 @@ export function Prompt(props: PromptProps) {
       restorePromptParts: promptParts => parts.restore(promptParts),
       onPromptModelWarning: promptModelWarning,
       onSubmit: props.onSubmit,
+      onWorktreeChoice: sync.data.vcs
+        ? async () => {
+            const sandboxes = await sdk.client.experimental.worktree
+              .$get()
+              .then(res => res.json() as Promise<string[]>)
+              .catch(() => [] as string[])
+            return DialogWorktree.show(dialog, sandboxes)
+          }
+        : undefined,
       onSubmitError: message => {
         toast.show({
           variant: "error",

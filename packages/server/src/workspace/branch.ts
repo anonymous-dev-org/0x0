@@ -161,6 +161,16 @@ export namespace Branch {
     return result
   }
 
+  export async function infoFromWorktree(worktree: string): Promise<{ name: string; base: string; worktree: string }> {
+    const branchName = (await $`git -C ${worktree} branch --show-current`.quiet().nothrow().text()).trim()
+    if (!branchName) throw new Error(`No branch found in worktree ${worktree}`)
+
+    const cwd = Instance.directory
+    const baseBranch = (await $`git branch --show-current`.quiet().cwd(cwd).nothrow().text()).trim() || "HEAD"
+
+    return { name: branchName, base: baseBranch, worktree }
+  }
+
   export async function remove(worktreePath: string, branchName: string): Promise<void> {
     const cwd = Instance.directory
 

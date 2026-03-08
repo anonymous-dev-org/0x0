@@ -1,6 +1,9 @@
 import { Identifier } from "@anonymous-dev/0x0-server/core/id/id"
+import type { Session } from "@anonymous-dev/0x0-server/session"
 import { iife } from "@anonymous-dev/0x0-server/util/iife"
 import type { PromptInfo } from "./history"
+
+type WorktreeMode = NonNullable<Session.Info["worktreeMode"]>
 
 type SubmitModel = {
   providerID: string
@@ -83,6 +86,7 @@ export async function submitPrompt(props: {
   onPromptModelWarning: () => void
   onSubmit?: () => void
   onSubmitError?: (message: string) => void
+  onWorktreeChoice?: () => Promise<WorktreeMode | undefined>
   onOptimistic?: (
     message: {
       id: string
@@ -135,6 +139,13 @@ export async function submitPrompt(props: {
   const nonTextParts = snapshotPrompt.parts.filter(part => part.type !== "text")
   const variant = props.local.model.variant.current()
 
+  // Ask for worktree choice BEFORE clearing the prompt so Escape = cancel = nothing happens
+  let worktreeMode: WorktreeMode | undefined
+  if (!props.sessionID && props.onWorktreeChoice) {
+    worktreeMode = await props.onWorktreeChoice()
+    if (worktreeMode === undefined) return
+  }
+
   props.input.extmarks.clear()
   props.setPrompt({
     input: "",
@@ -158,7 +169,8 @@ export async function submitPrompt(props: {
     ? props.sessionID
     : await (async () => {
         try {
-          const res = await props.sdk.client.session.$post({ json: {} } as any)
+          const body = worktreeMode ? { worktreeMode } : {}
+          const res = await props.sdk.client.session.$post({ json: body } as any)
           const created = await (res as any).json()
           if (!created?.id) {
             rollbackSubmit("Failed to create session")

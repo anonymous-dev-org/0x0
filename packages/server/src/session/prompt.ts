@@ -346,14 +346,21 @@ export namespace SessionPrompt {
           providerID: lastUser.model.providerID,
           history: msgs,
         })
-        if (Instance.project.vcs === "git" && !session.branch) {
+        if (Instance.project.vcs === "git" && !session.branch && session.worktreeMode !== "skip") {
           try {
-            const updatedSession = await Session.get(sessionID)
-            const branchInfo = await Branch.create({
-              slug: session.slug,
-              title: Session.isDefaultTitle(updatedSession.title) ? undefined : updatedSession.title,
-              projectId: Instance.project.id,
-            })
+            const mode = session.worktreeMode
+            let branchInfo: { name: string; base: string; worktree: string }
+
+            if (typeof mode === "object" && "reuse" in mode) {
+              branchInfo = await Branch.infoFromWorktree(mode.reuse)
+            } else {
+              const updatedSession = await Session.get(sessionID)
+              branchInfo = await Branch.create({
+                slug: session.slug,
+                title: Session.isDefaultTitle(updatedSession.title) ? undefined : updatedSession.title,
+                projectId: Instance.project.id,
+              })
+            }
             session.branch = branchInfo
             sessionCwd = branchInfo.worktree
             await Session.update(sessionID, draft => {

@@ -96,6 +96,7 @@ export namespace Session {
           worktree: z.string(),
         })
         .optional(),
+      worktreeMode: z.union([z.literal("create"), z.literal("skip"), z.object({ reuse: z.string() })]).optional(),
     })
     .meta({
       ref: "Session",
@@ -160,6 +161,7 @@ export namespace Session {
         parentID: Identifier.schema("session").optional(),
         title: z.string().optional(),
         permission: Info.shape.permission,
+        worktreeMode: Info.shape.worktreeMode,
       })
       .optional(),
     async input => {
@@ -168,6 +170,7 @@ export namespace Session {
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
+        worktreeMode: input?.worktreeMode,
       })
     }
   )
@@ -226,6 +229,7 @@ export namespace Session {
     parentID?: string
     directory: string
     permission?: PermissionNext.Ruleset
+    worktreeMode?: Info["worktreeMode"]
   }) {
     const result: Info = {
       id: Identifier.descending("session", input.id),
@@ -236,6 +240,7 @@ export namespace Session {
       parentID: input.parentID,
       title: input.title ?? createDefaultTitle(!!input.parentID),
       permission: input.permission,
+      worktreeMode: input.worktreeMode,
       time: {
         created: Date.now(),
         updated: Date.now(),
