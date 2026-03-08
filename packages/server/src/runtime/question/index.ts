@@ -60,6 +60,17 @@ export namespace Question {
   })
   export type Reply = z.infer<typeof Reply>
 
+  export type Outcome =
+    | {
+        status: "answered"
+        request: Request
+        answers: Answer[]
+      }
+    | {
+        status: "cancelled"
+        request: Request
+      }
+
   export const Event = {
     Asked: BusEvent.define("question.asked", Request),
     Replied: BusEvent.define(
@@ -121,7 +132,7 @@ export namespace Question {
     return Object.values(s.pending).filter(entry => entry.sessionID === sessionID)
   }
 
-  export async function reply(input: { requestID: string; answers: Answer[] }): Promise<void> {
+  export async function reply(input: { requestID: string; answers: Answer[] }): Promise<Outcome | undefined> {
     const s = await state()
     const existing = s.pending[input.requestID]
     if (!existing) {
@@ -137,9 +148,14 @@ export namespace Question {
       requestID: existing.id,
       answers: input.answers,
     })
+    return {
+      status: "answered",
+      request: existing,
+      answers: input.answers,
+    }
   }
 
-  export async function reject(requestID: string): Promise<void> {
+  export async function reject(requestID: string): Promise<Outcome | undefined> {
     const s = await state()
     const existing = s.pending[requestID]
     if (!existing) {
@@ -154,6 +170,10 @@ export namespace Question {
       sessionID: existing.sessionID,
       requestID: existing.id,
     })
+    return {
+      status: "cancelled",
+      request: existing,
+    }
   }
 
   export class RejectedError extends Error {

@@ -1,14 +1,14 @@
+import os from "os"
+import z from "zod"
 import { Bus } from "@/core/bus"
 import { BusEvent } from "@/core/bus/bus-event"
 import { Config } from "@/core/config/config"
 import { Identifier } from "@/core/id/id"
-import { Instance } from "@/project/instance"
 import { Storage } from "@/core/storage/storage"
+import { Instance } from "@/project/instance"
 import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
-import os from "os"
-import z from "zod"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
@@ -54,7 +54,7 @@ export namespace PermissionNext {
         continue
       }
       ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
+        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action }))
       )
     }
     return ruleset
@@ -85,8 +85,35 @@ export namespace PermissionNext {
 
   export type Request = z.infer<typeof Request>
 
-  export const Reply = z.enum(["once", "always", "reject", "always_deny"])
+  export const Reply = z.enum(["once", "always", "reject", "always_deny", "cancel"])
   export type Reply = z.infer<typeof Reply>
+
+  export type Outcome =
+    | {
+        status: "approved"
+        request: Request
+        reply: "once" | "always"
+      }
+    | {
+        status: "denied"
+        request: Request
+        reply: "reject" | "always_deny"
+        message?: string
+      }
+    | {
+        status: "cancelled"
+        request: Request
+      }
+
+  export type Decision =
+    | {
+        status: "allowed"
+      }
+    | {
+        status: "pending"
+        request: Request
+        promise: Promise<void>
+      }
 
   export const Approval = z.object({
     projectID: z.string(),
@@ -101,7 +128,7 @@ export namespace PermissionNext {
         sessionID: z.string(),
         requestID: z.string(),
         reply: Reply,
-      }),
+      })
     ),
   }
 
@@ -113,8 +140,9 @@ export namespace PermissionNext {
       string,
       {
         info: Request
+        promise: Promise<void>
         resolve: () => void
-        reject: (e: any) => void
+        reject: (error: Error) => void
       }
     > = {}
 
@@ -124,36 +152,74 @@ export namespace PermissionNext {
     }
   })
 
-  export const ask = fn(
+  function createPendingRequest(
+    pending: Record<
+      string,
+      {
+        info: Request
+        promise: Promise<void>
+        resolve: () => void
+        reject: (error: Error) => void
+      }
+    >,
+    request: Request
+  ) {
+    let resolvePending = () => {}
+    let rejectPending = (_error: Error) => {}
+    const promise = new Promise<void>((resolve, reject) => {
+      resolvePending = resolve
+      rejectPending = reject
+    })
+    pending[request.id] = {
+      info: request,
+      promise,
+      resolve: resolvePending,
+      reject: rejectPending,
+    }
+    Bus.publish(Event.Asked, request)
+    return pending[request.id]
+  }
+
+  export const request = fn(
     Request.partial({ id: true }).extend({
       ruleset: Ruleset,
     }),
-    async (input) => {
+    async (input): Promise<Decision> => {
       const s = await state()
       const { ruleset, ...request } = input
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
         log.info("evaluated", { permission: request.permission, pattern, action: rule })
         if (rule.action === "deny")
-          throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
+          throw new DeniedError(ruleset.filter(r => Wildcard.match(request.permission, r.permission)))
         if (rule.action === "ask") {
-          const id = input.id ?? Identifier.ascending("permission")
-          return new Promise<void>((resolve, reject) => {
-            const info: Request = {
-              id,
-              ...request,
-            }
-            s.pending[id] = {
-              info,
-              resolve,
-              reject,
-            }
-            Bus.publish(Event.Asked, info)
-          })
+          const info: Request = {
+            id: input.id ?? Identifier.ascending("permission"),
+            ...request,
+          }
+          const entry = createPendingRequest(s.pending, info)
+          return {
+            status: "pending",
+            request: info,
+            promise: entry.promise,
+          }
         }
-        if (rule.action === "allow") continue
       }
-    },
+      return {
+        status: "allowed",
+      }
+    }
+  )
+
+  export const ask = fn(
+    Request.partial({ id: true }).extend({
+      ruleset: Ruleset,
+    }),
+    async input => {
+      const decision = await request(input)
+      if (decision.status === "allowed") return
+      return decision.promise
+    }
   )
 
   export const reply = fn(
@@ -162,7 +228,7 @@ export namespace PermissionNext {
       reply: Reply,
       message: z.string().optional(),
     }),
-    async (input) => {
+    async (input): Promise<Outcome | undefined> => {
       const s = await state()
       const existing = s.pending[input.requestID]
       if (!existing) return
@@ -172,6 +238,13 @@ export namespace PermissionNext {
         requestID: existing.info.id,
         reply: input.reply,
       })
+      if (input.reply === "cancel") {
+        existing.reject(new CancelledError())
+        return {
+          status: "cancelled",
+          request: existing.info,
+        }
+      }
       if (input.reply === "reject") {
         existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
         // Reject all other pending permissions for this session
@@ -187,11 +260,20 @@ export namespace PermissionNext {
             pending.reject(new RejectedError())
           }
         }
-        return
+        return {
+          status: "denied",
+          request: existing.info,
+          reply: "reject",
+          message: input.message,
+        }
       }
       if (input.reply === "once") {
         existing.resolve()
-        return
+        return {
+          status: "approved",
+          request: existing.info,
+          reply: "once",
+        }
       }
       if (input.reply === "always") {
         for (const pattern of existing.info.always) {
@@ -208,7 +290,7 @@ export namespace PermissionNext {
         for (const [id, pending] of Object.entries(s.pending)) {
           if (pending.info.sessionID !== sessionID) continue
           const ok = pending.info.patterns.every(
-            (pattern) => evaluate(pending.info.permission, pattern, s.approved).action === "allow",
+            pattern => evaluate(pending.info.permission, pattern, s.approved).action === "allow"
           )
           if (!ok) continue
           delete s.pending[id]
@@ -221,7 +303,11 @@ export namespace PermissionNext {
         }
 
         await persistAction(existing.info.metadata, "allow")
-        return
+        return {
+          status: "approved",
+          request: existing.info,
+          reply: "always",
+        }
       }
       if (input.reply === "always_deny") {
         for (const pattern of existing.info.always) {
@@ -234,7 +320,7 @@ export namespace PermissionNext {
 
         await persistAction(existing.info.metadata, "deny")
 
-        existing.reject(new DeniedError(s.approved.filter((r) => r.action === "deny")))
+        existing.reject(new DeniedError(s.approved.filter(r => r.action === "deny")))
         const sessionID = existing.info.sessionID
         for (const [id, pending] of Object.entries(s.pending)) {
           if (pending.info.sessionID === sessionID) {
@@ -247,15 +333,16 @@ export namespace PermissionNext {
             pending.reject(new RejectedError())
           }
         }
-        return
+        return {
+          status: "denied",
+          request: existing.info,
+          reply: "always_deny",
+        }
       }
-    },
+    }
   )
 
-  async function persistAction(
-    metadata: Record<string, unknown> | undefined,
-    policy: "allow" | "deny",
-  ) {
+  async function persistAction(metadata: Record<string, unknown> | undefined, policy: "allow" | "deny") {
     const tool = metadata?.tool
     const provider = metadata?.provider
     const agent = metadata?.agent
@@ -273,7 +360,7 @@ export namespace PermissionNext {
     const merged = merge(...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
-      (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+      rule => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern)
     )
     return match ?? { action: "ask", permission, pattern: "*" }
   }
@@ -285,7 +372,7 @@ export namespace PermissionNext {
     for (const tool of tools) {
       const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
 
-      const rule = ruleset.findLast((r) => Wildcard.match(permission, r.permission))
+      const rule = ruleset.findLast(r => Wildcard.match(permission, r.permission))
       if (!rule) continue
       if (rule.pattern === "*" && rule.action === "deny") result.add(tool)
     }
@@ -296,6 +383,13 @@ export namespace PermissionNext {
   export class RejectedError extends Error {
     constructor() {
       super(`The user rejected permission to use this specific tool call.`)
+    }
+  }
+
+  /** User dismissed permission modal - halts execution until resumed separately */
+  export class CancelledError extends Error {
+    constructor() {
+      super(`The user dismissed the pending permission request.`)
     }
   }
 
@@ -310,12 +404,34 @@ export namespace PermissionNext {
   export class DeniedError extends Error {
     constructor(public readonly ruleset: Ruleset) {
       super(
-        `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(ruleset)}`,
+        `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(ruleset)}`
       )
     }
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x.pending).map((x) => x.info))
+    return state().then(x => Object.values(x.pending).map(x => x.info))
+  }
+
+  export async function listBySession(sessionID: string) {
+    return state().then(x =>
+      Object.values(x.pending)
+        .map(x => x.info)
+        .filter(x => x.sessionID === sessionID)
+    )
+  }
+
+  export async function cancelBySession(sessionID: string) {
+    const s = await state()
+    for (const [id, pending] of Object.entries(s.pending)) {
+      if (pending.info.sessionID !== sessionID) continue
+      delete s.pending[id]
+      Bus.publish(Event.Replied, {
+        sessionID: pending.info.sessionID,
+        requestID: pending.info.id,
+        reply: "cancel",
+      })
+      pending.reject(new CancelledError())
+    }
   }
 }

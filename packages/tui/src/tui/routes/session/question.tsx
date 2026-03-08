@@ -1,4 +1,3 @@
-import { Identifier } from "@anonymous-dev/0x0-server/core/id/id"
 import type { QuestionAnswer, QuestionRequest } from "@anonymous-dev/0x0-server/server/types"
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
@@ -67,33 +66,13 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   }
 
   function replyAndResume(answers: QuestionAnswer[]) {
-    // 0. Optimistically remove from local store so modal hides immediately
+    // Optimistically remove from local store so modal hides immediately
     removeFromSyncStore()
 
-    // 1. Tell the server to clean up the pending question
+    // Tell the server to reply — the server owns resuming the conversation
     sdk.client.question[":requestID"].reply.$post({
       param: { requestID: props.request.id },
       json: { answers },
-    } as never)
-
-    // 2. Build templated Q&A text
-    const lines = props.request.questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
-    const text = `The user answered your questions:\n\n${lines.join("\n\n")}\n\nContinue with the user's answers in mind.`
-
-    // 3. Submit as a regular prompt to resume the conversation
-    const model = local.model.current()
-    if (!model) return
-    sdk.client.session[":sessionID"].prompt_async.$post({
-      param: { sessionID: props.request.sessionID },
-      json: {
-        messageID: Identifier.ascending("message"),
-        agent: issuingAgent(),
-        agentMode: local.agent.currentMode(),
-        model,
-        variant: local.model.variant.current(),
-        thinkingEffort: local.model.thinkingEffort.current(),
-        parts: [{ id: Identifier.ascending("part"), type: "text" as const, text }],
-      },
     } as never)
   }
 

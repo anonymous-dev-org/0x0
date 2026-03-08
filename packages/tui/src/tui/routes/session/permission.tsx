@@ -1,17 +1,17 @@
-import { createStore } from "solid-js/store"
-import { For, Match, Show, Switch } from "solid-js"
-import { Portal, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
-import type { TextareaRenderable } from "@opentui/core"
-import { keybind } from "@tui/state/keybind"
-import { theme, themeState, selectedForeground } from "@tui/state/theme"
 import type { PermissionRequest } from "@anonymous-dev/0x0-server/server/types"
-import { sdk } from "@tui/state/sdk"
-import { SplitBorder } from "../../component/border"
-import { sync } from "@tui/state/sync"
-import { useTextareaKeybindings } from "../../component/textarea-keybindings"
-import path from "path"
 import { Keybind } from "@anonymous-dev/0x0-server/util/keybind"
 import { Locale } from "@anonymous-dev/0x0-server/util/locale"
+import type { TextareaRenderable } from "@opentui/core"
+import { type JSX, Portal, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { keybind } from "@tui/state/keybind"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
+import { selectedForeground, theme, themeState } from "@tui/state/theme"
+import path from "path"
+import { For, Match, Show, Switch } from "solid-js"
+import { createStore } from "solid-js/store"
+import { SplitBorder } from "../../component/border"
+import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
 import { filetype, normalizePath } from "./session-tool-format"
 
@@ -89,8 +89,7 @@ function SearchBody(props: { input: Record<string, unknown> }) {
   return (
     <Show
       when={mode() === "files"}
-      fallback={<TextBody icon="✱" title={`Search content "` + (props.input.pattern ?? "") + `"`} />}
-    >
+      fallback={<TextBody icon="✱" title={`Search content "` + (props.input.pattern ?? "") + `"`} />}>
       <TextBody icon="✱" title={`Search files "` + (props.input.pattern ?? "") + `"`} />
     </Show>
   )
@@ -215,13 +214,12 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     if (!tool) return {}
     const parts = sync.data.part[tool.messageID] ?? []
     for (const part of parts) {
-      if (part.type === "tool" && part.callID === tool.callID && part.state.status !== "pending") {
+      if (part.type === "tool" && part.callID === tool.callID) {
         return part.state.input ?? {}
       }
     }
     return {}
   }
-
 
   return (
     <Switch>
@@ -239,7 +237,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           options={{ confirm: "Confirm", cancel: "Cancel" }}
           escapeKey="cancel"
-          onSelect={(option) => {
+          onSelect={option => {
             setStore("stage", "permission")
             if (option === "cancel") return
             sdk.client.permission[":requestID"].reply.$post({
@@ -263,7 +261,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           options={{ confirm: "Confirm", cancel: "Cancel" }}
           escapeKey="cancel"
-          onSelect={(option) => {
+          onSelect={option => {
             setStore("stage", "permission")
             if (option === "cancel") return
             sdk.client.permission[":requestID"].reply.$post({
@@ -275,7 +273,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       </Match>
       <Match when={store.stage === "reject"}>
         <RejectPrompt
-          onConfirm={(message) => {
+          onConfirm={message => {
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "reject", message: message || undefined },
@@ -297,7 +295,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           escapeKey="reject"
           fullscreen
-          onSelect={(option) => {
+          onSelect={option => {
             if (option === "always") {
               setStore("stage", "always")
               return
@@ -335,7 +333,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const narrow = () => dimensions().width < 80
   const dialog = useDialog()
 
-  useKeyboard((evt) => {
+  useKeyboard(evt => {
     if (dialog.visible) return
 
     if (evt.name === "escape" || keybind.match("app_exit", evt)) {
@@ -354,8 +352,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
       backgroundColor={theme.backgroundPanel}
       border={["left"]}
       borderColor={theme.error}
-      customBorderChars={SplitBorder.customBorderChars}
-    >
+      customBorderChars={SplitBorder.customBorderChars}>
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1}>
         <box flexDirection="row" gap={1} paddingLeft={1}>
           <text fg={theme.error}>{"△"}</text>
@@ -375,8 +372,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
         backgroundColor={theme.backgroundElement}
         justifyContent={narrow() ? "flex-start" : "space-between"}
         alignItems={narrow() ? "flex-start" : "center"}
-        gap={1}
-      >
+        gap={1}>
         <textarea
           ref={(val: TextareaRenderable) => (input = val)}
           focused
@@ -416,7 +412,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   const narrow = () => dimensions().width < 80
   const dialog = useDialog()
 
-  useKeyboard((evt) => {
+  useKeyboard(evt => {
     if (dialog.visible) return
 
     if (evt.name === "left" || evt.name == "h") {
@@ -448,7 +444,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     if (props.fullscreen && diffKey && Keybind.match(diffKey, keybind.parse(evt))) {
       evt.preventDefault()
       evt.stopPropagation()
-      setStore("expanded", (v) => !v)
+      setStore("expanded", v => !v)
     }
   })
 
@@ -470,8 +466,7 @@ function Prompt<const T extends Record<string, string>>(props: {
             left: 0,
             right: 0,
             position: "relative",
-          })}
-    >
+          })}>
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1} flexGrow={1}>
         <box flexDirection="row" gap={1} paddingLeft={1} flexShrink={0}>
           <text fg={theme.warning}>{"△"}</text>
@@ -489,11 +484,10 @@ function Prompt<const T extends Record<string, string>>(props: {
         paddingBottom={1}
         backgroundColor={theme.backgroundElement}
         justifyContent={narrow() ? "flex-start" : "space-between"}
-        alignItems={narrow() ? "flex-start" : "center"}
-      >
+        alignItems={narrow() ? "flex-start" : "center"}>
         <box flexDirection="row" gap={1} flexShrink={0}>
           <For each={keys}>
-            {(option) => (
+            {option => (
               <box
                 paddingLeft={1}
                 paddingRight={1}
@@ -502,8 +496,7 @@ function Prompt<const T extends Record<string, string>>(props: {
                 onMouseUp={() => {
                   setStore("selected", option)
                   props.onSelect(option)
-                }}
-              >
+                }}>
                 <text fg={option === store.selected ? selectedForeground(theme, theme.warning) : theme.textMuted}>
                   {props.options[option]}
                 </text>

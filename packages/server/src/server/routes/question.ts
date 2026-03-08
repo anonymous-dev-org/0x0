@@ -1,10 +1,10 @@
 import { Hono } from "hono"
-import { describeRoute, validator } from "hono-openapi"
-import { resolver } from "hono-openapi"
-import { Question } from "@/runtime/question"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import { errors } from "../error"
+import { Question } from "@/runtime/question"
+import { SessionPrompt } from "@/session/prompt"
 import { lazy } from "../../util/lazy"
+import { errors } from "../error"
 
 export const QuestionRoutes = lazy(() =>
   new Hono()
@@ -25,10 +25,10 @@ export const QuestionRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const questions = await Question.list()
         return c.json(questions)
-      },
+      }
     )
     .post(
       "/:requestID/reply",
@@ -52,18 +52,22 @@ export const QuestionRoutes = lazy(() =>
         "param",
         z.object({
           requestID: z.string(),
-        }),
+        })
       ),
       validator("json", Question.Reply),
-      async (c) => {
+      async c => {
         const params = c.req.valid("param")
         const json = c.req.valid("json")
-        await Question.reply({
+        const outcome = await Question.reply({
           requestID: params.requestID,
           answers: json.answers,
         })
+        if (outcome?.status === "answered") {
+          const text = SessionPrompt.questionAnswerTemplate(outcome.request.questions, outcome.answers)
+          SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
+        }
         return c.json(true)
-      },
+      }
     )
     .post(
       "/:requestID/reject",
@@ -87,12 +91,16 @@ export const QuestionRoutes = lazy(() =>
         "param",
         z.object({
           requestID: z.string(),
-        }),
+        })
       ),
-      async (c) => {
+      async c => {
         const params = c.req.valid("param")
-        await Question.reject(params.requestID)
+        const outcome = await Question.reject(params.requestID)
+        if (outcome?.status === "cancelled") {
+          const text = SessionPrompt.questionCancelTemplate()
+          SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
+        }
         return c.json(true)
-      },
-    ),
+      }
+    )
 )

@@ -1,9 +1,10 @@
 import { Hono } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { PermissionNext } from "@/permission/next"
-import { errors } from "../error"
+import { SessionPrompt } from "@/session/prompt"
 import { lazy } from "../../util/lazy"
+import { errors } from "../error"
 
 export const PermissionRoutes = lazy(() =>
   new Hono()
@@ -29,19 +30,34 @@ export const PermissionRoutes = lazy(() =>
         "param",
         z.object({
           requestID: z.string(),
-        }),
+        })
       ),
       validator("json", z.object({ reply: PermissionNext.Reply, message: z.string().optional() })),
-      async (c) => {
+      async c => {
         const params = c.req.valid("param")
         const json = c.req.valid("json")
-        await PermissionNext.reply({
+        const outcome = await PermissionNext.reply({
           requestID: params.requestID,
           reply: json.reply,
           message: json.message,
         })
+        if (outcome) {
+          let text: string
+          switch (outcome.status) {
+            case "approved":
+              text = SessionPrompt.permissionApprovalTemplate(outcome.request.permission, outcome.reply)
+              break
+            case "denied":
+              text = SessionPrompt.permissionDenialTemplate(outcome.request.permission, outcome.message)
+              break
+            case "cancelled":
+              text = SessionPrompt.permissionCancelTemplate(outcome.request.permission)
+              break
+          }
+          SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
+        }
         return c.json(true)
-      },
+      }
     )
     .get(
       "/",
@@ -60,9 +76,9 @@ export const PermissionRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
+      async c => {
         const permissions = await PermissionNext.list()
         return c.json(permissions)
-      },
-    ),
+      }
+    )
 )
