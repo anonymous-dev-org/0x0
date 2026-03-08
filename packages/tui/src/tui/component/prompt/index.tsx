@@ -98,7 +98,9 @@ export function Prompt(props: PromptProps) {
 
   function insertStashText(text: string) {
     if (!input || input.isDestroyed || !text) return
-    input.insertText(text)
+    // Prepend newline if prompt already has text, to avoid concatenation
+    const needsNewline = store.prompt.input.length > 0
+    input.insertText(needsNewline ? "\n" + text : text)
     defer(() => {
       input.getLayoutNode().markDirty()
       input.gotoBufferEnd()
@@ -106,23 +108,38 @@ export function Prompt(props: PromptProps) {
     })
   }
 
-  // Listen for server-side prompt stash updates (e.g. file refs sent from nvim)
+  // Tracks last-seen stash content per session to detect what's new on fetch.
+  const stashSnapshot = new Map<string, string>()
+
+  // Listen for server-side prompt stash updates (e.g. file refs sent from nvim).
+  // SSE events carry the delta (newly appended text only).
   const offStash = sdk.event.on("session.prompt.stash.updated", evt => {
     if (evt.properties.sessionID !== props.sessionID) return
+    // Update snapshot so the fetch effect doesn't re-insert this content
+    const prev = stashSnapshot.get(evt.properties.sessionID) ?? ""
+    stashSnapshot.set(evt.properties.sessionID, prev ? prev + "\n" + evt.properties.text : evt.properties.text)
     insertStashText(evt.properties.text)
   })
 
   onCleanup(offStash)
 
-  // Fetch pending stash when session changes
+  // Fetch the full stash when switching to a session.
   createEffect(() => {
     const sessionID = props.sessionID
     if (!sessionID) return
+
     sdk.client.session[":sessionID"].prompt.stash
       .$get({ param: { sessionID } })
       .then(async res => {
+        if (props.sessionID !== sessionID) return
         const data = (await res.json()) as { text: string }
-        if (data.text) insertStashText(data.text)
+        if (!data.text) return
+        const seen = stashSnapshot.get(sessionID) ?? ""
+        if (data.text === seen) return
+        // Only insert the portion we haven't seen before
+        const newText = seen && data.text.startsWith(seen) ? data.text.slice(seen.length + 1) : data.text
+        stashSnapshot.set(sessionID, data.text)
+        if (newText) insertStashText(newText)
       })
       .catch(() => {})
   })
