@@ -1,5 +1,5 @@
-import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
 import { RGBA, TextAttributes } from "@opentui/core"
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js"
 
 export function Thinking(props: {
   visible: () => boolean
@@ -25,6 +25,7 @@ export function Thinking(props: {
     const detail = props.detail()
     if (phase === "writing") return "Writing"
     if (phase === "tool") return detail ?? "Running tool"
+    if (phase === "waiting") return "Waiting for answer"
     return "Thinking"
   }
 
@@ -68,13 +69,11 @@ export function Thinking(props: {
           <box flexDirection="column" flexShrink={0} gap={0}>
             <text>
               <For each={[0, 1, 2, 3, 4, 5]}>
-                {(col) => <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>}
+                {col => <span style={{ fg: dot(dots()[col] ?? 0.45), bg: dot(dots()[col + 6] ?? 0.45) }}>▀</span>}
               </For>
             </text>
             <text>
-              <For each={[0, 1, 2, 3, 4, 5]}>
-                {(col) => <span style={{ fg: dot(dots()[col + 12] ?? 0.45) }}>▀</span>}
-              </For>
+              <For each={[0, 1, 2, 3, 4, 5]}>{col => <span style={{ fg: dot(dots()[col + 12] ?? 0.45) }}>▀</span>}</For>
             </text>
           </box>
           <text fg={props.textMuted} attributes={TextAttributes.DIM}>
