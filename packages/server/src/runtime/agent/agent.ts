@@ -511,7 +511,7 @@ export namespace Agent {
     if (modeConfig.maxSteps !== undefined) base.steps = modeConfig.maxSteps
     if (modeConfig.thinking_effort !== undefined) base.thinkingEffort = modeConfig.thinking_effort
     if (modeConfig.knowledge_base !== undefined) {
-      base.knowledgeBase = Array.from(new Set([...base.knowledgeBase, ...modeConfig.knowledge_base]))
+      base.knowledgeBase = Array.from(new Set([...(base.knowledgeBase ?? []), ...(modeConfig.knowledge_base ?? [])]))
     }
     if (modeConfig.actions !== undefined) {
       base.actions = migrateNestedActions("mode", modeConfig.actions as Record<string, unknown>)

@@ -2,10 +2,7 @@ import { Bus } from "@/core/bus"
 import { Identifier } from "@/core/id/id"
 import type { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
-<<<<<<< HEAD
 import { Branch } from "@/workspace/branch"
-=======
->>>>>>> 0x0/kind-orchid
 import { Snapshot } from "@/workspace/snapshot"
 import { Session } from "."
 import { LLM } from "./llm"
@@ -100,17 +97,10 @@ export namespace SessionProcessor {
           : streamInput.agent.name
         const cliSessionId =
           streamInput.cliSessionId ??
-<<<<<<< HEAD
-          (sessionInfo?.cliSessionAgent === streamInput.agent.name ? sessionInfo?.cliSessionId : undefined)
-        const codexThreadId =
-          streamInput.codexThreadId ??
-          (sessionInfo?.codexThreadAgent === streamInput.agent.name ? sessionInfo?.codexThreadId : undefined)
-=======
           (sessionInfo?.cliSessionAgent === agentKey ? sessionInfo?.cliSessionId : undefined)
         const codexThreadId =
           streamInput.codexThreadId ??
           (sessionInfo?.codexThreadAgent === agentKey ? sessionInfo?.codexThreadId : undefined)
->>>>>>> 0x0/kind-orchid
 
         const enrichedInput: LLM.StreamInput = {
           ...streamInput,

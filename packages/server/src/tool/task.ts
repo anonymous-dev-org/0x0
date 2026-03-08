@@ -128,7 +128,7 @@ export const TaskTool = Tool.define("task", async ctx => {
         // sees the agent change via cliSessionAgent mismatch, and starts a
         // fresh LLM conversation automatically.
         // If the target agent has modes, default to its first mode.
-        const targetMode = agent.modes.length > 0 ? agent.modes[0] : undefined
+        const targetMode = agent.modes && agent.modes.length > 0 ? agent.modes[0] : undefined
         await SessionPrompt.prompt({
           sessionID: ctx.sessionID,
           agent: agent.name,
