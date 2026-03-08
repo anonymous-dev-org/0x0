@@ -48,6 +48,8 @@ export namespace LLM {
     cliSessionId?: string
     /** Codex thread ID for resuming a Codex session */
     codexThreadId?: string
+    /** Working directory override (e.g. worktree path for branch sessions) */
+    cwd?: string
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +90,7 @@ export namespace LLM {
   // Extract the latest user prompt text from the messages array
   // ─────────────────────────────────────────────────────────────────────────────
 
-  function extractUserPrompt(messages: ModelMessage[]): string {
+  export function extractUserPrompt(messages: ModelMessage[]): string {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
       if (!msg || msg.role !== "user") continue
@@ -174,10 +176,12 @@ export namespace LLM {
 
     const systemParts = await composeSystemParts(input)
 
+    const effectiveDir = input.cwd ?? Instance.directory
+    const effectiveRoot = input.cwd ?? Instance.worktree
     const contextBlock = [
       `# Environment`,
-      `- Working Directory: ${Instance.directory}`,
-      `- Workspace Root: ${Instance.worktree}`,
+      `- Working Directory: ${effectiveDir}`,
+      `- Workspace Root: ${effectiveRoot}`,
       `- Platform: ${process.platform}`,
       `- Date: ${new Date().toISOString().split("T")[0]}`,
     ].join("\n")
@@ -221,7 +225,7 @@ export namespace LLM {
       sessionID: input.sessionID,
       agentName: input.agent.name,
       agent: input.agent,
-      cwd: Instance.directory,
+      cwd: input.cwd ?? Instance.directory,
     })) {
       switch (event.type) {
         case "text-delta":
@@ -265,7 +269,7 @@ export namespace LLM {
       systemPrompt: systemPrompt || undefined,
       threadId: input.codexThreadId,
       abort: input.abort,
-      cwd: Instance.directory,
+      cwd: input.cwd ?? Instance.directory,
       sessionID: input.sessionID,
       agentName: input.agent.name,
       agent: input.agent,

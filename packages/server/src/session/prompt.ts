@@ -299,6 +299,7 @@ export namespace SessionPrompt {
 
     let step = 0
     const session = await Session.get(sessionID)
+    const sessionCwd = session.branch?.worktree
     while (true) {
       SessionStatus.set(sessionID, { type: "busy" })
       log.info("loop", { step, sessionID })
@@ -360,8 +361,8 @@ export namespace SessionPrompt {
           agent: task.agent,
           variant: lastUser.variant,
           path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
+            cwd: sessionCwd ?? Instance.directory,
+            root: sessionCwd ?? Instance.worktree,
           },
           cost: 0,
           tokens: {
@@ -559,8 +560,8 @@ export namespace SessionPrompt {
           agent: agent.name,
           variant: lastUser.variant,
           path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
+            cwd: sessionCwd ?? Instance.directory,
+            root: sessionCwd ?? Instance.worktree,
           },
           cost: 0,
           tokens: {
@@ -644,6 +645,7 @@ export namespace SessionPrompt {
         ],
         tools,
         model,
+        cwd: sessionCwd,
       })
       if (result === "stop") break
     }

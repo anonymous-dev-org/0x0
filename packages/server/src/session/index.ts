@@ -15,6 +15,7 @@ import type { Provider } from "@/provider/provider"
 import { Command } from "@/runtime/command"
 import { fn } from "@/util/fn"
 import { Slug } from "@/util/slug"
+import { Branch } from "@/workspace/branch"
 import { Snapshot } from "@/workspace/snapshot"
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
@@ -88,6 +89,13 @@ export namespace Session {
       cliSessionAgent: z.string().optional(),
       codexThreadId: z.string().optional(),
       codexThreadAgent: z.string().optional(),
+      branch: z
+        .object({
+          name: z.string(),
+          base: z.string(),
+          worktree: z.string(),
+        })
+        .optional(),
     })
     .meta({
       ref: "Session",
@@ -228,6 +236,21 @@ export namespace Session {
     }
     log.info("created", result)
     await Storage.write(["session", Instance.project.id, result.id], result)
+
+    if (Instance.project.vcs === "git") {
+      try {
+        const branchInfo = await Branch.create({
+          slug: result.slug,
+          title: input.title,
+          projectId: Instance.project.id,
+        })
+        result.branch = branchInfo
+        await Storage.write(["session", Instance.project.id, result.id], result)
+      } catch (e) {
+        log.warn("failed to create branch for session", { error: e, sessionID: result.id })
+      }
+    }
+
     Bus.publish(Event.Created, {
       info: result,
     })
@@ -356,6 +379,11 @@ export namespace Session {
     const project = Instance.project
     try {
       const session = await get(sessionID)
+      if (session.branch) {
+        await Branch.remove(session.branch.worktree, session.branch.name).catch(e =>
+          log.warn("failed to remove branch", { error: e, sessionID })
+        )
+      }
       for (const child of await children(sessionID)) {
         await remove(child.id)
       }

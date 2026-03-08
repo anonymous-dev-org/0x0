@@ -1,7 +1,7 @@
 import fs from "fs/promises"
-import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
-import path from "path"
 import os from "os"
+import path from "path"
+import { xdgCache, xdgConfig, xdgData, xdgState } from "xdg-basedir"
 
 const app = "zeroxzero"
 const config_app = "0x0"
@@ -32,6 +32,7 @@ await Promise.all([
   fs.mkdir(Global.Path.state, { recursive: true }),
   fs.mkdir(Global.Path.log, { recursive: true }),
   fs.mkdir(Global.Path.bin, { recursive: true }),
+  fs.mkdir(path.join(Global.Path.data, "worktrees"), { recursive: true }),
 ])
 
 const CACHE_VERSION = "21"
@@ -44,12 +45,12 @@ if (version !== CACHE_VERSION) {
   try {
     const contents = await fs.readdir(Global.Path.cache)
     await Promise.all(
-      contents.map((item) =>
+      contents.map(item =>
         fs.rm(path.join(Global.Path.cache, item), {
           recursive: true,
           force: true,
-        }),
-      ),
+        })
+      )
     )
   } catch (e) {}
   await Bun.file(path.join(Global.Path.cache, "version")).write(CACHE_VERSION)

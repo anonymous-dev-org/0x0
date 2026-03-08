@@ -1,21 +1,18 @@
-import { Provider } from "@/provider/provider"
-
-import { fn } from "@/util/fn"
-import z from "zod"
-import { Session } from "."
-
-import { MessageV2 } from "./message-v2"
-import { Identifier } from "@/core/id/id"
-import { Snapshot } from "@/workspace/snapshot"
-
-import { Log } from "@/util/log"
 import path from "path"
-import { Instance } from "@/project/instance"
-import { Storage } from "@/core/storage/storage"
+import z from "zod"
 import { Bus } from "@/core/bus"
-
-import { LLM } from "./llm"
+import { Identifier } from "@/core/id/id"
+import { Storage } from "@/core/storage/storage"
+import { Instance } from "@/project/instance"
+import { Provider } from "@/provider/provider"
 import { Agent } from "@/runtime/agent/agent"
+import { fn } from "@/util/fn"
+import { Log } from "@/util/log"
+import { Branch } from "@/workspace/branch"
+import { Snapshot } from "@/workspace/snapshot"
+import { Session } from "."
+import { LLM } from "./llm"
+import type { MessageV2 } from "./message-v2"
 
 export namespace SessionSummary {
   const log = Log.create({ service: "session.summary" })
@@ -81,29 +78,31 @@ export namespace SessionSummary {
       sessionID: z.string(),
       messageID: z.string(),
     }),
-    async (input) => {
+    async input => {
       const all = await Session.messages({ sessionID: input.sessionID })
       await Promise.all([
         summarizeSession({ sessionID: input.sessionID, messages: all }),
         summarizeMessage({ messageID: input.messageID, messages: all }),
       ])
-    },
+    }
   )
 
   async function summarizeSession(input: { sessionID: string; messages: MessageV2.WithParts[] }) {
+    const session = await Session.get(input.sessionID).catch(() => null)
+    const worktreeRoot = session?.branch?.worktree ?? Instance.worktree
     const files = new Set(
       input.messages
-        .flatMap((x) => x.parts)
-        .filter((x) => x.type === "patch")
-        .flatMap((x) => x.files)
-        .map((x) => path.relative(Instance.worktree, x).replaceAll("\\", "/")),
+        .flatMap(x => x.parts)
+        .filter(x => x.type === "patch")
+        .flatMap(x => x.files)
+        .map(x => path.relative(worktreeRoot, x).replaceAll("\\", "/"))
     )
-    const diffs = await computeDiff({ messages: input.messages }).then((x) =>
-      x.filter((x) => {
+    const diffs = await computeDiff({ messages: input.messages, session: session ?? undefined }).then(x =>
+      x.filter(x => {
         return files.has(x.file)
-      }),
+      })
     )
-    await Session.update(input.sessionID, (draft) => {
+    await Session.update(input.sessionID, draft => {
       draft.summary = {
         additions: diffs.reduce((sum, x) => sum + x.additions, 0),
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
@@ -119,9 +118,9 @@ export namespace SessionSummary {
 
   async function summarizeMessage(input: { messageID: string; messages: MessageV2.WithParts[] }) {
     const messages = input.messages.filter(
-      (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
+      m => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID)
     )
-    const msgWithParts = messages.find((m) => m.info.id === input.messageID)!
+    const msgWithParts = messages.find(m => m.info.id === input.messageID)!
     const userMsg = msgWithParts.info as MessageV2.User
     const diffs = await computeDiff({ messages })
     userMsg.summary = {
@@ -130,7 +129,7 @@ export namespace SessionSummary {
     }
     await Session.updateMessage(userMsg)
 
-    const textPart = msgWithParts.parts.find((p) => p.type === "text" && !p.synthetic) as MessageV2.TextPart
+    const textPart = msgWithParts.parts.find(p => p.type === "text" && !p.synthetic) as MessageV2.TextPart
     if (textPart && !userMsg.summary?.title) {
       const agent = await Agent.get("title")
       if (!agent) return
@@ -170,9 +169,9 @@ export namespace SessionSummary {
       sessionID: Identifier.schema("session"),
       messageID: Identifier.schema("message").optional(),
     }),
-    async (input) => {
+    async input => {
       const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
-      const next = diffs.map((item) => {
+      const next = diffs.map(item => {
         const file = unquoteGitPath(item.file)
         if (file === item.file) return item
         return {
@@ -181,12 +180,15 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) Storage.write(["session_diff", input.sessionID], next).catch((e) => log.warn("failed to write session diff", { error: e, sessionID: input.sessionID }))
+      if (changed)
+        Storage.write(["session_diff", input.sessionID], next).catch(e =>
+          log.warn("failed to write session diff", { error: e, sessionID: input.sessionID })
+        )
       return next
-    },
+    }
   )
 
-  export async function computeDiff(input: { messages: MessageV2.WithParts[] }) {
+  export async function computeDiff(input: { messages: MessageV2.WithParts[]; session?: Session.Info }) {
     let from: string | undefined
     let to: string | undefined
 
@@ -210,7 +212,12 @@ export namespace SessionSummary {
       }
     }
 
-    if (from && to) return Snapshot.diffFull(from, to)
+    if (from && to) {
+      if (input.session?.branch) {
+        return Branch.diffFull(input.session.branch.worktree, from, to)
+      }
+      return Snapshot.diffFull(from, to)
+    }
     return []
   }
 }
