@@ -1,8 +1,7 @@
-import { BusEvent } from "@/core/bus/bus-event"
 import z from "zod"
+import { BusEvent } from "@/core/bus/bus-event"
 
 export const TuiEvent = {
-  PromptAppend: BusEvent.define("tui.prompt.append", z.object({ text: z.string() })),
   CommandExecute: BusEvent.define(
     "tui.command.execute",
     z.object({
@@ -27,7 +26,7 @@ export const TuiEvent = {
         ]),
         z.string(),
       ]),
-    }),
+    })
   ),
   ToastShow: BusEvent.define(
     "tui.toast.show",
@@ -36,12 +35,12 @@ export const TuiEvent = {
       message: z.string(),
       variant: z.enum(["info", "success", "warning", "error"]),
       duration: z.number().default(5000).optional().describe("Duration in milliseconds"),
-    }),
+    })
   ),
   SessionSelect: BusEvent.define(
     "tui.session.select",
     z.object({
       sessionID: z.string().regex(/^ses/).describe("Session ID to navigate to"),
-    }),
+    })
   ),
 }

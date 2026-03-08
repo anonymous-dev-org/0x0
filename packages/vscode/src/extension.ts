@@ -6,13 +6,13 @@ import * as vscode from "vscode"
 const TERMINAL_NAME = "0x0"
 
 export function activate(context: vscode.ExtensionContext) {
-  let openNewTerminalDisposable = vscode.commands.registerCommand("0x0.openNewTerminal", async () => {
+  const openNewTerminalDisposable = vscode.commands.registerCommand("0x0.openNewTerminal", async () => {
     await openTerminal()
   })
 
-  let openTerminalDisposable = vscode.commands.registerCommand("0x0.openTerminal", async () => {
+  const openTerminalDisposable = vscode.commands.registerCommand("0x0.openTerminal", async () => {
     // A 0x0 terminal already exists => focus it
-    const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
+    const existingTerminal = vscode.window.terminals.find(t => t.name === TERMINAL_NAME)
     if (existingTerminal) {
       existingTerminal.show()
       return
@@ -21,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
     await openTerminal()
   })
 
-  let addFilepathDisposable = vscode.commands.registerCommand("0x0.addFilepathToTerminal", async () => {
+  const addFilepathDisposable = vscode.commands.registerCommand("0x0.addFilepathToTerminal", async () => {
     const fileRef = getActiveFile()
     if (!fileRef) {
       return
@@ -33,9 +33,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     if (terminal.name === TERMINAL_NAME) {
-      // @ts-ignore
+      // @ts-expect-error
       const port = terminal.creationOptions.env?.["_EXTENSION_0X0_PORT"]
-      port ? await appendPrompt(parseInt(port), fileRef) : terminal.sendText(fileRef, false)
+      port ? await appendToSessionStash(parseInt(port), fileRef) : terminal.sendText(fileRef, false)
       terminal.show()
     }
   })
@@ -73,7 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
     let tries = 10
     let connected = false
     do {
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      await new Promise(resolve => setTimeout(resolve, 200))
       try {
         await fetch(`http://localhost:${port}/app`)
         connected = true
@@ -85,18 +85,32 @@ export function activate(context: vscode.ExtensionContext) {
 
     // If connected, append the prompt to the terminal
     if (connected) {
-      await appendPrompt(port, `In ${fileRef}`)
+      await appendToSessionStash(port, `In ${fileRef}`)
       terminal.show()
     }
   }
 
-  async function appendPrompt(port: number, text: string) {
-    await fetch(`http://localhost:${port}/tui/append-prompt`, {
+  async function appendToSessionStash(port: number, text: string) {
+    // Create a session, then append to its prompt stash
+    const sessionRes = await fetch(`http://localhost:${port}/session`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const session = (await sessionRes.json()) as { id?: string }
+    if (!session.id) return
+
+    await fetch(`http://localhost:${port}/session/${session.id}/prompt/stash`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
+    })
+
+    // Navigate the TUI to this session
+    await fetch(`http://localhost:${port}/tui/select-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionID: session.id }),
     })
   }
 

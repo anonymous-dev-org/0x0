@@ -14,6 +14,7 @@ import { Session } from "../../session"
 import { SessionCompaction } from "../../session/compaction"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
+import { PromptStash } from "../../session/prompt-stash"
 import { SessionRevert } from "../../session/revert"
 import { Todo } from "../../session/todo"
 import { lazy } from "../../util/lazy"
@@ -842,6 +843,101 @@ export const SessionRoutes = lazy(() =>
             })
           })
         })
+      }
+    )
+    .post(
+      "/:sessionID/prompt/stash",
+      describeRoute({
+        summary: "Append to prompt stash",
+        description:
+          "Append text to the in-memory prompt stash for a session. The stash accumulates file references and context that will pre-fill the TUI prompt.",
+        operationId: "session.prompt.stash.append",
+        responses: {
+          200: {
+            description: "Text appended to stash",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ text: z.string() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        })
+      ),
+      validator(
+        "json",
+        z.object({
+          text: z.string().meta({ description: "Text to append to the prompt stash" }),
+        })
+      ),
+      async c => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        const { text } = c.req.valid("json")
+        PromptStash.append(sessionID, text)
+        return c.json({ text: PromptStash.get(sessionID) ?? "" })
+      }
+    )
+    .get(
+      "/:sessionID/prompt/stash",
+      describeRoute({
+        summary: "Get prompt stash",
+        description: "Get the current prompt stash text for a session.",
+        operationId: "session.prompt.stash.get",
+        responses: {
+          200: {
+            description: "Current stash text",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ text: z.string() })),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        })
+      ),
+      async c => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        return c.json({ text: PromptStash.get(sessionID) ?? "" })
+      }
+    )
+    .delete(
+      "/:sessionID/prompt/stash",
+      describeRoute({
+        summary: "Clear prompt stash",
+        description: "Clear the prompt stash for a session. Called after prompt submission.",
+        operationId: "session.prompt.stash.clear",
+        responses: {
+          204: {
+            description: "Stash cleared",
+          },
+          ...errors(404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+        })
+      ),
+      async c => {
+        const sessionID = c.req.valid("param").sessionID
+        await Session.get(sessionID)
+        PromptStash.clear(sessionID)
+        return c.body(null, 204)
       }
     )
     .post(

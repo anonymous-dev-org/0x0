@@ -172,6 +172,9 @@ export async function submitPrompt(props: {
       })()
   if (!sessionID) return
 
+  // Clear server-side prompt stash on submit
+  props.sdk.client.session[":sessionID"].prompt.stash.$delete({ param: { sessionID } }).catch(() => {})
+
   props.history.append({
     ...snapshotPrompt,
     mode: snapshotMode,

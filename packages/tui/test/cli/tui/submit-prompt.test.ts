@@ -55,6 +55,7 @@ function props(input = "hello") {
             shell: { $post: async () => ({}) },
             command: { $post: async () => ({}) },
             prompt_async: { $post: async () => ({}) },
+            prompt: { stash: { $delete: async () => ({}) } },
           },
         },
       },
