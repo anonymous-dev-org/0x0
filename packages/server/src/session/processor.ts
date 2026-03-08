@@ -91,6 +91,10 @@ export namespace SessionProcessor {
         // CLI/Codex session so the model doesn't carry stale context from the
         // previous agent (e.g. planner permissions leaking into builder).
         const sessionInfo = await Session.get(input.sessionID).catch(() => null)
+        // Include mode in the agent key so switching modes gets a fresh CLI session
+        const agentKey = streamInput.agent.agentMode
+          ? `${streamInput.agent.name}:${streamInput.agent.agentMode}`
+          : streamInput.agent.name
         const cliSessionId =
           streamInput.cliSessionId ??
           (sessionInfo?.cliSessionAgent === streamInput.agent.name ? sessionInfo?.cliSessionId : undefined)
@@ -359,11 +363,11 @@ export namespace SessionProcessor {
                   await Session.update(input.sessionID, draft => {
                     if (event.cliSessionId) {
                       draft.cliSessionId = event.cliSessionId
-                      draft.cliSessionAgent = streamInput.agent.name
+                      draft.cliSessionAgent = agentKey
                     }
                     if (event.codexThreadId) {
                       draft.codexThreadId = event.codexThreadId
-                      draft.codexThreadAgent = streamInput.agent.name
+                      draft.codexThreadAgent = agentKey
                     }
                   })
                 }

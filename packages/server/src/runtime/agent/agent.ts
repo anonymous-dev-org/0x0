@@ -18,6 +18,9 @@ import PROMPT_TITLE from "./prompt/title.txt"
 export namespace Agent {
   const log = Log.create({ service: "agent" })
 
+  export const Mode = Config.AgentMode
+  export type Mode = Config.AgentMode
+
   export const Info = z
     .object({
       name: z.string(),
@@ -38,11 +41,15 @@ export namespace Agent {
         .optional(),
       variant: z.string().optional(),
       prompt: z.string().optional(),
+      modePrompt: z.string().optional(),
       options: z.record(z.string(), z.unknown()),
       steps: z.number().int().positive().optional(),
       actions: z.record(z.string(), z.enum(["allow", "deny", "ask"])).default({}),
       thinkingEffort: z.string().optional(),
       knowledgeBase: z.array(z.string()).default([]),
+      agentMode: Mode.optional(),
+      modes: z.array(Mode).default([]),
+      overrides: z.array(Config.AgentOverride).default([]),
     })
     .meta({
       ref: "Agent",
@@ -165,6 +172,9 @@ export namespace Agent {
   }
 
   const state = Instance.state(async () => {
+    // Clear resolve cache whenever state reloads (config change, etc.)
+    resolveCache = new Map()
+
     const cfg = await Config.get()
 
     const skillDirs = await Skill.dirs()
@@ -242,7 +252,7 @@ export namespace Agent {
       },
     }
 
-    const native = new Set(["builder", "planner", "general", "explore", "compaction", "title", "summary"])
+    const native = new Set(["default", "builder", "planner", "general", "explore", "compaction", "title", "summary"])
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
       if (value.disable) {
@@ -319,6 +329,13 @@ export namespace Agent {
         item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(deny))
       }
 
+      // Store modes supported by this agent
+      const availableModes: Mode[] = []
+      if (value.plan) availableModes.push("plan")
+      if (value.build) availableModes.push("build")
+      item.modes = availableModes
+      item.overrides = (value.overrides ?? []) as Config.AgentOverride[]
+
       const known = new Set([
         "name",
         "model",
@@ -340,11 +357,15 @@ export namespace Agent {
         "mode",
         "permission",
         "tools",
+        "plan",
+        "build",
+        "overrides",
       ])
       for (const [k, v] of Object.entries(value)) {
         if (!known.has(k)) item.options[k] = v
       }
 
+      // Backward compat: builder-specific permission narrowing
       if (key === "builder") {
         const builderPermKeys = new Set(derivePermissionKeysFromActions(item.actions ?? {}))
         const allPermKeys = ALL_PERMISSION_KEYS
@@ -357,6 +378,7 @@ export namespace Agent {
         }
       }
 
+      // Backward compat: planner-specific permission narrowing
       if (key === "planner") {
         const plannerPermKeys = derivePermissionKeysFromActions(item.actions ?? {})
         item.permission = PermissionNext.merge(
@@ -371,6 +393,14 @@ export namespace Agent {
             },
           })
         )
+      }
+
+      // Default agent with modes: the base agent gets a permissive default.
+      // Mode-specific permissions are resolved at runtime via Agent.resolve().
+      if (key === "default" && availableModes.length > 0 && !value.actions) {
+        // For the base agent (before mode resolution), allow the union of all mode actions
+        // so the base agent can be used before a mode is selected.
+        // The mode resolution will narrow permissions down to the active mode.
       }
     }
 
@@ -394,6 +424,169 @@ export namespace Agent {
     return result
   })
 
+  // ─── Override resolution ──────────────────────────────────────────────────
+
+  /**
+   * Score an override entry against the current context.
+   * Higher score = more specific match.
+   * Returns 0 if the entry doesn't match.
+   */
+  function scoreOverride(
+    entry: Config.AgentOverride,
+    ctx: { providerID?: string; modelID?: string; thinkingEffort?: string }
+  ): number {
+    let score = 0
+    const hasProvider = !!entry.provider
+    const hasModel = !!entry.model
+    const hasEffort = !!entry.thinking_effort
+
+    if (hasProvider) {
+      if (entry.provider !== ctx.providerID) return 0
+      score += 4
+    }
+    if (hasModel) {
+      if (entry.model !== ctx.modelID) return 0
+      score += 2
+    }
+    if (hasEffort) {
+      if (entry.thinking_effort !== ctx.thinkingEffort) return 0
+      score += 1
+    }
+    // An entry with no criteria is a fallback — always matches but scores 0
+    if (!hasProvider && !hasModel && !hasEffort) return 0
+    return score
+  }
+
+  /** Pick the best matching override from a list, or undefined if none match. */
+  function bestOverride(
+    overrides: Config.AgentOverride[],
+    ctx: { providerID?: string; modelID?: string; thinkingEffort?: string }
+  ): Config.AgentOverride | undefined {
+    let best: Config.AgentOverride | undefined
+    let bestScore = 0
+    for (const entry of overrides) {
+      const s = scoreOverride(entry, ctx)
+      if (s > bestScore) {
+        bestScore = s
+        best = entry
+      }
+    }
+    return best
+  }
+
+  /** Apply override fields onto an agent Info (replace semantics, not merge). */
+  function applyOverride(base: Info, override: Config.AgentOverride): void {
+    if (override.prompt !== undefined) base.prompt = override.prompt
+    if (override.model !== undefined) base.model = Provider.parseModel(override.model)
+    if (override.variant !== undefined) base.variant = override.variant
+    if (override.temperature !== undefined) base.temperature = override.temperature
+    if (override.top_p !== undefined) base.topP = override.top_p
+    if (override.description !== undefined) base.description = override.description
+    if (override.steps !== undefined) base.steps = override.steps
+    if (override.maxSteps !== undefined) base.steps = override.maxSteps
+    if (override.thinking_effort !== undefined) base.thinkingEffort = override.thinking_effort
+    if (override.knowledge_base !== undefined) base.knowledgeBase = [...override.knowledge_base]
+    if (override.actions !== undefined) {
+      base.actions = migrateNestedActions("override", override.actions as Record<string, unknown>)
+    }
+    if (override.permission !== undefined) {
+      base.permission = PermissionNext.merge(
+        base.permission,
+        PermissionNext.fromConfig(override.permission as Parameters<typeof PermissionNext.fromConfig>[0])
+      )
+    }
+    if (override.options !== undefined) base.options = mergeDeep(base.options, override.options)
+  }
+
+  /** Apply a mode config on top of a base agent. */
+  function applyModeConfig(base: Info, modeConfig: Config.AgentModeConfig): void {
+    if (modeConfig.prompt !== undefined) base.prompt = modeConfig.prompt
+    if (modeConfig.mode_prompt !== undefined) base.modePrompt = modeConfig.mode_prompt
+    if (modeConfig.model !== undefined) base.model = Provider.parseModel(modeConfig.model)
+    if (modeConfig.variant !== undefined) base.variant = modeConfig.variant
+    if (modeConfig.temperature !== undefined) base.temperature = modeConfig.temperature
+    if (modeConfig.top_p !== undefined) base.topP = modeConfig.top_p
+    if (modeConfig.description !== undefined) base.description = modeConfig.description
+    if (modeConfig.steps !== undefined) base.steps = modeConfig.steps
+    if (modeConfig.maxSteps !== undefined) base.steps = modeConfig.maxSteps
+    if (modeConfig.thinking_effort !== undefined) base.thinkingEffort = modeConfig.thinking_effort
+    if (modeConfig.knowledge_base !== undefined) {
+      base.knowledgeBase = Array.from(new Set([...base.knowledgeBase, ...modeConfig.knowledge_base]))
+    }
+    if (modeConfig.actions !== undefined) {
+      base.actions = migrateNestedActions("mode", modeConfig.actions as Record<string, unknown>)
+    }
+    if (modeConfig.permission !== undefined) {
+      base.permission = PermissionNext.merge(
+        base.permission,
+        PermissionNext.fromConfig(modeConfig.permission as Parameters<typeof PermissionNext.fromConfig>[0])
+      )
+    }
+    if (modeConfig.options !== undefined) base.options = mergeDeep(base.options, modeConfig.options)
+  }
+
+  // Memoization cache for resolved agents: keyed by "agentName:mode:providerID:modelID:thinkingEffort"
+  let resolveCache = new Map<string, Info>()
+
+  /**
+   * Resolve an agent with optional mode and provider/model context.
+   * Returns a fully resolved Agent.Info for the active mode.
+   * Result is cached per (agent, mode, provider, model, thinkingEffort) tuple.
+   */
+  export async function resolve(input: {
+    agent: string
+    agentMode?: Mode
+    providerID?: string
+    modelID?: string
+    thinkingEffort?: string
+  }): Promise<Info | undefined> {
+    const cacheKey = `${input.agent}:${input.agentMode ?? ""}:${input.providerID ?? ""}:${input.modelID ?? ""}:${input.thinkingEffort ?? ""}`
+    const cached = resolveCache.get(cacheKey)
+    if (cached) return cached
+
+    const base = await get(input.agent)
+    if (!base) return undefined
+
+    // If no mode requested and no overrides, return as-is
+    if (!input.agentMode && !base.overrides?.length && !input.providerID) {
+      return base
+    }
+
+    // Clone to avoid mutating the cached base
+    const resolved: Info = JSON.parse(JSON.stringify(base))
+    const ctx = {
+      providerID: input.providerID,
+      modelID: input.modelID,
+      thinkingEffort: input.thinkingEffort,
+    }
+
+    // 1. Apply agent-level overrides
+    if (resolved.overrides?.length) {
+      const match = bestOverride(resolved.overrides, ctx)
+      if (match) applyOverride(resolved, match)
+    }
+
+    // 2. Apply mode config
+    const cfg = await Config.get()
+    const agentCfg = cfg.agent?.[input.agent]
+    if (input.agentMode && agentCfg) {
+      const modeConfig = agentCfg[input.agentMode] as Config.AgentModeConfig | undefined
+      if (modeConfig) {
+        applyModeConfig(resolved, modeConfig)
+        resolved.agentMode = input.agentMode
+
+        // 3. Apply mode-level overrides
+        if (modeConfig.overrides?.length) {
+          const modeMatch = bestOverride(modeConfig.overrides, ctx)
+          if (modeMatch) applyOverride(resolved, modeMatch)
+        }
+      }
+    }
+
+    resolveCache.set(cacheKey, resolved)
+    return resolved
+  }
+
   export async function get(agent: string) {
     return state().then(x => x[agent])
   }
@@ -403,7 +596,7 @@ export namespace Agent {
     return pipe(
       await state(),
       values(),
-      sortBy([x => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "planner"), "desc"])
+      sortBy([x => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "default"), "desc"])
     )
   }
 
@@ -418,8 +611,11 @@ export namespace Agent {
       return agent.name
     }
 
-    const preferred = agents.planner
-    if (preferred && preferred.hidden !== true) return preferred.name
+    // Prefer "default" agent, fall back to "planner" for backward compat, then first visible
+    for (const preferred of ["default", "planner"]) {
+      const agent = agents[preferred]
+      if (agent && agent.hidden !== true) return agent.name
+    }
 
     const visible = Object.values(agents).find(a => a.hidden !== true)
     if (!visible) throw new Error("no visible agent found")

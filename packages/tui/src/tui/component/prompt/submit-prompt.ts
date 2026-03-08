@@ -26,6 +26,7 @@ type SubmitContext = {
       current: () => {
         name: string
       }
+      currentMode: () => "plan" | "build" | undefined
     }
   }
   sdk: {
@@ -92,7 +93,7 @@ export async function submitPrompt(props: {
       variant: string | undefined
       time: { created: number }
     },
-    parts: Array<{ id: string; sessionID: string; messageID: string; type: string; text?: string }>,
+    parts: Array<{ id: string; sessionID: string; messageID: string; type: string; text?: string }>
   ) => void
   exit: () => void
 }) {
@@ -131,7 +132,7 @@ export async function submitPrompt(props: {
     inputText = before + part.text + after
   }
 
-  const nonTextParts = snapshotPrompt.parts.filter((part) => part.type !== "text")
+  const nonTextParts = snapshotPrompt.parts.filter(part => part.type !== "text")
   const variant = props.local.model.variant.current()
 
   props.input.extmarks.clear()
@@ -206,7 +207,7 @@ export async function submitPrompt(props: {
     iife(() => {
       const firstLine = inputText.split("\n")[0] ?? ""
       const command = (firstLine.split(" ")[0] ?? "").slice(1)
-      return props.sync.data.command.some((x) => x.name === command)
+      return props.sync.data.command.some(x => x.name === command)
     })
 
   if (isCommand) {
@@ -217,8 +218,8 @@ export async function submitPrompt(props: {
     const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
     const fileParts = nonTextParts
-      .filter((x) => x.type === "file")
-      .map((x) => ({
+      .filter(x => x.type === "file")
+      .map(x => ({
         id: Identifier.ascending("part"),
         ...x,
       }))
@@ -241,12 +242,12 @@ export async function submitPrompt(props: {
           type: "text",
           text: inputText,
         },
-        ...fileParts.map((x) => ({
+        ...fileParts.map(x => ({
           ...x,
           sessionID,
           messageID,
         })),
-      ],
+      ]
     )
 
     props.sdk.client.session[":sessionID"].command
@@ -272,7 +273,7 @@ export async function submitPrompt(props: {
       type: "text" as const,
       text: inputText,
     },
-    ...nonTextParts.map((x) => ({
+    ...nonTextParts.map(x => ({
       id: Identifier.ascending("part"),
       ...x,
     })),
@@ -288,11 +289,11 @@ export async function submitPrompt(props: {
       variant,
       time: { created: Date.now() },
     },
-    parts.map((x) => ({
+    parts.map(x => ({
       ...x,
       sessionID,
       messageID,
-    })),
+    }))
   )
 
   props.sdk.client.session[":sessionID"].prompt_async
@@ -301,6 +302,7 @@ export async function submitPrompt(props: {
       json: {
         messageID,
         agent: props.local.agent.current().name,
+        agentMode: props.local.agent.currentMode(),
         model: selectedModel,
         variant,
         thinkingEffort: props.local.model.thinkingEffort.current(),
