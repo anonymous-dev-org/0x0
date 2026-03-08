@@ -79,24 +79,16 @@ export namespace Question {
     ),
   }
 
-  interface Waiter {
-    resolve: (answers: Answer[]) => void
-    reject: (e: Error) => void
-  }
-
-  interface PendingEntry {
-    info: Request
-    waiters: Waiter[]
-  }
-
   const state = Instance.state(async () => {
-    const pending: Record<string, PendingEntry> = {}
+    const pending: Record<string, Request> = {}
     return { pending }
   })
 
   /**
-   * Fire-and-forget: registers a question request and publishes the event.
-   * Returns the request ID so callers can wait for it later via `waitForAnswer()`.
+   * Registers a question request and publishes the event.
+   * The TUI picks this up via SSE and shows the question UI.
+   * When the user answers, the TUI calls reply() to clean up,
+   * then submits the Q&A as a regular prompt.
    */
   export async function register(input: {
     sessionID: string
@@ -115,37 +107,10 @@ export namespace Question {
       tool: input.tool,
     }
 
-    s.pending[id] = { info, waiters: [] }
+    s.pending[id] = info
     Bus.publish(Event.Asked, info)
 
     return id
-  }
-
-  /**
-   * Blocking: waits for the user to answer a specific question request.
-   * Resolves with the answers, or rejects with RejectedError if dismissed.
-   */
-  export async function waitForAnswer(requestID: string): Promise<Answer[]> {
-    const s = await state()
-    const entry = s.pending[requestID]
-    if (!entry) throw new Error(`No pending question for requestID: ${requestID}`)
-
-    return new Promise<Answer[]>((resolve, reject) => {
-      entry.waiters.push({ resolve, reject })
-    })
-  }
-
-  /**
-   * Original blocking API: registers and waits in one call.
-   * Kept for backward compatibility.
-   */
-  export async function ask(input: {
-    sessionID: string
-    questions: Info[]
-    tool?: { messageID: string; callID: string }
-  }): Promise<Answer[]> {
-    const requestID = await register(input)
-    return waitForAnswer(requestID)
   }
 
   /**
@@ -153,9 +118,7 @@ export namespace Question {
    */
   export async function listBySession(sessionID: string): Promise<Request[]> {
     const s = await state()
-    return Object.values(s.pending)
-      .filter(entry => entry.info.sessionID === sessionID)
-      .map(entry => entry.info)
+    return Object.values(s.pending).filter(entry => entry.sessionID === sessionID)
   }
 
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<void> {
@@ -170,14 +133,10 @@ export namespace Question {
     log.info("replied", { requestID: input.requestID, answers: input.answers })
 
     Bus.publish(Event.Replied, {
-      sessionID: existing.info.sessionID,
-      requestID: existing.info.id,
+      sessionID: existing.sessionID,
+      requestID: existing.id,
       answers: input.answers,
     })
-
-    for (const waiter of existing.waiters) {
-      waiter.resolve(input.answers)
-    }
   }
 
   export async function reject(requestID: string): Promise<void> {
@@ -192,14 +151,9 @@ export namespace Question {
     log.info("rejected", { requestID })
 
     Bus.publish(Event.Rejected, {
-      sessionID: existing.info.sessionID,
-      requestID: existing.info.id,
+      sessionID: existing.sessionID,
+      requestID: existing.id,
     })
-
-    const error = new RejectedError()
-    for (const waiter of existing.waiters) {
-      waiter.reject(error)
-    }
   }
 
   export class RejectedError extends Error {
@@ -211,21 +165,17 @@ export namespace Question {
   export async function rejectBySession(sessionID: string): Promise<void> {
     const s = await state()
     for (const [id, entry] of Object.entries(s.pending)) {
-      if (entry.info.sessionID !== sessionID) continue
+      if (entry.sessionID !== sessionID) continue
       delete s.pending[id]
       log.info("rejected by session cleanup", { requestID: id, sessionID })
       Bus.publish(Event.Rejected, {
-        sessionID: entry.info.sessionID,
-        requestID: entry.info.id,
+        sessionID: entry.sessionID,
+        requestID: entry.id,
       })
-      const error = new RejectedError()
-      for (const waiter of entry.waiters) {
-        waiter.reject(error)
-      }
     }
   }
 
   export async function list() {
-    return state().then(x => Object.values(x.pending).map(x => x.info))
+    return state().then(x => Object.values(x.pending))
   }
 }

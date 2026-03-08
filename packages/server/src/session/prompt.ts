@@ -662,25 +662,14 @@ export namespace SessionPrompt {
         break
       }
 
-      // After the model turn ends, check for pending questions registered
-      // during this turn. Wait for the user's answer, update the tool part
-      // metadata with answers (for inline display), then inject a synthetic
-      // user message with the answers and continue the loop.
+      // If questions were registered during this turn, stop the loop.
+      // The TUI will show them, the user answers, and the TUI submits
+      // a new prompt with the Q&A — which starts a fresh prompt() call.
       const pendingQuestions = await Question.listBySession(sessionID)
-      if (pendingQuestions.length > 0) {
-        const questionHandled = await handlePendingQuestions({
-          sessionID,
-          pendingQuestions,
-          lastUser,
-          processor,
-          abort,
-        })
-        if (!questionHandled) break
-      }
+      if (pendingQuestions.length > 0) break
     }
-    // Clean up any pending questions that weren't handled
-    // (e.g. loop exited due to abort, finish condition, or other break)
-    await Question.rejectBySession(sessionID)
+    // Clean up questions only on abort (user interrupted)
+    if (abort.aborted) await Question.rejectBySession(sessionID)
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []
@@ -691,94 +680,6 @@ export namespace SessionPrompt {
     }
     throw new Error("Impossible")
   })
-
-  /**
-   * Waits for the user to answer pending questions, updates tool part metadata
-   * with answers for inline display, and injects a synthetic user message.
-   * Returns true if answers were provided, false if the user dismissed (go idle).
-   */
-  async function handlePendingQuestions(input: {
-    sessionID: string
-    pendingQuestions: Question.Request[]
-    lastUser: MessageV2.User
-    processor: SessionProcessor.Info
-    abort: AbortSignal
-  }): Promise<boolean> {
-    SessionStatus.set(input.sessionID, { type: "busy", phase: "waiting" })
-
-    // When the session is interrupted, reject all pending questions so
-    // waitForAnswer unblocks instead of hanging forever.
-    const onAbort = () => {
-      Question.rejectBySession(input.sessionID).catch(() => {})
-    }
-    input.abort.addEventListener("abort", onAbort, { once: true })
-
-    const allAnswers: Array<{ request: Question.Request; answers: Question.Answer[] }> = []
-
-    try {
-      for (const request of input.pendingQuestions) {
-        if (input.abort.aborted) return false
-
-        try {
-          const answers = await Question.waitForAnswer(request.id)
-          allAnswers.push({ request, answers })
-        } catch (e) {
-          if (e instanceof Question.RejectedError) {
-            log.info("question dismissed", { requestID: request.id, sessionID: input.sessionID })
-            // Reject remaining questions for this session
-            await Question.rejectBySession(input.sessionID)
-            return false
-          }
-          throw e
-        }
-      }
-    } finally {
-      input.abort.removeEventListener("abort", onAbort)
-    }
-
-    // Update tool parts with answers metadata for inline display
-    for (const { request, answers } of allAnswers) {
-      if (!request.tool) continue
-      const toolPart = input.processor.partFromToolCall(request.tool.callID)
-      if (!toolPart || toolPart.state.status !== "completed") continue
-
-      await Session.updatePart({
-        ...toolPart,
-        state: {
-          ...toolPart.state,
-          metadata: {
-            ...toolPart.state.metadata,
-            answers,
-          },
-        },
-      } satisfies MessageV2.ToolPart)
-    }
-
-    // Build synthetic user message with all answers
-    const answerLines = allAnswers.flatMap(({ request, answers }) =>
-      request.questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
-    )
-
-    const syntheticUserMsg: MessageV2.User = {
-      id: Identifier.ascending("message"),
-      sessionID: input.sessionID,
-      role: "user",
-      time: { created: Date.now() },
-      agent: input.lastUser.agent,
-      model: input.lastUser.model,
-    }
-    await Session.updateMessage(syntheticUserMsg)
-    await Session.updatePart({
-      id: Identifier.ascending("part"),
-      messageID: syntheticUserMsg.id,
-      sessionID: input.sessionID,
-      type: "text",
-      text: `The user answered your questions:\n\n${answerLines.join("\n\n")}\n\nContinue with the user's answers in mind.`,
-      synthetic: true,
-    } satisfies MessageV2.TextPart)
-
-    return true
-  }
 
   async function lastModel(sessionID: string) {
     for await (const item of MessageV2.stream(sessionID)) {

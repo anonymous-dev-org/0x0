@@ -693,7 +693,7 @@ export function Prompt(props: PromptProps) {
     })
   }
 
-  const agent = () => local.agent.color(local.agent.current().name)
+  const agent = () => local.agent.color(local.agent.current().name, local.agent.currentMode())
 
   const line = createMemo(() => {
     if (keybind.leader) return theme.border

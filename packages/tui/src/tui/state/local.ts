@@ -142,7 +142,9 @@ function createAgent() {
       const configuredName = sync.data.config.agent?.[agent.name]?.name
       return configuredName ?? Locale.titlecase(agent.name)
     },
-    color(name: string) {
+    color(name: string, mode?: "plan" | "build") {
+      if (mode === "plan") return theme.primary
+      if (mode === "build") return theme.success
       const index = agents().findIndex(x => x.name === name)
       if (index === -1) return colors()[0]
       const agent = agents()[index]

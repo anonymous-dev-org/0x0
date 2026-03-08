@@ -3,12 +3,12 @@ import { Instance } from "../../../src/project/instance"
 import { Question } from "../../../src/runtime/question"
 import { tmpdir } from "../../fixture/fixture"
 
-test("ask - returns pending promise", async () => {
+test("register - returns request ID and adds to pending", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const promise = Question.ask({
+      const requestID = await Question.register({
         sessionID: "ses_test",
         questions: [
           {
@@ -21,12 +21,15 @@ test("ask - returns pending promise", async () => {
           },
         ],
       })
-      expect(promise).toBeInstanceOf(Promise)
+      expect(requestID).toStartWith("que_")
+      const pending = await Question.list()
+      expect(pending.length).toBe(1)
+      expect(pending[0]!.id).toBe(requestID)
     },
   })
 })
 
-test("ask - adds to pending list", async () => {
+test("register - adds to pending list", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -42,7 +45,7 @@ test("ask - adds to pending list", async () => {
         },
       ]
 
-      Question.ask({
+      await Question.register({
         sessionID: "ses_test",
         questions,
       })
@@ -56,47 +59,12 @@ test("ask - adds to pending list", async () => {
 
 // reply tests
 
-test("reply - resolves the pending ask with answers", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const questions = [
-        {
-          question: "What would you like to do?",
-          header: "Action",
-          options: [
-            { label: "Option 1", description: "First option" },
-            { label: "Option 2", description: "Second option" },
-          ],
-        },
-      ]
-
-      const askPromise = Question.ask({
-        sessionID: "ses_test",
-        questions,
-      })
-
-      const pending = await Question.list()
-      const requestID = pending[0]!.id
-
-      await Question.reply({
-        requestID,
-        answers: [["Option 1"]],
-      })
-
-      const answers = await askPromise
-      expect(answers).toEqual([["Option 1"]])
-    },
-  })
-})
-
 test("reply - removes from pending list", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      Question.ask({
+      const requestID = await Question.register({
         sessionID: "ses_test",
         questions: [
           {
@@ -114,7 +82,7 @@ test("reply - removes from pending list", async () => {
       expect(pending.length).toBe(1)
 
       await Question.reply({
-        requestID: pending[0]!.id,
+        requestID,
         answers: [["Option 1"]],
       })
 
@@ -138,80 +106,7 @@ test("reply - does nothing for unknown requestID", async () => {
   })
 })
 
-// reject tests
-
-test("reject - throws RejectedError", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const askPromise = Question.ask({
-        sessionID: "ses_test",
-        questions: [
-          {
-            question: "What would you like to do?",
-            header: "Action",
-            options: [
-              { label: "Option 1", description: "First option" },
-              { label: "Option 2", description: "Second option" },
-            ],
-          },
-        ],
-      })
-
-      const pending = await Question.list()
-      await Question.reject(pending[0]!.id)
-
-      await expect(askPromise).rejects.toBeInstanceOf(Question.RejectedError)
-    },
-  })
-})
-
-test("reject - removes from pending list", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const askPromise = Question.ask({
-        sessionID: "ses_test",
-        questions: [
-          {
-            question: "What would you like to do?",
-            header: "Action",
-            options: [
-              { label: "Option 1", description: "First option" },
-              { label: "Option 2", description: "Second option" },
-            ],
-          },
-        ],
-      })
-
-      const pending = await Question.list()
-      expect(pending.length).toBe(1)
-
-      await Question.reject(pending[0]!.id)
-      askPromise.catch(() => {}) // Ignore rejection
-
-      const pendingAfter = await Question.list()
-      expect(pendingAfter.length).toBe(0)
-    },
-  })
-})
-
-test("reject - does nothing for unknown requestID", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await Question.reject("que_unknown")
-      // Should not throw
-    },
-  })
-})
-
-// multiple questions tests
-
-test("ask - handles multiple questions", async () => {
+test("register - handles multiple questions", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -235,20 +130,62 @@ test("ask - handles multiple questions", async () => {
         },
       ]
 
-      const askPromise = Question.ask({
+      const requestID = await Question.register({
         sessionID: "ses_test",
         questions,
       })
 
       const pending = await Question.list()
+      expect(pending.length).toBe(1)
+      expect(pending[0]!.questions.length).toBe(2)
 
       await Question.reply({
-        requestID: pending[0]!.id,
+        requestID,
         answers: [["Build"], ["Dev"]],
       })
 
-      const answers = await askPromise
-      expect(answers).toEqual([["Build"], ["Dev"]])
+      const pendingAfter = await Question.list()
+      expect(pendingAfter.length).toBe(0)
+    },
+  })
+})
+
+// reject tests
+
+test("reject - removes from pending list", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = await Question.register({
+        sessionID: "ses_test",
+        questions: [
+          {
+            question: "What would you like to do?",
+            header: "Action",
+            options: [
+              { label: "Option 1", description: "First option" },
+              { label: "Option 2", description: "Second option" },
+            ],
+          },
+        ],
+      })
+
+      await Question.reject(requestID)
+
+      const pending = await Question.list()
+      expect(pending.length).toBe(0)
+    },
+  })
+})
+
+test("reject - does nothing for unknown requestID", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Question.reject("que_unknown")
+      // Should not throw
     },
   })
 })
@@ -260,7 +197,7 @@ test("list - returns all pending requests", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      Question.ask({
+      await Question.register({
         sessionID: "ses_test1",
         questions: [
           {
@@ -271,7 +208,7 @@ test("list - returns all pending requests", async () => {
         ],
       })
 
-      Question.ask({
+      await Question.register({
         sessionID: "ses_test2",
         questions: [
           {
@@ -306,7 +243,7 @@ test("rejectBySession - rejects all pending questions for a session", async () =
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const promise1 = Question.ask({
+      await Question.register({
         sessionID: "ses_target",
         questions: [
           {
@@ -320,7 +257,7 @@ test("rejectBySession - rejects all pending questions for a session", async () =
         ],
       })
 
-      const promise2 = Question.ask({
+      await Question.register({
         sessionID: "ses_target",
         questions: [
           {
@@ -335,7 +272,7 @@ test("rejectBySession - rejects all pending questions for a session", async () =
       })
 
       // Different session — should NOT be rejected
-      const promise3 = Question.ask({
+      await Question.register({
         sessionID: "ses_other",
         questions: [
           {
@@ -352,18 +289,7 @@ test("rejectBySession - rejects all pending questions for a session", async () =
       const pendingBefore = await Question.list()
       expect(pendingBefore.length).toBe(3)
 
-      // Attach catch handlers before rejection to prevent unhandled rejection errors
-      const caught1 = promise1.catch(e => e)
-      const caught2 = promise2.catch(e => e)
-      promise3.catch(() => {})
-
       await Question.rejectBySession("ses_target")
-
-      // Both target session questions should be rejected
-      const err1 = await caught1
-      const err2 = await caught2
-      expect(err1).toBeInstanceOf(Question.RejectedError)
-      expect(err2).toBeInstanceOf(Question.RejectedError)
 
       // Other session question should still be pending
       const pendingAfter = await Question.list()
@@ -385,87 +311,6 @@ test("rejectBySession - does nothing when no pending questions for session", asy
       await Question.rejectBySession("ses_nonexistent")
       const pending = await Question.list()
       expect(pending.length).toBe(0)
-    },
-  })
-})
-
-// register + waitForAnswer tests
-
-test("register - returns request ID and adds to pending", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const requestID = await Question.register({
-        sessionID: "ses_test",
-        questions: [
-          {
-            question: "What would you like to do?",
-            header: "Action",
-            options: [
-              { label: "Option 1", description: "First option" },
-              { label: "Option 2", description: "Second option" },
-            ],
-          },
-        ],
-      })
-      expect(requestID).toStartWith("que_")
-      const pending = await Question.list()
-      expect(pending.length).toBe(1)
-      expect(pending[0]!.id).toBe(requestID)
-    },
-  })
-})
-
-test("waitForAnswer - resolves when reply is called", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const requestID = await Question.register({
-        sessionID: "ses_test",
-        questions: [
-          {
-            question: "Pick one",
-            header: "Pick",
-            options: [
-              { label: "A", description: "A" },
-              { label: "B", description: "B" },
-            ],
-          },
-        ],
-      })
-
-      const waitPromise = Question.waitForAnswer(requestID)
-      await Question.reply({ requestID, answers: [["A"]] })
-      const answers = await waitPromise
-      expect(answers).toEqual([["A"]])
-    },
-  })
-})
-
-test("waitForAnswer - rejects when question is rejected", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const requestID = await Question.register({
-        sessionID: "ses_test",
-        questions: [
-          {
-            question: "Pick one",
-            header: "Pick",
-            options: [
-              { label: "A", description: "A" },
-              { label: "B", description: "B" },
-            ],
-          },
-        ],
-      })
-
-      const waitPromise = Question.waitForAnswer(requestID)
-      await Question.reject(requestID)
-      await expect(waitPromise).rejects.toBeInstanceOf(Question.RejectedError)
     },
   })
 })
