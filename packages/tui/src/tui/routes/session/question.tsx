@@ -92,7 +92,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         model,
         variant: local.model.variant.current(),
         thinkingEffort: local.model.thinkingEffort.current(),
-        parts: [{ id: Identifier.ascending("part"), type: "text" as const, text, synthetic: true }],
+        parts: [{ id: Identifier.ascending("part"), type: "text" as const, text }],
       },
     } as never)
   }
