@@ -20,6 +20,7 @@ import { route } from "@tui/state/route"
 import { sdk } from "@tui/state/sdk"
 import { sync } from "@tui/state/sync"
 import { theme, themeState, tint } from "@tui/state/theme"
+import { worktreeChoice } from "@tui/state/worktree-choice"
 import { useDialog } from "@tui/ui/dialog"
 import { Editor } from "@tui/util/editor"
 import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
@@ -34,7 +35,7 @@ import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Autocomplete, type AutocompleteRef } from "./autocomplete"
 import { type PromptInfo, usePromptHistory } from "./history"
 import { usePromptStash } from "./stash"
-import { submitPrompt } from "./submit-prompt"
+import { submitPrompt, type WorktreeMode } from "./submit-prompt"
 import { usePromptCommands } from "./use-prompt-commands"
 import { usePromptParts } from "./use-prompt-parts"
 
@@ -414,8 +415,44 @@ export function Prompt(props: PromptProps) {
     stashList,
   })
 
+  async function resolveWorktreeChoice(): Promise<WorktreeMode | undefined> {
+    if (!sync.data.vcs) return undefined
+    if (props.sessionID) return undefined
+
+    const existing = worktreeChoice.get()
+    if (existing) {
+      // Validate "reuse" mode: if the worktree path no longer exists, fall back to "skip"
+      if (typeof existing === "object" && "reuse" in existing) {
+        const sandboxes = await fetchSandboxes()
+        if (!sandboxes.includes(existing.reuse)) {
+          worktreeChoice.lock("skip")
+          return "skip"
+        }
+      }
+      return existing
+    }
+
+    const sandboxes = await fetchSandboxes()
+    const choice = await DialogWorktree.show(dialog, sandboxes)
+    if (choice !== undefined) {
+      worktreeChoice.lock(choice)
+    }
+    return choice
+  }
+
+  async function fetchSandboxes(): Promise<string[]> {
+    return sdk.client.experimental.worktree
+      .$get()
+      .then(res => res.json() as Promise<string[]>)
+      .catch(() => [] as string[])
+  }
+
   async function submit() {
-    const first = store.prompt.input.split("\n")[0]?.trim() ?? ""
+    // Resolve worktree choice BEFORE clearing the prompt.
+    // If the user cancels (Escape), nothing happens — prompt stays intact.
+    const worktreeMode = await resolveWorktreeChoice()
+    if (!props.sessionID && sync.data.vcs && worktreeMode === undefined) return
+
     await submitPrompt({
       disabled: props.disabled,
       autocompleteVisible: autocomplete.visible !== false,
@@ -430,21 +467,13 @@ export function Prompt(props: PromptProps) {
       history,
       input,
       promptPartTypeId,
+      worktreeMode,
       setMode: mode => setStore("mode", mode),
       setPrompt: prompt => setStore("prompt", prompt),
       setExtmarkToPartIndex: map => setStore("extmarkToPartIndex", map),
       restorePromptParts: promptParts => parts.restore(promptParts),
       onPromptModelWarning: promptModelWarning,
       onSubmit: props.onSubmit,
-      onWorktreeChoice: sync.data.vcs
-        ? async () => {
-            const sandboxes = await sdk.client.experimental.worktree
-              .$get()
-              .then(res => res.json() as Promise<string[]>)
-              .catch(() => [] as string[])
-            return DialogWorktree.show(dialog, sandboxes)
-          }
-        : undefined,
       onSubmitError: message => {
         toast.show({
           variant: "error",

@@ -49,8 +49,8 @@ DialogWorktree.show = (dialog: DialogContext, sandboxes: string[]): Promise<Work
         <DialogWorktree
           sandboxes={sandboxes}
           onSelect={mode => {
-            dialog.clear()
             resolve(mode)
+            dialog.clear()
           }}
         />
       ),
