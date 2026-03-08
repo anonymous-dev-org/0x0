@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { submitPrompt } from "../../../src/tui/component/prompt/submit-prompt"
 import type { PromptInfo } from "../../../src/tui/component/prompt/history"
+import { submitPrompt } from "../../../src/tui/component/prompt/submit-prompt"
 
 type SubmitProps = Parameters<typeof submitPrompt>[0]
 
@@ -54,6 +54,7 @@ function props(input = "hello") {
             shell: { $post: async () => ({}) },
             command: { $post: async () => ({}) },
             prompt_async: { $post: async () => ({}) },
+            prompt: { stash: { $delete: async () => ({}) } },
           },
         },
       },
@@ -107,7 +108,7 @@ function props(input = "hello") {
     onSubmit: () => {
       calls.onSubmit++
     },
-    onSubmitError: (message) => {
+    onSubmitError: message => {
       calls.onSubmitError.push(message)
     },
     exit: () => {

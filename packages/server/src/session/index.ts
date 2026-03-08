@@ -137,6 +137,13 @@ export namespace Session {
         error: MessageV2.Assistant.shape.error,
       })
     ),
+    PromptStashUpdated: BusEvent.define(
+      "session.prompt.stash.updated",
+      z.object({
+        sessionID: z.string(),
+        text: z.string(),
+      })
+    ),
   }
 
   export const create = fn(

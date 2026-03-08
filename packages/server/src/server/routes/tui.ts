@@ -1,12 +1,12 @@
-import { Hono, type Context } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { type Context, Hono } from "hono"
+import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Bus } from "@/core/bus"
-import { Session } from "../../session"
 import { TuiEvent } from "@/core/bus/tui-event"
+import { Session } from "../../session"
+import { lazy } from "../../util/lazy"
 import { AsyncQueue } from "../../util/queue"
 import { errors } from "../error"
-import { lazy } from "../../util/lazy"
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -87,10 +87,10 @@ const TuiControlRoutes = new Hono()
         },
       },
     }),
-    async (c) => {
+    async c => {
       const req = await request.next()
       return c.json(req)
-    },
+    }
   )
   .post(
     "/response",
@@ -110,11 +110,11 @@ const TuiControlRoutes = new Hono()
       },
     }),
     validator("json", z.any()),
-    async (c) => {
+    async c => {
       const body = c.req.valid("json")
       response.push(body)
       return c.json(true)
-    },
+    }
   )
 
 function commandEndpoint(summary: string, operationId: string, command: string) {
@@ -139,30 +139,6 @@ function commandEndpoint(summary: string, operationId: string, command: string) 
 
 export const TuiRoutes = lazy(() =>
   new Hono()
-    .post(
-      "/append-prompt",
-      describeRoute({
-        summary: "Append TUI prompt",
-        description: "Append prompt to the TUI",
-        operationId: "tui.appendPrompt",
-        responses: {
-          200: {
-            description: "Prompt processed successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", TuiEvent.PromptAppend.properties),
-      async (c) => {
-        await Bus.publish(TuiEvent.PromptAppend, c.req.valid("json"))
-        return c.json(true)
-      },
-    )
     .post("/open-help", ...commandEndpoint("Open help dialog", "tui.openHelp", "help.show"))
     .post("/open-sessions", ...commandEndpoint("Open sessions dialog", "tui.openSessions", "session.list"))
     .post("/open-models", ...commandEndpoint("Open models dialog", "tui.openModels", "model.list"))
@@ -187,7 +163,7 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       validator("json", z.object({ command: TuiExecuteCommandAlias })),
-      async (c) => {
+      async c => {
         const command = c.req.valid("json").command
         const mapped = tuiExecuteCommandMap[command]
         if (!mapped) {
@@ -195,14 +171,14 @@ export const TuiRoutes = lazy(() =>
             {
               message: `Unknown command alias: ${command}`,
             },
-            400,
+            400
           )
         }
         await Bus.publish(TuiEvent.CommandExecute, {
           command: mapped,
         })
         return c.json(true)
-      },
+      }
     )
     .post(
       "/show-toast",
@@ -222,10 +198,10 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       validator("json", TuiEvent.ToastShow.properties),
-      async (c) => {
+      async c => {
         await Bus.publish(TuiEvent.ToastShow, c.req.valid("json"))
         return c.json(true)
-      },
+      }
     )
     .post(
       "/publish",
@@ -248,7 +224,7 @@ export const TuiRoutes = lazy(() =>
       validator(
         "json",
         z.union(
-          Object.values(TuiEvent).map((def) => {
+          Object.values(TuiEvent).map(def => {
             return z
               .object({
                 type: z.literal(def.type),
@@ -257,14 +233,14 @@ export const TuiRoutes = lazy(() =>
               .meta({
                 ref: "Event" + "." + def.type,
               })
-          }),
-        ),
+          })
+        )
       ),
-      async (c) => {
+      async c => {
         const evt = c.req.valid("json")
-        await Bus.publish(Object.values(TuiEvent).find((def) => def.type === evt.type)!, evt.properties)
+        await Bus.publish(Object.values(TuiEvent).find(def => def.type === evt.type)!, evt.properties)
         return c.json(true)
-      },
+      }
     )
     .post(
       "/select-session",
@@ -285,12 +261,12 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       validator("json", TuiEvent.SessionSelect.properties),
-      async (c) => {
+      async c => {
         const { sessionID } = c.req.valid("json")
         await Session.get(sessionID)
         await Bus.publish(TuiEvent.SessionSelect, { sessionID })
         return c.json(true)
-      },
+      }
     )
-    .route("/control", TuiControlRoutes),
+    .route("/control", TuiControlRoutes)
 )

@@ -34,6 +34,12 @@ function M.setup(opts)
     end, { desc = "0x0: Send with message to TUI" })
   end
 
+  if km.switch_session and km.switch_session ~= "" then
+    vim.keymap.set("n", km.switch_session, function()
+      M.switch_session()
+    end, { desc = "0x0: Switch pinned session" })
+  end
+
   if km.diff and km.diff ~= "" then
     vim.keymap.set("n", km.diff, function()
       M.diff()
@@ -83,6 +89,10 @@ end
 
 function M.send_message()
   require("zeroxzero.tui").send_with_message()
+end
+
+function M.switch_session()
+  require("zeroxzero.tui").switch_session()
 end
 
 -- Diff review

@@ -1,42 +1,41 @@
+import type { FilePart } from "@anonymous-dev/0x0-server/server/types"
+import { Binary } from "@anonymous-dev/0x0-server/util/binary"
 import {
-  BoxRenderable,
-  TextareaRenderable,
-  MouseEvent,
-  KeyEvent,
-  PasteEvent,
-  TextAttributes,
-  t,
+  type BoxRenderable,
   dim,
   fg,
+  type KeyEvent,
+  type MouseEvent,
+  type PasteEvent,
+  TextAttributes,
+  type TextareaRenderable,
+  t,
 } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
-import { local } from "@tui/state/local"
-import { tint, theme, themeState } from "@tui/state/theme"
-import { EmptyBorder } from "@tui/component/border"
-import { sdk } from "@tui/state/sdk"
-import { route } from "@tui/state/route"
-import { sync } from "@tui/state/sync"
-import { Binary } from "@anonymous-dev/0x0-server/util/binary"
-import { createStore, produce } from "solid-js/store"
-import { keybind } from "@tui/state/keybind"
-import { usePromptHistory, type PromptInfo } from "./history"
-import { usePromptStash } from "./stash"
-import { DialogStash } from "../dialog-stash"
-import { type AutocompleteRef, Autocomplete } from "./autocomplete"
-import { useCommandDialog } from "../dialog-command"
 import { useRenderer } from "@opentui/solid"
-import { Editor } from "@tui/util/editor"
+import { EmptyBorder } from "@tui/component/border"
 import { exit } from "@tui/state/exit"
-import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@anonymous-dev/0x0-server/server/types"
-import { TuiEvent } from "@anonymous-dev/0x0-server/core/bus/tui-event"
+import { keybind } from "@tui/state/keybind"
+import { local } from "@tui/state/local"
+import { route } from "@tui/state/route"
+import { sdk } from "@tui/state/sdk"
+import { sync } from "@tui/state/sync"
+import { theme, themeState, tint } from "@tui/state/theme"
 import { useDialog } from "@tui/ui/dialog"
+import { Editor } from "@tui/util/editor"
+import { createEffect, createMemo, type JSX, onCleanup, Show } from "solid-js"
+import { createStore, produce } from "solid-js/store"
 import { useToast } from "../../ui/toast"
-import { useTextareaKeybindings } from "../textarea-keybindings"
+import { Clipboard } from "../../util/clipboard"
+import { useCommandDialog } from "../dialog-command"
 import { DialogSkill } from "../dialog-skill"
+import { DialogStash } from "../dialog-stash"
+import { useTextareaKeybindings } from "../textarea-keybindings"
+import { Autocomplete, type AutocompleteRef } from "./autocomplete"
+import { type PromptInfo, usePromptHistory } from "./history"
+import { usePromptStash } from "./stash"
+import { submitPrompt } from "./submit-prompt"
 import { usePromptCommands } from "./use-prompt-commands"
 import { usePromptParts } from "./use-prompt-parts"
-import { submitPrompt } from "./submit-prompt"
 
 export type PromptProps = {
   sessionID?: string
@@ -97,23 +96,42 @@ export function Prompt(props: PromptProps) {
     })
   }
 
-  const off = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
-    if (!input || input.isDestroyed) return
-    input.insertText(evt.properties.text)
+  function insertStashText(text: string) {
+    if (!input || input.isDestroyed || !text) return
+    input.insertText(text)
     defer(() => {
       input.getLayoutNode().markDirty()
       input.gotoBufferEnd()
       renderer.requestRender()
     })
+  }
+
+  // Listen for server-side prompt stash updates (e.g. file refs sent from nvim)
+  const offStash = sdk.event.on("session.prompt.stash.updated", evt => {
+    if (evt.properties.sessionID !== props.sessionID) return
+    insertStashText(evt.properties.text)
   })
 
-  onCleanup(off)
+  onCleanup(offStash)
+
+  // Fetch pending stash when session changes
+  createEffect(() => {
+    const sessionID = props.sessionID
+    if (!sessionID) return
+    sdk.client.session[":sessionID"].prompt.stash
+      .$get({ param: { sessionID } })
+      .then(async res => {
+        const data = (await res.json()) as { text: string }
+        if (data.text) insertStashText(data.text)
+      })
+      .catch(() => {})
+  })
 
   const lastUserMessage = () => {
     if (!props.sessionID) return undefined
     const messages = sync.data.message[props.sessionID]
     if (!messages) return undefined
-    return messages.findLast((m) => m.role === "user")
+    return messages.findLast(m => m.role === "user")
   }
 
   const [store, setStore] = createStore<{
@@ -149,7 +167,7 @@ export function Prompt(props: PromptProps) {
 
       syncedSessionID = sessionID
 
-      const hasAgent = local.agent.list().some((x) => x.name === msg.agent)
+      const hasAgent = local.agent.list().some(x => x.name === msg.agent)
       if (msg.agent && hasAgent) {
         local.agent.set(msg.agent)
         if (msg.model) local.model.set(msg.model)
@@ -176,13 +194,13 @@ export function Prompt(props: PromptProps) {
 
   async function edit() {
     const text = store.prompt.parts
-      .filter((p) => p.type === "text")
+      .filter(p => p.type === "text")
       .reduce((acc, p) => {
         if (!p.source) return acc
         return acc.replace(p.source.text.value, p.text)
       }, store.prompt.input)
 
-    const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
+    const nonTextParts = store.prompt.parts.filter(p => p.type !== "text")
 
     const value = text
     const content = await Editor.open({ value, renderer })
@@ -191,7 +209,7 @@ export function Prompt(props: PromptProps) {
     input.setText(content)
 
     const updatedNonTextParts = nonTextParts
-      .map((part) => {
+      .map(part => {
         let virtualText = ""
         if (part.type === "file" && part.source?.text) {
           virtualText = part.source.text.value
@@ -233,7 +251,7 @@ export function Prompt(props: PromptProps) {
 
         return part
       })
-      .filter((part) => part !== null)
+      .filter(part => part !== null)
 
     setStore("prompt", {
       input: content,
@@ -249,7 +267,7 @@ export function Prompt(props: PromptProps) {
       size: "large",
       body: () => (
         <DialogSkill
-          onSelect={(skill) => {
+          onSelect={skill => {
             input.setText(`/${skill} `)
             setStore("prompt", {
               input: `/${skill} `,
@@ -312,8 +330,8 @@ export function Prompt(props: PromptProps) {
     pasteStyleId,
     getParts: () => store.prompt.parts,
     getMap: () => store.extmarkToPartIndex,
-    setParts: (parts) => setStore("prompt", "parts", parts),
-    setMap: (map) => setStore("extmarkToPartIndex", map),
+    setParts: parts => setStore("prompt", "parts", parts),
+    setMap: map => setStore("extmarkToPartIndex", map),
   })
 
   function stashPush() {
@@ -342,7 +360,7 @@ export function Prompt(props: PromptProps) {
       title: "Stash",
       body: () => (
         <DialogStash
-          onSelect={(entry) => {
+          onSelect={entry => {
             input.setText(entry.input)
             setStore("prompt", { input: entry.input, parts: entry.parts })
             parts.restore(entry.parts)
@@ -394,13 +412,13 @@ export function Prompt(props: PromptProps) {
       history,
       input,
       promptPartTypeId,
-      setMode: (mode) => setStore("mode", mode),
-      setPrompt: (prompt) => setStore("prompt", prompt),
-      setExtmarkToPartIndex: (map) => setStore("extmarkToPartIndex", map),
-      restorePromptParts: (promptParts) => parts.restore(promptParts),
+      setMode: mode => setStore("mode", mode),
+      setPrompt: prompt => setStore("prompt", prompt),
+      setExtmarkToPartIndex: map => setStore("extmarkToPartIndex", map),
+      restorePromptParts: promptParts => parts.restore(promptParts),
       onPromptModelWarning: promptModelWarning,
       onSubmit: props.onSubmit,
-      onSubmitError: (message) => {
+      onSubmitError: message => {
         toast.show({
           variant: "error",
           message: `Failed to submit prompt. ${message}`,
@@ -416,11 +434,11 @@ export function Prompt(props: PromptProps) {
           sync.set(
             "message",
             sid,
-            produce((draft) => {
-              const match = Binary.search(draft, message.id, (m) => m.id)
+            produce(draft => {
+              const match = Binary.search(draft, message.id, m => m.id)
               if (match.found) return
               draft.splice(match.index, 0, message as any)
-            }),
+            })
           )
         }
         for (const part of optimisticParts) {
@@ -432,11 +450,11 @@ export function Prompt(props: PromptProps) {
           sync.set(
             "part",
             part.messageID,
-            produce((draft) => {
-              const match = Binary.search(draft, part.id, (p) => p.id)
+            produce(draft => {
+              const match = Binary.search(draft, part.id, p => p.id)
               if (match.found) return
               draft.splice(match.index, 0, part as any)
-            }),
+            })
           )
         }
       },
@@ -459,7 +477,7 @@ export function Prompt(props: PromptProps) {
     })
 
     setStore(
-      produce((draft) => {
+      produce(draft => {
         const partIndex = draft.prompt.parts.length
         draft.prompt.parts.push({
           type: "text" as const,
@@ -473,14 +491,14 @@ export function Prompt(props: PromptProps) {
           },
         })
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
+      })
     )
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
-    const count = store.prompt.parts.filter((x) => x.type === "file").length
+    const count = store.prompt.parts.filter(x => x.type === "file").length
     const virtualText = `[Image ${count + 1}]`
     const extmarkEnd = extmarkStart + virtualText.length
     const textToInsert = virtualText + " "
@@ -511,11 +529,11 @@ export function Prompt(props: PromptProps) {
       },
     }
     setStore(
-      produce((draft) => {
+      produce(draft => {
         const partIndex = draft.prompt.parts.length
         draft.prompt.parts.push(part)
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
+      })
     )
     return
   }
@@ -632,7 +650,7 @@ export function Prompt(props: PromptProps) {
           event.preventDefault()
           const content = await file
             .arrayBuffer()
-            .then((buffer) => Buffer.from(buffer).toString("base64"))
+            .then(buffer => Buffer.from(buffer).toString("base64"))
             .catch(() => {
               toast.show({ variant: "warning", message: "Could not read pasted image file", duration: 3000 })
               return undefined
@@ -683,15 +701,15 @@ export function Prompt(props: PromptProps) {
     <>
       <Autocomplete
         sessionID={props.sessionID}
-        ref={(r) => (autocomplete = r)}
+        ref={r => (autocomplete = r)}
         anchor={() => anchor}
         input={() => input}
-        setPrompt={(cb) => {
+        setPrompt={cb => {
           setStore("prompt", produce(cb))
         }}
         value={store.prompt.input}
       />
-      <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
+      <box ref={r => (anchor = r)} visible={props.visible !== false}>
         <box
           border={["left"]}
           borderColor={line()}
@@ -699,16 +717,14 @@ export function Prompt(props: PromptProps) {
             ...EmptyBorder,
             vertical: "┃",
             bottomLeft: "╹",
-          }}
-        >
+          }}>
           <box
             paddingLeft={2}
             paddingRight={2}
             paddingTop={1}
             flexShrink={0}
             backgroundColor={theme.backgroundElement}
-            flexGrow={1}
-          >
+            flexGrow={1}>
             <textarea
               placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
               textColor={keybind.leader ? theme.textMuted : theme.text}
@@ -777,8 +793,7 @@ export function Prompt(props: PromptProps) {
           customBorderChars={{
             ...EmptyBorder,
             vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
-          }}
-        >
+          }}>
           <box
             height={1}
             border={["bottom"]}

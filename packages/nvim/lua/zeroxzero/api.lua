@@ -290,12 +290,14 @@ function M.get_providers(callback)
   M.get("/provider", callback)
 end
 
--- TUI bridge endpoints
+-- Prompt stash endpoints
 
+---Append text to a session's prompt stash
+---@param session_id string
 ---@param text string
 ---@param callback fun(err?: string)
-function M.append_prompt(text, callback)
-  M.post("/tui/append-prompt", { text = text }, function(err, response)
+function M.append_stash(session_id, text, callback)
+  M.post("/session/" .. session_id .. "/prompt/stash", { text = text }, function(err, response)
     if err then
       callback(err)
       return
@@ -307,6 +309,38 @@ function M.append_prompt(text, callback)
     callback(nil)
   end)
 end
+
+---Get a session's prompt stash
+---@param session_id string
+---@param callback fun(err?: string, text?: string)
+function M.get_stash(session_id, callback)
+  M.get("/session/" .. session_id .. "/prompt/stash", function(err, response)
+    if err then
+      callback(err)
+      return
+    end
+    if not response or response.status ~= 200 then
+      callback("server error: " .. tostring(response and response.status))
+      return
+    end
+    callback(nil, response.body and response.body.text or "")
+  end)
+end
+
+---Clear a session's prompt stash
+---@param session_id string
+---@param callback fun(err?: string)
+function M.clear_stash(session_id, callback)
+  M.delete("/session/" .. session_id .. "/prompt/stash", function(err, response)
+    if err then
+      callback(err)
+      return
+    end
+    callback(nil)
+  end)
+end
+
+-- TUI bridge endpoints
 
 ---@param session_id string
 ---@param callback fun(err?: string)

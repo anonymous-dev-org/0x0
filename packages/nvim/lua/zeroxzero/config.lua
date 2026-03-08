@@ -11,6 +11,7 @@ local M = {}
 ---@class zeroxzero.KeymapConfig
 ---@field send string
 ---@field send_message string
+---@field switch_session string
 ---@field diff string
 ---@field interrupt string
 ---@field inline_edit string
@@ -25,6 +26,7 @@ M.defaults = {
   keymaps = {
     send = "",
     send_message = "",
+    switch_session = "",
     diff = "",
     interrupt = "",
     inline_edit = "",
