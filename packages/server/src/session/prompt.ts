@@ -260,7 +260,11 @@ export namespace SessionPrompt {
 
   function start(sessionID: string) {
     const s = state()
-    if (s[sessionID]) return
+    if (s[sessionID]) {
+      log.warn("start: session already has active loop, queueing", { sessionID })
+      return
+    }
+    log.info("start: creating new loop state", { sessionID })
     const controller = new AbortController()
     s[sessionID] = {
       abort: controller,
@@ -299,12 +303,14 @@ export namespace SessionPrompt {
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
+      log.warn("loop: no abort signal, queueing as callback", { sessionID, resume_existing })
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
         const match = state()[sessionID]
         if (!match) return reject(new Error("session not found"))
         match.callbacks.push({ resolve, reject })
       })
     }
+    log.info("loop: entering", { sessionID, resume_existing })
 
     using _ = defer(() => cancel(sessionID))
 
@@ -341,7 +347,12 @@ export namespace SessionPrompt {
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
       ) {
-        log.info("exiting loop", { sessionID })
+        log.info("exiting loop: assistant finished", {
+          sessionID,
+          finish: lastAssistant.finish,
+          lastUserID: lastUser.id,
+          lastAssistantID: lastAssistant.id,
+        })
         break
       }
 
@@ -698,13 +709,20 @@ export namespace SessionPrompt {
       // If questions were registered during this turn, stop the loop.
       // The server will resume via resumeAfterInteraction when the user answers.
       const pendingQuestions = await Question.listBySession(sessionID)
-      if (pendingQuestions.length > 0) break
+      if (pendingQuestions.length > 0) {
+        log.info("loop: pausing for pending questions", { sessionID, count: pendingQuestions.length })
+        break
+      }
 
       // If permissions are pending (modal pause), stop the loop.
       // The server will resume via resumeAfterInteraction when the user responds.
       const pendingPermissions = await PermissionNext.listBySession(sessionID)
-      if (pendingPermissions.length > 0) break
+      if (pendingPermissions.length > 0) {
+        log.info("loop: pausing for pending permissions", { sessionID, count: pendingPermissions.length })
+        break
+      }
     }
+    log.info("loop: exited while loop", { sessionID, aborted: abort.aborted })
     // Clean up questions only on abort (user interrupted), not on modal pause
     if (abort.aborted && !(abort.reason instanceof ModalPauseError)) {
       await Question.rejectBySession(sessionID)
@@ -712,6 +730,7 @@ export namespace SessionPrompt {
     }
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
+      log.info("loop: returning last assistant message", { sessionID, messageID: item.info.id })
       const queued = state()[sessionID]?.callbacks ?? []
       for (const q of queued) {
         q.resolve(item)
@@ -780,8 +799,14 @@ export namespace SessionPrompt {
   }
 
   export async function stageInteractionResponse(input: { sessionID: string; text: string }) {
+    log.info("stageInteractionResponse: start", { sessionID: input.sessionID })
     const ctx = await requireLastUserContext(input.sessionID)
-    return prompt({
+    log.info("stageInteractionResponse: got user context", {
+      sessionID: input.sessionID,
+      agent: ctx.agent,
+      model: ctx.model,
+    })
+    const result = await prompt({
       sessionID: input.sessionID,
       agent: ctx.agent,
       agentMode: ctx.agentMode,
@@ -791,11 +816,17 @@ export namespace SessionPrompt {
       parts: [{ type: "text" as const, text: input.text }],
       noReply: true,
     })
+    log.info("stageInteractionResponse: done", { sessionID: input.sessionID, messageID: result.info.id })
+    return result
   }
 
   export function resumeInteractionLoopInBackground(input: { sessionID: string; providerID: string }) {
+    log.info("resumeInteractionLoopInBackground: calling loop", {
+      sessionID: input.sessionID,
+      providerID: input.providerID,
+    })
     void loop({ sessionID: input.sessionID }).catch(error => {
-      log.error("resume interaction loop failed", { sessionID: input.sessionID, error })
+      log.error("resumeInteractionLoopInBackground: loop failed", { sessionID: input.sessionID, error })
       Bus.publish(Session.Event.Error, {
         sessionID: input.sessionID,
         error: MessageV2.fromError(error, { providerID: input.providerID }),
@@ -866,7 +897,7 @@ export namespace SessionPrompt {
             state: {
               status: "pending",
               input: match.state.input,
-              raw: match.state.status === "running" ? match.state.metadata?.raw ?? "" : match.state.raw,
+              raw: match.state.status === "running" ? (match.state.metadata?.raw ?? "") : match.state.raw,
             },
           })
         }
