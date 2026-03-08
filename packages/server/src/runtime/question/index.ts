@@ -132,6 +132,11 @@ export namespace Question {
     return Object.values(s.pending).filter(entry => entry.sessionID === sessionID)
   }
 
+  export async function get(requestID: string): Promise<Request | undefined> {
+    const s = await state()
+    return s.pending[requestID]
+  }
+
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<Outcome | undefined> {
     const s = await state()
     const existing = s.pending[input.requestID]

@@ -58,14 +58,32 @@ export const QuestionRoutes = lazy(() =>
       async c => {
         const params = c.req.valid("param")
         const json = c.req.valid("json")
-        const outcome = await Question.reply({
+
+        // Look up the pending question without removing it yet
+        const request = await Question.get(params.requestID)
+        if (!request) {
+          return c.json({ error: "Question not found" }, 404)
+        }
+
+        // Stage the answer as a user message BEFORE committing the reply.
+        // If staging fails, the question stays pending and the client keeps the modal open.
+        const text = SessionPrompt.questionAnswerTemplate(request.questions, json.answers)
+        const staged = await SessionPrompt.stageInteractionResponse({ sessionID: request.sessionID, text })
+
+        // Now it's safe to commit: remove from pending and emit question.replied
+        await Question.reply({
           requestID: params.requestID,
           answers: json.answers,
         })
-        if (outcome?.status === "answered") {
-          const text = SessionPrompt.questionAnswerTemplate(outcome.request.questions, outcome.answers)
-          SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
+
+        // Resume the assistant loop in the background (failures surface via session.error event)
+        if (staged.info.role === "user" && staged.info.model) {
+          SessionPrompt.resumeInteractionLoopInBackground({
+            sessionID: request.sessionID,
+            providerID: staged.info.model.providerID,
+          })
         }
+
         return c.json(true)
       }
     )

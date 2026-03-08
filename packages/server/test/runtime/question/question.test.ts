@@ -106,6 +106,46 @@ test("reply - does nothing for unknown requestID", async () => {
   })
 })
 
+test("get - returns pending request without removing it", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = await Question.register({
+        sessionID: "ses_test",
+        questions: [
+          {
+            question: "What would you like to do?",
+            header: "Action",
+            options: [
+              { label: "Option 1", description: "First option" },
+              { label: "Option 2", description: "Second option" },
+            ],
+          },
+        ],
+      })
+
+      const pendingRequest = await Question.get(requestID)
+      const pendingAfterLookup = await Question.list()
+
+      expect(pendingRequest?.id).toBe(requestID)
+      expect(pendingAfterLookup).toHaveLength(1)
+      expect(pendingAfterLookup[0]?.id).toBe(requestID)
+    },
+  })
+})
+
+test("get - returns undefined for unknown requestID", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const pendingRequest = await Question.get("que_unknown")
+      expect(pendingRequest).toBeUndefined()
+    },
+  })
+})
+
 test("register - handles multiple questions", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

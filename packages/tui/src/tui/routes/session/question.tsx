@@ -6,11 +6,12 @@ import { local } from "@tui/state/local"
 import { sdk } from "@tui/state/sdk"
 import { sync } from "@tui/state/sync"
 import { theme, tint } from "@tui/state/theme"
-import { batch, createMemo, For, Show } from "solid-js"
+import { batch, createMemo, createSignal, For, Show } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
+import { useToast } from "../../ui/toast"
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
   const bindings = useTextareaKeybindings()
@@ -52,6 +53,9 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     return store.answers[store.tab]?.includes(value) ?? false
   })
 
+  const toast = useToast()
+  const [submitting, setSubmitting] = createSignal(false)
+
   function removeFromSyncStore() {
     const sessionID = props.request.sessionID
     const requestID = props.request.id
@@ -65,20 +69,36 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     )
   }
 
-  function replyAndResume(answers: QuestionAnswer[]) {
-    // Optimistically remove from local store so modal hides immediately
-    removeFromSyncStore()
+  async function replyAndResume(answers: QuestionAnswer[]) {
+    if (submitting()) return
+    setSubmitting(true)
 
-    // Tell the server to reply — the server owns resuming the conversation
-    sdk.client.question[":requestID"].reply.$post({
-      param: { requestID: props.request.id },
-      json: { answers },
-    } as never)
+    try {
+      const response = await sdk.client.question[":requestID"].reply.$post({
+        param: { requestID: props.request.id },
+        json: { answers },
+      } as never)
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        const message =
+          body && typeof body === "object" && "error" in body && typeof body.error === "string"
+            ? body.error
+            : "Failed to submit answers"
+        toast.show({ variant: "error", message })
+        return
+      }
+      // Modal removal happens via the server's question.replied SSE event hitting the sync store
+    } catch {
+      toast.show({ variant: "error", message: "Failed to submit answers — network error" })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function submit() {
     const answers = questions().map((_, i) => store.answers[i] ?? [])
-    replyAndResume(answers)
+    void replyAndResume(answers)
   }
 
   function reject() {
@@ -96,7 +116,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     })
     if (currentTab === questions().length - 1) {
       const answers = questions().map((_, i) => (i === currentTab ? [answer] : (store.answers[i] ?? [])))
-      replyAndResume(answers)
+      void replyAndResume(answers)
       return
     }
     batch(() => {

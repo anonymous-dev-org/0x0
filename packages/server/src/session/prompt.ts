@@ -746,6 +746,14 @@ export namespace SessionPrompt {
     return undefined
   }
 
+  async function requireLastUserContext(sessionID: string) {
+    const ctx = await lastUserContext(sessionID)
+    if (!ctx) {
+      throw new Error("No prior user context found for interaction resume")
+    }
+    return ctx
+  }
+
   export function questionAnswerTemplate(questions: Question.Info[], answers: Question.Answer[]): string {
     const lines = questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
     return `The user answered your questions:\n\n${lines.join("\n\n")}\n\nContinue with the user's answers in mind.`
@@ -771,13 +779,9 @@ export namespace SessionPrompt {
     return `The user dismissed the ${permission} permission request. Continue without this tool call, or ask the user for guidance.`
   }
 
-  export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
-    const ctx = await lastUserContext(input.sessionID)
-    if (!ctx) {
-      log.warn("resumeAfterInteraction: no user context found", { sessionID: input.sessionID })
-      return
-    }
-    prompt({
+  export async function stageInteractionResponse(input: { sessionID: string; text: string }) {
+    const ctx = await requireLastUserContext(input.sessionID)
+    return prompt({
       sessionID: input.sessionID,
       agent: ctx.agent,
       agentMode: ctx.agentMode,
@@ -785,6 +789,25 @@ export namespace SessionPrompt {
       variant: ctx.variant,
       thinkingEffort: ctx.thinkingEffort,
       parts: [{ type: "text" as const, text: input.text }],
+      noReply: true,
+    })
+  }
+
+  export function resumeInteractionLoopInBackground(input: { sessionID: string; providerID: string }) {
+    void loop({ sessionID: input.sessionID }).catch(error => {
+      log.error("resume interaction loop failed", { sessionID: input.sessionID, error })
+      Bus.publish(Session.Event.Error, {
+        sessionID: input.sessionID,
+        error: MessageV2.fromError(error, { providerID: input.providerID }),
+      })
+    })
+  }
+
+  export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
+    const staged = await stageInteractionResponse(input)
+    resumeInteractionLoopInBackground({
+      sessionID: input.sessionID,
+      providerID: staged.info.model.providerID,
     }).catch(e => {
       log.error("resumeAfterInteraction failed", { sessionID: input.sessionID, error: e })
     })
