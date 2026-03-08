@@ -101,6 +101,7 @@ export namespace SessionPrompt {
 
   export const PromptInput = z.object({
     sessionID: Identifier.schema("session"),
+    messageID: Identifier.schema("message").optional(),
     model: z
       .object({
         providerID: z.string(),
@@ -842,7 +843,7 @@ export namespace SessionPrompt {
         : undefined)
 
     const info: MessageV2.Info = {
-      id: Identifier.ascending("message"),
+      id: Identifier.ascending("message", input.messageID),
       role: "user",
       sessionID: input.sessionID,
       time: {
@@ -1179,6 +1180,7 @@ export namespace SessionPrompt {
 
   export const ShellInput = z.object({
     sessionID: Identifier.schema("session"),
+    messageID: Identifier.schema("message").optional(),
     agent: z.string(),
     model: z
       .object({
@@ -1216,7 +1218,7 @@ export namespace SessionPrompt {
     if (!agent) throw new Error(`Agent not found: ${input.agent}`)
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const userMsg: MessageV2.User = {
-      id: Identifier.ascending("message"),
+      id: Identifier.ascending("message", input.messageID),
       sessionID: input.sessionID,
       time: {
         created: Date.now(),
@@ -1424,6 +1426,7 @@ export namespace SessionPrompt {
 
   export const CommandInput = z.object({
     sessionID: Identifier.schema("session"),
+    messageID: Identifier.schema("message").optional(),
     agent: z.string().optional(),
     model: z.string().optional(),
     arguments: z.string(),
@@ -1573,6 +1576,7 @@ export namespace SessionPrompt {
 
     const result = (await prompt({
       sessionID: input.sessionID,
+      messageID: input.messageID,
       model: {
         providerID: userModel.providerID ?? "",
         modelID: userModel.modelID,
