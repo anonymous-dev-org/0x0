@@ -646,7 +646,11 @@ export namespace SessionPrompt {
         tools,
         model,
       })
-      if (result === "stop") break
+      if (result === "stop") {
+        // Clean up any questions registered during this (failed) turn
+        await Question.rejectBySession(sessionID)
+        break
+      }
 
       // After the model turn ends, check for pending questions registered
       // during this turn. Wait for the user's answer, update the tool part
@@ -664,6 +668,9 @@ export namespace SessionPrompt {
         if (!questionHandled) break
       }
     }
+    // Clean up any pending questions that weren't handled
+    // (e.g. loop exited due to abort, finish condition, or other break)
+    await Question.rejectBySession(sessionID)
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       const queued = state()[sessionID]?.callbacks ?? []
@@ -689,23 +696,34 @@ export namespace SessionPrompt {
   }): Promise<boolean> {
     SessionStatus.set(input.sessionID, { type: "busy", phase: "waiting" })
 
+    // When the session is interrupted, reject all pending questions so
+    // waitForAnswer unblocks instead of hanging forever.
+    const onAbort = () => {
+      Question.rejectBySession(input.sessionID).catch(() => {})
+    }
+    input.abort.addEventListener("abort", onAbort, { once: true })
+
     const allAnswers: Array<{ request: Question.Request; answers: Question.Answer[] }> = []
 
-    for (const request of input.pendingQuestions) {
-      if (input.abort.aborted) return false
+    try {
+      for (const request of input.pendingQuestions) {
+        if (input.abort.aborted) return false
 
-      try {
-        const answers = await Question.waitForAnswer(request.id)
-        allAnswers.push({ request, answers })
-      } catch (e) {
-        if (e instanceof Question.RejectedError) {
-          log.info("question dismissed", { requestID: request.id, sessionID: input.sessionID })
-          // Reject remaining questions for this session
-          await Question.rejectBySession(input.sessionID)
-          return false
+        try {
+          const answers = await Question.waitForAnswer(request.id)
+          allAnswers.push({ request, answers })
+        } catch (e) {
+          if (e instanceof Question.RejectedError) {
+            log.info("question dismissed", { requestID: request.id, sessionID: input.sessionID })
+            // Reject remaining questions for this session
+            await Question.rejectBySession(input.sessionID)
+            return false
+          }
+          throw e
         }
-        throw e
       }
+    } finally {
+      input.abort.removeEventListener("abort", onAbort)
     }
 
     // Update tool parts with answers metadata for inline display
