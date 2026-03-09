@@ -799,14 +799,8 @@ export namespace SessionPrompt {
   }
 
   export async function stageInteractionResponse(input: { sessionID: string; text: string }) {
-    log.info("stageInteractionResponse: start", { sessionID: input.sessionID })
     const ctx = await requireLastUserContext(input.sessionID)
-    log.info("stageInteractionResponse: got user context", {
-      sessionID: input.sessionID,
-      agent: ctx.agent,
-      model: ctx.model,
-    })
-    const result = await prompt({
+    return prompt({
       sessionID: input.sessionID,
       agent: ctx.agent,
       agentMode: ctx.agentMode,
@@ -816,17 +810,11 @@ export namespace SessionPrompt {
       parts: [{ type: "text" as const, text: input.text }],
       noReply: true,
     })
-    log.info("stageInteractionResponse: done", { sessionID: input.sessionID, messageID: result.info.id })
-    return result
   }
 
   export function resumeInteractionLoopInBackground(input: { sessionID: string; providerID: string }) {
-    log.info("resumeInteractionLoopInBackground: calling loop", {
-      sessionID: input.sessionID,
-      providerID: input.providerID,
-    })
     void loop({ sessionID: input.sessionID }).catch(error => {
-      log.error("resumeInteractionLoopInBackground: loop failed", { sessionID: input.sessionID, error })
+      log.error("resume loop failed", { sessionID: input.sessionID, error })
       Bus.publish(Session.Event.Error, {
         sessionID: input.sessionID,
         error: MessageV2.fromError(error, { providerID: input.providerID }),
@@ -836,11 +824,13 @@ export namespace SessionPrompt {
 
   export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
     const staged = await stageInteractionResponse(input)
+    const info = staged.info
+    if (info.role !== "user" || !info.model) {
+      throw new Error("stageInteractionResponse returned unexpected message type for resumeAfterInteraction")
+    }
     resumeInteractionLoopInBackground({
       sessionID: input.sessionID,
-      providerID: staged.info.model.providerID,
-    }).catch(e => {
-      log.error("resumeAfterInteraction failed", { sessionID: input.sessionID, error: e })
+      providerID: info.model.providerID,
     })
   }
 
