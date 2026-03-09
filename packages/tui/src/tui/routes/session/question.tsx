@@ -80,7 +80,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       } as never)
 
       if (!response.ok) {
-        const body = await response.json().catch(() => null)
+        const body: unknown = await response.json().catch(() => null)
         const message =
           body && typeof body === "object" && "error" in body && typeof body.error === "string"
             ? body.error
