@@ -260,7 +260,11 @@ export namespace SessionPrompt {
 
   function start(sessionID: string) {
     const s = state()
-    if (s[sessionID]) return
+    if (s[sessionID]) {
+      log.warn("start: session already has active loop, queueing", { sessionID })
+      return
+    }
+    log.info("start: creating new loop state", { sessionID })
     const controller = new AbortController()
     s[sessionID] = {
       abort: controller,
@@ -299,12 +303,14 @@ export namespace SessionPrompt {
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
+      log.warn("loop: no abort signal, queueing as callback", { sessionID, resume_existing })
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
         const match = state()[sessionID]
         if (!match) return reject(new Error("session not found"))
         match.callbacks.push({ resolve, reject })
       })
     }
+    log.info("loop: entering", { sessionID, resume_existing })
 
     using _ = defer(() => cancel(sessionID))
 
@@ -341,7 +347,12 @@ export namespace SessionPrompt {
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
       ) {
-        log.info("exiting loop", { sessionID })
+        log.info("exiting loop: assistant finished", {
+          sessionID,
+          finish: lastAssistant.finish,
+          lastUserID: lastUser.id,
+          lastAssistantID: lastAssistant.id,
+        })
         break
       }
 
@@ -698,13 +709,20 @@ export namespace SessionPrompt {
       // If questions were registered during this turn, stop the loop.
       // The server will resume via resumeAfterInteraction when the user answers.
       const pendingQuestions = await Question.listBySession(sessionID)
-      if (pendingQuestions.length > 0) break
+      if (pendingQuestions.length > 0) {
+        log.info("loop: pausing for pending questions", { sessionID, count: pendingQuestions.length })
+        break
+      }
 
       // If permissions are pending (modal pause), stop the loop.
       // The server will resume via resumeAfterInteraction when the user responds.
       const pendingPermissions = await PermissionNext.listBySession(sessionID)
-      if (pendingPermissions.length > 0) break
+      if (pendingPermissions.length > 0) {
+        log.info("loop: pausing for pending permissions", { sessionID, count: pendingPermissions.length })
+        break
+      }
     }
+    log.info("loop: exited while loop", { sessionID, aborted: abort.aborted })
     // Clean up questions only on abort (user interrupted), not on modal pause
     if (abort.aborted && !(abort.reason instanceof ModalPauseError)) {
       await Question.rejectBySession(sessionID)
@@ -712,6 +730,7 @@ export namespace SessionPrompt {
     }
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
+      log.info("loop: returning last assistant message", { sessionID, messageID: item.info.id })
       const queued = state()[sessionID]?.callbacks ?? []
       for (const q of queued) {
         q.resolve(item)
@@ -746,6 +765,14 @@ export namespace SessionPrompt {
     return undefined
   }
 
+  async function requireLastUserContext(sessionID: string) {
+    const ctx = await lastUserContext(sessionID)
+    if (!ctx) {
+      throw new Error("No prior user context found for interaction resume")
+    }
+    return ctx
+  }
+
   export function questionAnswerTemplate(questions: Question.Info[], answers: Question.Answer[]): string {
     const lines = questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
     return `The user answered your questions:\n\n${lines.join("\n\n")}\n\nContinue with the user's answers in mind.`
@@ -771,13 +798,9 @@ export namespace SessionPrompt {
     return `The user dismissed the ${permission} permission request. Continue without this tool call, or ask the user for guidance.`
   }
 
-  export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
-    const ctx = await lastUserContext(input.sessionID)
-    if (!ctx) {
-      log.warn("resumeAfterInteraction: no user context found", { sessionID: input.sessionID })
-      return
-    }
-    prompt({
+  export async function stageInteractionResponse(input: { sessionID: string; text: string }) {
+    const ctx = await requireLastUserContext(input.sessionID)
+    return prompt({
       sessionID: input.sessionID,
       agent: ctx.agent,
       agentMode: ctx.agentMode,
@@ -785,8 +808,29 @@ export namespace SessionPrompt {
       variant: ctx.variant,
       thinkingEffort: ctx.thinkingEffort,
       parts: [{ type: "text" as const, text: input.text }],
-    }).catch(e => {
-      log.error("resumeAfterInteraction failed", { sessionID: input.sessionID, error: e })
+      noReply: true,
+    })
+  }
+
+  export function resumeInteractionLoopInBackground(input: { sessionID: string; providerID: string }) {
+    void loop({ sessionID: input.sessionID }).catch(error => {
+      log.error("resume loop failed", { sessionID: input.sessionID, error })
+      Bus.publish(Session.Event.Error, {
+        sessionID: input.sessionID,
+        error: MessageV2.fromError(error, { providerID: input.providerID }),
+      })
+    })
+  }
+
+  export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
+    const staged = await stageInteractionResponse(input)
+    const info = staged.info
+    if (info.role !== "user" || !info.model) {
+      throw new Error("stageInteractionResponse returned unexpected message type for resumeAfterInteraction")
+    }
+    resumeInteractionLoopInBackground({
+      sessionID: input.sessionID,
+      providerID: info.model.providerID,
     })
   }
 
@@ -843,7 +887,7 @@ export namespace SessionPrompt {
             state: {
               status: "pending",
               input: match.state.input,
-              raw: match.state.status === "running" ? match.state.metadata?.raw ?? "" : match.state.raw,
+              raw: match.state.status === "running" ? (match.state.metadata?.raw ?? "") : match.state.raw,
             },
           })
         }

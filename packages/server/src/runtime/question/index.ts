@@ -170,6 +170,11 @@ export namespace Question {
       .map(entry => entry.request)
   }
 
+  export async function get(requestID: string): Promise<Request | undefined> {
+    const s = await state()
+    return s.pending[requestID]?.request
+  }
+
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<Outcome | undefined> {
     const s = await state()
     const existing = s.pending[input.requestID]
