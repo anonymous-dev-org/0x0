@@ -7,7 +7,6 @@ import { Snapshot } from "@/workspace/snapshot"
 import { Session } from "."
 import { LLM } from "./llm"
 import { MessageV2 } from "./message-v2"
-import { ModalPauseError } from "./prompt"
 import { SessionStatus } from "./status"
 import { SessionSummary } from "./summary"
 
@@ -455,27 +454,8 @@ export namespace SessionProcessor {
     }
 
     function finalizeTools() {
-      const isModalPause = input.abort.reason instanceof ModalPauseError
       for (const [id, toolPart] of Object.entries(toolParts)) {
         if (toolPart.state.status === "pending" || toolPart.state.status === "running") {
-          // On modal pause, preserve pending tool parts so the TUI can still render details
-          if (isModalPause && toolPart.state.status === "pending") {
-            delete toolParts[id]
-            continue
-          }
-          // On modal pause, mark running (non-permission) tools as pending too
-          if (isModalPause) {
-            Session.updatePart({
-              ...toolPart,
-              state: {
-                status: "pending",
-                input: toolPart.state.input,
-                raw: toolPart.state.status === "running" ? toolPart.state.metadata?.raw ?? "" : toolPart.state.raw,
-              },
-            }).catch(e => log.error("failed to mark tool as pending", { error: e, toolCallID: id }))
-            delete toolParts[id]
-            continue
-          }
           Session.updatePart({
             ...toolPart,
             state: {

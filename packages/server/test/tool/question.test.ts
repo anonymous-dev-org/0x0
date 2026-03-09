@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
-import { z } from "zod"
 import * as QuestionModule from "../../src/runtime/question"
 import { QuestionTool } from "../../src/tool/question"
 
@@ -15,16 +14,16 @@ const ctx = {
 }
 
 describe("tool.question", () => {
-  let registerSpy: ReturnType<typeof spyOn>
+  let askSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
-    registerSpy = spyOn(QuestionModule.Question, "register").mockImplementation(async () => {
-      return "que_test123"
+    askSpy = spyOn(QuestionModule.Question, "ask").mockImplementation(async () => {
+      return [["Red"]]
     })
   })
 
   afterEach(() => {
-    registerSpy.mockRestore()
+    askSpy.mockRestore()
   })
 
   test("should successfully execute with valid question parameters", async () => {
@@ -42,9 +41,11 @@ describe("tool.question", () => {
     ]
 
     const result = await tool.execute({ questions }, ctx)
-    expect(registerSpy).toHaveBeenCalledTimes(1)
+    expect(askSpy).toHaveBeenCalledTimes(1)
     expect(result.title).toBe("Asked 1 question")
-    expect(result.output).toContain("Question has been registered")
+    expect(result.output).toContain("The user answered your questions")
+    expect(result.output).toContain("Red")
+    expect(result.metadata.answers).toEqual([["Red"]])
   })
 
   test("should now pass with a header longer than 12 but less than 30 chars", async () => {
@@ -61,6 +62,6 @@ describe("tool.question", () => {
     ]
 
     const result = await tool.execute({ questions }, ctx)
-    expect(result.output).toContain("Question has been registered")
+    expect(result.output).toContain("The user answered your questions")
   })
 })

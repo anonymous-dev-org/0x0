@@ -9,17 +9,20 @@ export const QuestionTool = Tool.define("question", {
     questions: z.array(Question.Info.omit({ custom: true })).describe("Questions to ask"),
   }),
   async execute(params, ctx) {
-    await Question.register({
+    const answers = await Question.ask({
       sessionID: ctx.sessionID,
       questions: params.questions,
       tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
     })
 
+    const formatted = params.questions
+      .map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
+      .join("\n\n")
+
     return {
       title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
-      output:
-        "Question has been registered and will be shown to the user. Your turn is now ending — the user's answer will be provided in the next message.",
-      metadata: {} as { answers?: Question.Answer[] },
+      output: `The user answered your questions:\n\n${formatted}\n\nContinue with the user's answers in mind.`,
+      metadata: { answers },
     }
   },
 })

@@ -1,7 +1,10 @@
 import z from "zod"
+import { Bus } from "@/core/bus"
+import { TuiEvent } from "@/core/bus/tui-event"
 import { Config } from "@/core/config/config"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/runtime/agent/agent"
+import { Question } from "@/runtime/question"
 import { defer } from "@/util/defer"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
@@ -72,86 +75,7 @@ export const TaskTool = Tool.define("task", async ctx => {
       }
 
       if (params.mode === "handoff") {
-        if (ctx.agent !== params.agent) {
-          await ctx.ask({
-            permission: "task_handoff",
-            patterns: [params.agent],
-            always: [],
-            metadata: {
-              sourceAgent: ctx.agent,
-              targetAgent: params.agent,
-              reason: params.description,
-            },
-          })
-        }
-
-        const lastUser = [...ctx.messages].reverse().find(item => item.info.role === "user")?.info
-        if (!lastUser || lastUser.role !== "user") {
-          throw new Error("Unable to handoff: missing user message context")
-        }
-
-        if (params.compact !== false) {
-          const compacted = await SessionCompaction.process({
-            parentID: lastUser.id,
-            messages: ctx.messages,
-            sessionID: ctx.sessionID,
-            abort: ctx.abort,
-            auto: false,
-          })
-          if (compacted === "stop") {
-            throw new Error("Unable to handoff: compaction failed")
-          }
-        }
-
-        // Find plan file path from the current session's messages
-        const planFilePath = ctx.messages
-          .flatMap(m => m.parts)
-          .filter(
-            (p): p is MessageV2.ToolPart => p.type === "tool" && p.tool === "plan" && p.state.status === "completed"
-          )
-          .at(-1)?.metadata?.filepath as string | undefined
-
-        // Build handoff prompt
-        const promptLines = [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`]
-        if (planFilePath) {
-          promptLines.push("", `Plan file: ${planFilePath}`)
-          promptLines.push(
-            "",
-            "Read the plan file above and execute it. Update the todo checklist as you complete each task."
-          )
-        }
-        const handoffPromptText = promptLines.join("\n")
-
-        // Inject a user message into the SAME session with the target agent.
-        // noReply: true means we just create the message and return immediately.
-        // The prompt loop detects the new user message on its next iteration,
-        // sees the agent change via cliSessionAgent mismatch, and starts a
-        // fresh LLM conversation automatically.
-        // If the target agent has modes, default to its first mode.
-        const targetMode = agent.modes && agent.modes.length > 0 ? agent.modes[0] : undefined
-        await SessionPrompt.prompt({
-          sessionID: ctx.sessionID,
-          agent: agent.name,
-          agentMode: targetMode,
-          model,
-          noReply: true,
-          parts: [{ type: "text", text: handoffPromptText }],
-        })
-
-        return {
-          title: `Handoff to ${agent.name}`,
-          metadata: {
-            sessionId: undefined as string | undefined,
-            model,
-            handoff: {
-              switched: true,
-              sourceAgent: ctx.agent,
-              targetAgent: agent.name,
-              reason: params.description,
-            },
-          },
-          output: ["<handoff_result>", `Handed off to @${agent.name}`, "</handoff_result>"].join("\n"),
-        }
+        return executeHandoff({ params, ctx, agent, model })
       }
 
       if (!params.prompt) throw new Error("prompt is required for subtask mode")
@@ -260,3 +184,119 @@ export const TaskTool = Tool.define("task", async ctx => {
     },
   }
 })
+
+async function executeHandoff(input: {
+  params: z.infer<typeof parameters>
+  ctx: Tool.Context
+  agent: Agent.Info
+  model: { modelID: string; providerID: string }
+}) {
+  const { params, ctx, agent, model } = input
+
+  // Block until user picks an action
+  const answers = await Question.ask({
+    sessionID: ctx.sessionID,
+    questions: [
+      {
+        question: `Handoff from @${ctx.agent} to @${agent.name}: ${params.description}`,
+        header: "Agent Handoff",
+        options: [
+          { label: "Handoff + compact", description: `Fork session with compacted history to @${agent.name}` },
+          { label: "Handoff", description: `Fork session with full history to @${agent.name}` },
+          { label: "Keep iterating", description: `Stay in @${ctx.agent} and continue working` },
+        ],
+      },
+    ],
+    tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
+  })
+
+  const choice = answers[0]?.[0] ?? "Keep iterating"
+
+  if (choice === "Keep iterating") {
+    return {
+      title: `Handoff declined — continuing as @${ctx.agent}`,
+      metadata: {
+        sessionId: undefined as string | undefined,
+        model,
+        handoff: {
+          switched: false,
+          sourceAgent: ctx.agent,
+          targetAgent: agent.name,
+          reason: params.description,
+        },
+      },
+      output: `The user chose to keep iterating in @${ctx.agent} instead of handing off to @${agent.name}. Continue with the current task.`,
+    }
+  }
+
+  const shouldCompact = choice === "Handoff + compact"
+
+  // Fork the current session — copies all messages to a new session
+  const forked = await Session.fork({ sessionID: ctx.sessionID })
+
+  if (shouldCompact) {
+    const lastUser = [...ctx.messages].reverse().find(item => item.info.role === "user")?.info
+    if (lastUser && lastUser.role === "user") {
+      const compacted = await SessionCompaction.process({
+        parentID: lastUser.id,
+        messages: ctx.messages,
+        sessionID: forked.id,
+        abort: ctx.abort,
+        auto: false,
+      })
+      if (compacted === "stop") {
+        log.warn("compaction failed during handoff, proceeding without", { sessionID: forked.id })
+      }
+    }
+  }
+
+  // Find plan file path from the current session's messages
+  const planFilePath = ctx.messages
+    .flatMap(m => m.parts)
+    .filter((p): p is MessageV2.ToolPart => p.type === "tool" && p.tool === "plan" && p.state.status === "completed")
+    .at(-1)?.metadata?.filepath as string | undefined
+
+  // Build handoff prompt
+  const promptLines = [`Handoff from @${ctx.agent} to @${agent.name}.`, `Objective: ${params.description}`]
+  if (planFilePath) {
+    promptLines.push("", `Plan file: ${planFilePath}`)
+    promptLines.push(
+      "",
+      "Read the plan file above and execute it. Update the todo checklist as you complete each task."
+    )
+  }
+
+  const targetMode = agent.modes && agent.modes.length > 0 ? agent.modes[0] : undefined
+
+  // Start prompt on the forked session (fire and forget — TUI navigates to it)
+  void SessionPrompt.prompt({
+    sessionID: forked.id,
+    agent: agent.name,
+    agentMode: targetMode,
+    model,
+    parts: [{ type: "text", text: promptLines.join("\n") }],
+  })
+
+  // Navigate TUI to the new session
+  await Bus.publish(TuiEvent.SessionSelect, { sessionID: forked.id })
+
+  return {
+    title: `Handoff to ${agent.name}`,
+    metadata: {
+      sessionId: forked.id,
+      model,
+      handoff: {
+        switched: true,
+        sourceAgent: ctx.agent,
+        targetAgent: agent.name,
+        reason: params.description,
+      },
+    },
+    output: [
+      "<handoff_result>",
+      `Handed off to @${agent.name} in session ${forked.id}`,
+      shouldCompact ? "History was compacted before handoff." : "Full history was copied.",
+      "</handoff_result>",
+    ].join("\n"),
+  }
+}

@@ -47,13 +47,6 @@ import { SessionSummary } from "./summary"
 
 globalThis.AI_SDK_LOG_WARNINGS = false
 
-export class ModalPauseError extends Error {
-  constructor(public readonly interaction: "question" | "permission") {
-    super(`Modal pause: ${interaction}`)
-    this.name = "ModalPauseError"
-  }
-}
-
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   const QUEUED_USER_REMINDER = [
@@ -700,31 +693,10 @@ export namespace SessionPrompt {
         model,
         cwd: sessionCwd,
       })
-      if (result === "stop") {
-        // Clean up any questions registered during this (failed) turn
-        await Question.rejectBySession(sessionID)
-        break
-      }
-
-      // If questions were registered during this turn, stop the loop.
-      // The server will resume via resumeAfterInteraction when the user answers.
-      const pendingQuestions = await Question.listBySession(sessionID)
-      if (pendingQuestions.length > 0) {
-        log.info("loop: pausing for pending questions", { sessionID, count: pendingQuestions.length })
-        break
-      }
-
-      // If permissions are pending (modal pause), stop the loop.
-      // The server will resume via resumeAfterInteraction when the user responds.
-      const pendingPermissions = await PermissionNext.listBySession(sessionID)
-      if (pendingPermissions.length > 0) {
-        log.info("loop: pausing for pending permissions", { sessionID, count: pendingPermissions.length })
-        break
-      }
+      if (result === "stop") break
     }
     log.info("loop: exited while loop", { sessionID, aborted: abort.aborted })
-    // Clean up questions only on abort (user interrupted), not on modal pause
-    if (abort.aborted && !(abort.reason instanceof ModalPauseError)) {
+    if (abort.aborted) {
       await Question.rejectBySession(sessionID)
       await PermissionNext.cancelBySession(sessionID)
     }
@@ -745,93 +717,6 @@ export namespace SessionPrompt {
       if (item.info.role === "user" && item.info.model) return item.info.model
     }
     return Provider.defaultModel()
-  }
-
-  async function lastUserContext(sessionID: string) {
-    const msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const msg = msgs[i]
-      if (msg?.info.role === "user") {
-        const user = msg.info as MessageV2.User
-        return {
-          agent: user.agent,
-          agentMode: user.agentMode,
-          model: user.model,
-          variant: user.variant,
-          thinkingEffort: user.thinkingEffort,
-        }
-      }
-    }
-    return undefined
-  }
-
-  async function requireLastUserContext(sessionID: string) {
-    const ctx = await lastUserContext(sessionID)
-    if (!ctx) {
-      throw new Error("No prior user context found for interaction resume")
-    }
-    return ctx
-  }
-
-  export function questionAnswerTemplate(questions: Question.Info[], answers: Question.Answer[]): string {
-    const lines = questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`)
-    return `The user answered your questions:\n\n${lines.join("\n\n")}\n\nContinue with the user's answers in mind.`
-  }
-
-  export function questionCancelTemplate(): string {
-    return "The user dismissed your questions. Continue without the requested information, or ask differently if critical."
-  }
-
-  export function permissionApprovalTemplate(permission: string, reply: "once" | "always"): string {
-    const scope = reply === "always" ? " (always)" : ""
-    return `The user approved the ${permission} permission request${scope}. The tool was not executed — you need to call it again now.`
-  }
-
-  export function permissionDenialTemplate(permission: string, message?: string): string {
-    if (message) {
-      return `The user denied the ${permission} permission request with feedback: ${message}\n\nAdjust your approach based on this feedback.`
-    }
-    return `The user denied the ${permission} permission request. Do not retry this specific tool call. Find an alternative approach or ask the user for guidance.`
-  }
-
-  export function permissionCancelTemplate(permission: string): string {
-    return `The user dismissed the ${permission} permission request. Continue without this tool call, or ask the user for guidance.`
-  }
-
-  export async function stageInteractionResponse(input: { sessionID: string; text: string }) {
-    const ctx = await requireLastUserContext(input.sessionID)
-    return prompt({
-      sessionID: input.sessionID,
-      agent: ctx.agent,
-      agentMode: ctx.agentMode,
-      model: ctx.model,
-      variant: ctx.variant,
-      thinkingEffort: ctx.thinkingEffort,
-      parts: [{ type: "text" as const, text: input.text }],
-      noReply: true,
-    })
-  }
-
-  export function resumeInteractionLoopInBackground(input: { sessionID: string; providerID: string }) {
-    void loop({ sessionID: input.sessionID }).catch(error => {
-      log.error("resume loop failed", { sessionID: input.sessionID, error })
-      Bus.publish(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: MessageV2.fromError(error, { providerID: input.providerID }),
-      })
-    })
-  }
-
-  export async function resumeAfterInteraction(input: { sessionID: string; text: string }): Promise<void> {
-    const staged = await stageInteractionResponse(input)
-    const info = staged.info
-    if (info.role !== "user" || !info.model) {
-      throw new Error("stageInteractionResponse returned unexpected message type for resumeAfterInteraction")
-    }
-    resumeInteractionLoopInBackground({
-      sessionID: input.sessionID,
-      providerID: info.model.providerID,
-    })
   }
 
   async function resolveTools(input: {
@@ -872,31 +757,12 @@ export namespace SessionPrompt {
         }
       },
       async ask(req) {
-        const decision = await PermissionNext.request({
+        await PermissionNext.ask({
           ...req,
           sessionID: input.session.id,
           tool: { messageID: input.processor.message.id, callID: options.toolCallId },
           ruleset: PermissionNext.merge(input.agent.permission, input.session.permission ?? []),
         })
-        if (decision.status === "allowed") return
-        // Mark the tool part as pending so the TUI can render permission details
-        const match = input.processor.partFromToolCall(options.toolCallId)
-        if (match && (match.state.status === "running" || match.state.status === "pending")) {
-          await Session.updatePart({
-            ...match,
-            state: {
-              status: "pending",
-              input: match.state.input,
-              raw: match.state.status === "running" ? (match.state.metadata?.raw ?? "") : match.state.raw,
-            },
-          })
-        }
-        // Abort the stream to end the assistant turn immediately
-        const sessionState = state()[input.session.id]
-        if (sessionState) {
-          sessionState.abort.abort(new ModalPauseError("permission"))
-        }
-        throw new ModalPauseError("permission")
       },
     })
 
@@ -956,7 +822,6 @@ export namespace SessionPrompt {
           patterns: ["*"],
           always: ["*"],
         })
-        // If ctx.ask threw ModalPauseError, we never reach here
         const result = await execute(args, opts)
 
         const textParts: string[] = []

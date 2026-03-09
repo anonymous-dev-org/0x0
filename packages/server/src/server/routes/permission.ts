@@ -2,7 +2,6 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { PermissionNext } from "@/permission/next"
-import { SessionPrompt } from "@/session/prompt"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 
@@ -36,26 +35,11 @@ export const PermissionRoutes = lazy(() =>
       async c => {
         const params = c.req.valid("param")
         const json = c.req.valid("json")
-        const outcome = await PermissionNext.reply({
+        await PermissionNext.reply({
           requestID: params.requestID,
           reply: json.reply,
           message: json.message,
         })
-        if (outcome) {
-          let text: string
-          switch (outcome.status) {
-            case "approved":
-              text = SessionPrompt.permissionApprovalTemplate(outcome.request.permission, outcome.reply)
-              break
-            case "denied":
-              text = SessionPrompt.permissionDenialTemplate(outcome.request.permission, outcome.message)
-              break
-            case "cancelled":
-              text = SessionPrompt.permissionCancelTemplate(outcome.request.permission)
-              break
-          }
-          SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
-        }
         return c.json(true)
       }
     )

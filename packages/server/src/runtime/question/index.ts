@@ -106,7 +106,7 @@ export namespace Question {
   /**
    * Registers a question request and publishes the event.
    * Non-blocking: returns the question ID immediately.
-   * Used by the non-bridge prompt flow.
+   * @internal Used by tests only — production code should use `ask()`.
    */
   export async function register(input: {
     sessionID: string
@@ -133,7 +133,7 @@ export namespace Question {
 
   /**
    * Registers a question and blocks until the user answers or rejects.
-   * Used by the tool-bridge flow (Claude CLI).
+   * Used by all tool executions (question tool, handoff modal).
    */
   export async function ask(input: {
     sessionID: string
