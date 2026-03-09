@@ -483,27 +483,36 @@ async function handleQuestionTool(
     )
   }
 
-  // Non-blocking: register the question and return immediately.
-  // The session prompt loop will detect pending questions after the model turn
-  // ends, wait for the user's answer, and inject it as a synthetic user message.
-  await Question.register({
-    sessionID: bridge.sessionID,
-    questions: rawQuestions.map(q => ({
-      question: q.question,
-      header: q.header,
-      options: q.options,
-      multiple: q.multiSelect ?? q.multiple,
-    })),
-  })
+  const questions = rawQuestions.map(q => ({
+    question: q.question,
+    header: q.header,
+    options: q.options,
+    multiple: q.multiSelect ?? q.multiple,
+  }))
 
-  return c.json(
-    jsonRpcOk(rpcId, {
-      content: [
-        {
-          type: "text",
-          text: "Question has been registered and will be shown to the user. Your turn is now ending — the user's answer will be provided in the next message.",
-        },
-      ],
+  // Blocking: register the question and wait for the user's answer.
+  // The promise resolves when the user replies via the question route,
+  // or rejects if the user dismisses / session aborts.
+  try {
+    const answers = await Question.ask({
+      sessionID: bridge.sessionID,
+      questions,
     })
-  )
+
+    const summary = questions.map((q, i) => `Q: ${q.question}\nA: ${(answers[i] ?? []).join(", ")}`).join("\n\n")
+
+    return c.json(
+      jsonRpcOk(rpcId, {
+        content: [{ type: "text", text: `The user answered your questions:\n\n${summary}` }],
+      })
+    )
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "The user dismissed this question"
+    return c.json(
+      jsonRpcOk(rpcId, {
+        content: [{ type: "text", text: msg }],
+        isError: true,
+      })
+    )
+  }
 }

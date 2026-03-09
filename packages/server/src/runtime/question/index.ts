@@ -63,11 +63,13 @@ export namespace Question {
   export type Outcome =
     | {
         status: "answered"
+        blocking: boolean
         request: Request
         answers: Answer[]
       }
     | {
         status: "cancelled"
+        blocking: boolean
         request: Request
       }
 
@@ -90,16 +92,21 @@ export namespace Question {
     ),
   }
 
+  interface PendingEntry {
+    request: Request
+    resolve?: (answers: Answer[]) => void
+    reject?: (error: Error) => void
+  }
+
   const state = Instance.state(async () => {
-    const pending: Record<string, Request> = {}
+    const pending: Record<string, PendingEntry> = {}
     return { pending }
   })
 
   /**
    * Registers a question request and publishes the event.
-   * The TUI picks this up via SSE and shows the question UI.
-   * When the user answers, the TUI calls reply() to clean up,
-   * then submits the Q&A as a regular prompt.
+   * Non-blocking: returns the question ID immediately.
+   * Used by the non-bridge prompt flow.
    */
   export async function register(input: {
     sessionID: string
@@ -111,17 +118,46 @@ export namespace Question {
 
     log.info("register", { id, questions: input.questions.length })
 
-    const info: Request = {
+    const request: Request = {
       id,
       sessionID: input.sessionID,
       questions: input.questions,
       tool: input.tool,
     }
 
-    s.pending[id] = info
-    Bus.publish(Event.Asked, info)
+    s.pending[id] = { request }
+    Bus.publish(Event.Asked, request)
 
     return id
+  }
+
+  /**
+   * Registers a question and blocks until the user answers or rejects.
+   * Used by the tool-bridge flow (Claude CLI).
+   */
+  export async function ask(input: {
+    sessionID: string
+    questions: Info[]
+    tool?: { messageID: string; callID: string }
+  }): Promise<Answer[]> {
+    const s = await state()
+    const id = Identifier.ascending("question")
+
+    log.info("ask", { id, questions: input.questions.length })
+
+    const request: Request = {
+      id,
+      sessionID: input.sessionID,
+      questions: input.questions,
+      tool: input.tool,
+    }
+
+    const { promise, resolve, reject } = Promise.withResolvers<Answer[]>()
+
+    s.pending[id] = { request, resolve, reject }
+    Bus.publish(Event.Asked, request)
+
+    return promise
   }
 
   /**
@@ -129,7 +165,9 @@ export namespace Question {
    */
   export async function listBySession(sessionID: string): Promise<Request[]> {
     const s = await state()
-    return Object.values(s.pending).filter(entry => entry.sessionID === sessionID)
+    return Object.values(s.pending)
+      .filter(entry => entry.request.sessionID === sessionID)
+      .map(entry => entry.request)
   }
 
   export async function reply(input: { requestID: string; answers: Answer[] }): Promise<Outcome | undefined> {
@@ -141,16 +179,24 @@ export namespace Question {
     }
     delete s.pending[input.requestID]
 
-    log.info("replied", { requestID: input.requestID, answers: input.answers })
+    const blocking = existing.resolve !== undefined
+
+    log.info("replied", { requestID: input.requestID, answers: input.answers, blocking })
 
     Bus.publish(Event.Replied, {
-      sessionID: existing.sessionID,
-      requestID: existing.id,
+      sessionID: existing.request.sessionID,
+      requestID: existing.request.id,
       answers: input.answers,
     })
+
+    if (existing.resolve) {
+      existing.resolve(input.answers)
+    }
+
     return {
       status: "answered",
-      request: existing,
+      blocking,
+      request: existing.request,
       answers: input.answers,
     }
   }
@@ -164,15 +210,23 @@ export namespace Question {
     }
     delete s.pending[requestID]
 
-    log.info("rejected", { requestID })
+    const blocking = existing.reject !== undefined
+
+    log.info("rejected", { requestID, blocking })
 
     Bus.publish(Event.Rejected, {
-      sessionID: existing.sessionID,
-      requestID: existing.id,
+      sessionID: existing.request.sessionID,
+      requestID: existing.request.id,
     })
+
+    if (existing.reject) {
+      existing.reject(new RejectedError())
+    }
+
     return {
       status: "cancelled",
-      request: existing,
+      blocking,
+      request: existing.request,
     }
   }
 
@@ -185,17 +239,20 @@ export namespace Question {
   export async function rejectBySession(sessionID: string): Promise<void> {
     const s = await state()
     for (const [id, entry] of Object.entries(s.pending)) {
-      if (entry.sessionID !== sessionID) continue
+      if (entry.request.sessionID !== sessionID) continue
       delete s.pending[id]
       log.info("rejected by session cleanup", { requestID: id, sessionID })
       Bus.publish(Event.Rejected, {
-        sessionID: entry.sessionID,
-        requestID: entry.id,
+        sessionID: entry.request.sessionID,
+        requestID: entry.request.id,
       })
+      if (entry.reject) {
+        entry.reject(new RejectedError())
+      }
     }
   }
 
   export async function list() {
-    return state().then(x => Object.values(x.pending))
+    return state().then(x => Object.values(x.pending).map(entry => entry.request))
   }
 }

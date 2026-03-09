@@ -62,7 +62,10 @@ export const QuestionRoutes = lazy(() =>
           requestID: params.requestID,
           answers: json.answers,
         })
-        if (outcome?.status === "answered") {
+        // Only resume the session for non-blocking questions.
+        // Blocking questions (from the tool bridge) resolve their pending promise directly,
+        // so the model turn continues on its own without needing resumeAfterInteraction.
+        if (outcome?.status === "answered" && !outcome.blocking) {
           const text = SessionPrompt.questionAnswerTemplate(outcome.request.questions, outcome.answers)
           SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
         }
@@ -96,7 +99,8 @@ export const QuestionRoutes = lazy(() =>
       async c => {
         const params = c.req.valid("param")
         const outcome = await Question.reject(params.requestID)
-        if (outcome?.status === "cancelled") {
+        // Only resume for non-blocking questions (same reason as reply above)
+        if (outcome?.status === "cancelled" && !outcome.blocking) {
           const text = SessionPrompt.questionCancelTemplate()
           SessionPrompt.resumeAfterInteraction({ sessionID: outcome.request.sessionID, text })
         }
