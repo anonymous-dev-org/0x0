@@ -9,7 +9,7 @@ import { sync } from "@tui/state/sync"
 import { selectedForeground, theme, themeState } from "@tui/state/theme"
 import path from "path"
 import { For, Match, Show, Switch } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, produce } from "solid-js/store"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
@@ -207,6 +207,19 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     stage: "permission" as PermissionStage,
   })
 
+  function removeFromSyncStore() {
+    const sessionID = props.request.sessionID
+    const requestID = props.request.id
+    sync.set(
+      "permission",
+      sessionID,
+      produce((draft: PermissionRequest[]) => {
+        const index = draft.findIndex(p => p.id === requestID)
+        if (index !== -1) draft.splice(index, 1)
+      })
+    )
+  }
+
   const session = () => sync.session.get(props.request.sessionID)
 
   const input = () => {
@@ -240,6 +253,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           onSelect={option => {
             setStore("stage", "permission")
             if (option === "cancel") return
+            removeFromSyncStore()
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "always" },
@@ -264,6 +278,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           onSelect={option => {
             setStore("stage", "permission")
             if (option === "cancel") return
+            removeFromSyncStore()
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "always_deny" },
@@ -274,6 +289,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       <Match when={store.stage === "reject"}>
         <RejectPrompt
           onConfirm={message => {
+            removeFromSyncStore()
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "reject", message: message || undefined },
@@ -309,12 +325,14 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 setStore("stage", "reject")
                 return
               }
+              removeFromSyncStore()
               sdk.client.permission[":requestID"].reply.$post({
                 param: { requestID: props.request.id },
                 json: { reply: "reject" },
               } as any)
               return
             }
+            removeFromSyncStore()
             sdk.client.permission[":requestID"].reply.$post({
               param: { requestID: props.request.id },
               json: { reply: "once" },
