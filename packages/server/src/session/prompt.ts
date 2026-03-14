@@ -101,6 +101,62 @@ export namespace SessionPrompt {
     if (match) throw new Session.BusyError(sessionID)
   }
 
+  export function isBusy(sessionID: string) {
+    return sessionID in state()
+  }
+
+  /**
+   * Resume a session after the user answered a question that outlived the
+   * original LLM turn.  Creates a synthetic user message with the formatted
+   * Q&A and re-enters the session loop via `prompt()`.
+   */
+  export async function resumeWithQuestionAnswer(input: {
+    sessionID: string
+    request: Question.Request
+    answers: Question.Answer[]
+  }) {
+    const lastUser = await lastUserContext(input.sessionID)
+    const formattedQA = formatQuestionAnswer(input.request.questions, input.answers)
+    await prompt({
+      sessionID: input.sessionID,
+      agent: lastUser.agent,
+      agentMode: lastUser.agentMode,
+      model: lastUser.model,
+      system: lastUser.system,
+      variant: lastUser.variant,
+      thinkingEffort: lastUser.thinkingEffort,
+      parts: [
+        {
+          type: "text",
+          text: formattedQA,
+          synthetic: true,
+        },
+      ],
+    })
+  }
+
+  /** Returns the full context from the most recent user message in a session. */
+  async function lastUserContext(sessionID: string): Promise<MessageV2.User> {
+    for await (const item of MessageV2.stream(sessionID)) {
+      if (item.info.role === "user") return item.info as MessageV2.User
+    }
+    throw new Error(`No user message found in session ${sessionID}`)
+  }
+
+  function formatQuestionAnswer(questions: Question.Info[], answers: Question.Answer[]): string {
+    const lines = ["The user answered pending questions from a previous turn:", ""]
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]
+      const a = answers[i]
+      if (!q) continue
+      lines.push(`**${q.header}**: ${q.question}`)
+      lines.push(`Answer: ${a ? a.join(", ") : "(no answer)"}`)
+      lines.push("")
+    }
+    lines.push("Continue with your tasks based on the user's answers above.")
+    return lines.join("\n")
+  }
+
   export const PromptInput = z.object({
     sessionID: Identifier.schema("session"),
     messageID: Identifier.schema("message").optional(),
@@ -369,7 +425,6 @@ export namespace SessionPrompt {
               branchInfo = await Branch.create({
                 slug: session.slug,
                 title: Session.isDefaultTitle(updatedSession.title) ? undefined : updatedSession.title,
-                projectId: Instance.project.id,
               })
             }
             session.branch = branchInfo
@@ -696,10 +751,11 @@ export namespace SessionPrompt {
       if (result === "stop") break
     }
     log.info("loop: exited while loop", { sessionID, aborted: abort.aborted })
-    if (abort.aborted) {
-      await Question.rejectBySession(sessionID)
-      await PermissionNext.cancelBySession(sessionID)
-    }
+    // Detach pending questions — settles the ask() promises to free closures,
+    // but keeps entries in the store so the user can still answer via the
+    // HTTP route (which triggers resumeWithQuestionAnswer to restart the session).
+    await Question.detachBySession(sessionID)
+    await PermissionNext.cancelBySession(sessionID)
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
       log.info("loop: returning last assistant message", { sessionID, messageID: item.info.id })

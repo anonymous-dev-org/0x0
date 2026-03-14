@@ -405,3 +405,320 @@ test("listBySession - returns only questions for the given session", async () =>
     },
   })
 })
+
+// ask() blocking behavior tests
+
+test("ask - blocks until reply resolves the promise", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const questions = [
+        {
+          question: "Pick one",
+          header: "Choice",
+          options: [
+            { label: "A", description: "Option A" },
+            { label: "B", description: "Option B" },
+          ],
+        },
+      ]
+
+      let resolved = false
+      const askPromise = Question.ask({
+        sessionID: "ses_blocking",
+        questions,
+      }).then(answers => {
+        resolved = true
+        return answers
+      })
+
+      // Promise should not resolve immediately
+      await Bun.sleep(10)
+      expect(resolved).toBe(false)
+
+      // Find the pending question and reply
+      const pending = await Question.listBySession("ses_blocking")
+      expect(pending.length).toBe(1)
+
+      await Question.reply({
+        requestID: pending[0]!.id,
+        answers: [["A"]],
+      })
+
+      const result = await askPromise
+      expect(resolved).toBe(true)
+      expect(result).toEqual([["A"]])
+    },
+  })
+})
+
+test("ask - rejects when rejected", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_reject_ask",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "X", description: "X" },
+              { label: "Y", description: "Y" },
+            ],
+          },
+        ],
+      })
+
+      const pending = await Question.listBySession("ses_reject_ask")
+      await Question.reject(pending[0]!.id)
+
+      expect(askPromise).rejects.toBeInstanceOf(Question.RejectedError)
+    },
+  })
+})
+
+// reply outcome tests
+
+test("reply - outcome contains request and answers when ask() is awaiting", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_outcome_ask",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      const pending = await Question.listBySession("ses_outcome_ask")
+      const outcome = await Question.reply({
+        requestID: pending[0]!.id,
+        answers: [["A"]],
+      })
+
+      expect(outcome).toBeDefined()
+      expect(outcome!.status).toBe("answered")
+      if (outcome!.status === "answered") {
+        expect(outcome!.answers).toEqual([["A"]])
+      }
+      expect(outcome!.request.sessionID).toBe("ses_outcome_ask")
+
+      // Consume the ask promise to avoid unhandled rejection
+      await askPromise
+    },
+  })
+})
+
+// detachBySession tests
+
+test("detachBySession - settles ask() promise with DetachedError", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_detach",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      await Question.detachBySession("ses_detach")
+
+      expect(askPromise).rejects.toBeInstanceOf(Question.DetachedError)
+
+      // Clean up entry left in store
+      await Question.rejectBySession("ses_detach")
+    },
+  })
+})
+
+test("detachBySession - keeps entries in pending store", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_detach_keep",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      await Question.detachBySession("ses_detach_keep")
+      // Consume the rejection to avoid unhandled promise
+      await askPromise.catch(() => {})
+
+      const pending = await Question.listBySession("ses_detach_keep")
+      expect(pending.length).toBe(1)
+
+      // Clean up
+      await Question.rejectBySession("ses_detach_keep")
+    },
+  })
+})
+
+test("detachBySession - reply after detach removes entry and returns outcome", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_detach_reply",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      await Question.detachBySession("ses_detach_reply")
+      await askPromise.catch(() => {})
+
+      const pending = await Question.listBySession("ses_detach_reply")
+      const outcome = await Question.reply({
+        requestID: pending[0]!.id,
+        answers: [["A"]],
+      })
+
+      expect(outcome).toBeDefined()
+      expect(outcome!.status).toBe("answered")
+      if (outcome!.status === "answered") {
+        expect(outcome!.answers).toEqual([["A"]])
+      }
+
+      const afterReply = await Question.listBySession("ses_detach_reply")
+      expect(afterReply.length).toBe(0)
+    },
+  })
+})
+
+test("detachBySession - does not affect other sessions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askTarget = Question.ask({
+        sessionID: "ses_detach_target",
+        questions: [
+          {
+            question: "Q1?",
+            header: "Q1",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      const askOther = Question.ask({
+        sessionID: "ses_detach_other",
+        questions: [
+          {
+            question: "Q2?",
+            header: "Q2",
+            options: [
+              { label: "C", description: "C" },
+              { label: "D", description: "D" },
+            ],
+          },
+        ],
+      })
+
+      await Question.detachBySession("ses_detach_target")
+      await askTarget.catch(() => {})
+
+      // Other session should still have a live pending entry with resolve/reject
+      const otherPending = await Question.listBySession("ses_detach_other")
+      expect(otherPending.length).toBe(1)
+
+      // Replying to the other session should still resolve its ask() promise
+      await Question.reply({
+        requestID: otherPending[0]!.id,
+        answers: [["C"]],
+      })
+      const result = await askOther
+      expect(result).toEqual([["C"]])
+
+      // Clean up detached target
+      await Question.rejectBySession("ses_detach_target")
+    },
+  })
+})
+
+test("detachBySession - does nothing when no pending questions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Question.detachBySession("ses_nonexistent")
+      const pending = await Question.list()
+      expect(pending.length).toBe(0)
+    },
+  })
+})
+
+test("reply - outcome contains request when no awaiter (register)", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = await Question.register({
+        sessionID: "ses_outcome_register",
+        questions: [
+          {
+            question: "Q?",
+            header: "Q",
+            options: [
+              { label: "A", description: "A" },
+              { label: "B", description: "B" },
+            ],
+          },
+        ],
+      })
+
+      const outcome = await Question.reply({
+        requestID,
+        answers: [["B"]],
+      })
+
+      expect(outcome).toBeDefined()
+      expect(outcome!.status).toBe("answered")
+      if (outcome!.status === "answered") {
+        expect(outcome!.answers).toEqual([["B"]])
+      }
+      expect(outcome!.request.sessionID).toBe("ses_outcome_register")
+    },
+  })
+})

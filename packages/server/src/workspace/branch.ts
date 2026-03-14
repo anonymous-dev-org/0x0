@@ -1,7 +1,6 @@
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "@/core/global"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import type { Snapshot } from "@/workspace/snapshot"
@@ -18,14 +17,23 @@ export namespace Branch {
       .slice(0, 60)
   }
 
-  export function worktreePath(projectId: string, branchSlug: string): string {
-    return path.join(Global.Path.data, "worktrees", projectId, branchSlug)
+  export function worktreePath(branchSlug: string): string {
+    return path.join(Instance.directory, ".worktrees", branchSlug)
+  }
+
+  async function ensureGitExclude(pattern: string): Promise<void> {
+    const cwd = Instance.directory
+    const excludePath = path.join(cwd, ".git", "info", "exclude")
+    await fs.mkdir(path.dirname(excludePath), { recursive: true })
+    const existing = await fs.readFile(excludePath, "utf-8").catch(() => "")
+    if (existing.split("\n").includes(pattern)) return
+    const separator = existing.endsWith("\n") || existing === "" ? "" : "\n"
+    await fs.writeFile(excludePath, `${existing}${separator}${pattern}\n`)
   }
 
   export async function create(input: {
     slug: string
     title?: string
-    projectId: string
   }): Promise<{ name: string; base: string; worktree: string }> {
     const cwd = Instance.directory
     const slug = sanitizeSlug(input.title ?? input.slug)
@@ -50,7 +58,7 @@ export namespace Branch {
       }
     }
 
-    const wt = worktreePath(input.projectId, sanitizeSlug(branchName))
+    const wt = worktreePath(sanitizeSlug(branchName))
     await fs.mkdir(path.dirname(wt), { recursive: true })
 
     // Create branch from HEAD
@@ -62,7 +70,6 @@ export namespace Branch {
     // Create worktree
     const createWorktree = await $`git worktree add ${wt} ${branchName}`.quiet().cwd(cwd).nothrow()
     if (createWorktree.exitCode !== 0) {
-      // Clean up the branch we just created
       await $`git branch -D ${branchName}`.quiet().cwd(cwd).nothrow()
       throw new Error(`Failed to create worktree: ${createWorktree.stderr.toString()}`)
     }
@@ -70,6 +77,8 @@ export namespace Branch {
     // Configure git user in worktree for commits
     await $`git -C ${wt} config user.name "0x0"`.quiet().nothrow()
     await $`git -C ${wt} config user.email "0x0@local"`.quiet().nothrow()
+
+    await ensureGitExclude(".worktrees")
 
     log.info("created branch", { branchName, base: baseBranch, worktree: wt })
 

@@ -63,13 +63,11 @@ export namespace Question {
   export type Outcome =
     | {
         status: "answered"
-        blocking: boolean
         request: Request
         answers: Answer[]
       }
     | {
         status: "cancelled"
-        blocking: boolean
         request: Request
       }
 
@@ -184,9 +182,7 @@ export namespace Question {
     }
     delete s.pending[input.requestID]
 
-    const blocking = existing.resolve !== undefined
-
-    log.info("replied", { requestID: input.requestID, answers: input.answers, blocking })
+    log.info("replied", { requestID: input.requestID, answers: input.answers })
 
     Bus.publish(Event.Replied, {
       sessionID: existing.request.sessionID,
@@ -200,7 +196,6 @@ export namespace Question {
 
     return {
       status: "answered",
-      blocking,
       request: existing.request,
       answers: input.answers,
     }
@@ -215,9 +210,7 @@ export namespace Question {
     }
     delete s.pending[requestID]
 
-    const blocking = existing.reject !== undefined
-
-    log.info("rejected", { requestID, blocking })
+    log.info("rejected", { requestID })
 
     Bus.publish(Event.Rejected, {
       sessionID: existing.request.sessionID,
@@ -230,7 +223,6 @@ export namespace Question {
 
     return {
       status: "cancelled",
-      blocking,
       request: existing.request,
     }
   }
@@ -238,6 +230,35 @@ export namespace Question {
   export class RejectedError extends Error {
     constructor() {
       super("The user dismissed this question")
+    }
+  }
+
+  /** Settles promises without removing entries or publishing events.
+   *  Used when the session loop exits normally — the ask() awaiters are
+   *  orphaned, but the question stays in the pending store so the user
+   *  can still answer via the HTTP route (triggering resumeWithQuestionAnswer). */
+  export class DetachedError extends Error {
+    constructor() {
+      super("The session loop ended while this question was pending")
+    }
+  }
+
+  /** Settles all pending promises for a session (prevents handler leaks)
+   *  but keeps entries in the store and does NOT publish question.rejected.
+   *  The user can still answer later — the question route's resume path
+   *  will restart the session. */
+  export async function detachBySession(sessionID: string): Promise<void> {
+    const s = await state()
+    for (const entry of Object.values(s.pending)) {
+      if (entry.request.sessionID !== sessionID) continue
+      log.info("detached from session loop", { requestID: entry.request.id, sessionID })
+      if (entry.reject) {
+        entry.reject(new DetachedError())
+      }
+      // Clear the callbacks — the promise is settled, but the entry stays
+      // so reply() can still find it and trigger resume.
+      entry.resolve = undefined
+      entry.reject = undefined
     }
   }
 

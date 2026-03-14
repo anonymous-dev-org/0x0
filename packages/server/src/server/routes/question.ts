@@ -2,8 +2,12 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Question } from "@/runtime/question"
+import { SessionPrompt } from "../../session/prompt"
 import { lazy } from "../../util/lazy"
+import { Log } from "../../util/log"
 import { errors } from "../error"
+
+const log = Log.create({ service: "question.route" })
 
 export const QuestionRoutes = lazy(() =>
   new Hono()
@@ -57,10 +61,25 @@ export const QuestionRoutes = lazy(() =>
       async c => {
         const params = c.req.valid("param")
         const json = c.req.valid("json")
-        await Question.reply({
+        const outcome = await Question.reply({
           requestID: params.requestID,
           answers: json.answers,
         })
+        // If the session loop is idle, the original ask() awaiter is gone —
+        // resume the session with the user's answer as a synthetic message.
+        if (outcome && !SessionPrompt.isBusy(outcome.request.sessionID)) {
+          SessionPrompt.resumeWithQuestionAnswer({
+            sessionID: outcome.request.sessionID,
+            request: outcome.request,
+            answers: json.answers,
+          }).catch(e => {
+            log.error("failed to resume session after late question answer", {
+              sessionID: outcome.request.sessionID,
+              requestID: params.requestID,
+              error: e,
+            })
+          })
+        }
         return c.json(true)
       }
     )

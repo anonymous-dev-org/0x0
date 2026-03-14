@@ -116,40 +116,6 @@ function M.send_selection()
   end)
 end
 
----Send file/selection context with a user-typed message to the pinned session
-function M.send_with_message()
-  server.ensure(function(err)
-    if err then
-      vim.notify("0x0: " .. err, vim.log.levels.ERROR)
-      return
-    end
-
-    local ref = context.file_ref(nil, { include_selection = true })
-    local selection = context.selection_text()
-
-    vim.ui.input({ prompt = "0x0> " }, function(message)
-      if not message or message == "" then
-        return
-      end
-
-      local parts = {}
-      if ref then
-        table.insert(parts, ref)
-        if selection then
-          table.insert(parts, "```\n" .. selection .. "\n```")
-        end
-      end
-      table.insert(parts, message)
-
-      local text = table.concat(parts, "\n")
-
-      M.ensure_session(function(session_id)
-        send_to_stash(session_id, text, "message")
-      end)
-    end)
-  end)
-end
-
 ---Switch pinned session (unpin and re-open picker)
 function M.switch_session()
   server.ensure(function(err)
@@ -163,26 +129,6 @@ function M.switch_session()
       M.pin(session_id, title)
       vim.notify("0x0: pinned → " .. title, vim.log.levels.INFO)
     end)
-  end)
-end
-
----Select a session in the TUI
----@param session_id string
-function M.select_session(session_id)
-  api.select_session(session_id, function(select_err)
-    if select_err then
-      vim.notify("0x0: " .. select_err, vim.log.levels.ERROR)
-    end
-  end)
-end
-
----Execute a command in the TUI
----@param command string
-function M.execute_command(command)
-  api.execute_command(command, function(cmd_err)
-    if cmd_err then
-      vim.notify("0x0: " .. cmd_err, vim.log.levels.ERROR)
-    end
   end)
 end
 

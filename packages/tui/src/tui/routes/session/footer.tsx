@@ -1,19 +1,27 @@
-import { Match, onCleanup, onMount, Show, Switch } from "solid-js"
-import { theme } from "@tui/state/theme"
-import { sync } from "@tui/state/sync"
-import { useDirectory } from "../../context/directory"
-import { useConnected } from "../../component/dialog-model"
-import { createStore } from "solid-js/store"
 import { route } from "@tui/state/route"
+import { sync } from "@tui/state/sync"
+import { theme } from "@tui/state/theme"
+import { createMemo, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createStore } from "solid-js/store"
+import { useConnected } from "../../component/dialog-model"
 
 export function Footer() {
-  const mcp = () => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
-  const mcpError = () => Object.values(sync.data.mcp).some((x) => x.status === "failed")
+  const mcp = () => Object.values(sync.data.mcp).filter(x => x.status === "connected").length
+  const mcpError = () => Object.values(sync.data.mcp).some(x => x.status === "failed")
   const lsp = () => Object.keys(sync.data.lsp)
   const permissions = () => {
     return sync.data.permission[route.data.sessionID] ?? []
   }
-  const directory = useDirectory()
+  const directory = createMemo(() => {
+    const dir = sync.data.path.directory || process.cwd()
+    const folder = dir.split("/").pop() ?? dir
+    const branch = sync.data.vcs?.branch
+    const worktreeName = sync.data.path.worktreeName
+    if (worktreeName && branch) return `${folder}:${worktreeName} (${branch})`
+    if (worktreeName) return `${folder}:${worktreeName}`
+    if (branch) return `${folder}:${branch}`
+    return folder
+  })
   const connected = useConnected()
 
   const [store, setStore] = createStore({

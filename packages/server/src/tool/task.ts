@@ -1,7 +1,6 @@
 import z from "zod"
-import { Bus } from "@/core/bus"
-import { TuiEvent } from "@/core/bus/tui-event"
 import { Config } from "@/core/config/config"
+import { Identifier } from "@/core/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Agent } from "@/runtime/agent/agent"
 import { Question } from "@/runtime/question"
@@ -201,8 +200,8 @@ async function executeHandoff(input: {
         question: `Handoff from @${ctx.agent} to @${agent.name}: ${params.description}`,
         header: "Agent Handoff",
         options: [
-          { label: "Handoff + compact", description: `Fork session with compacted history to @${agent.name}` },
-          { label: "Handoff", description: `Fork session with full history to @${agent.name}` },
+          { label: "Switch + compact", description: `Switch to @${agent.name} with compacted history` },
+          { label: "Switch", description: `Switch to @${agent.name} with full history` },
           { label: "Keep iterating", description: `Stay in @${ctx.agent} and continue working` },
         ],
       },
@@ -229,10 +228,7 @@ async function executeHandoff(input: {
     }
   }
 
-  const shouldCompact = choice === "Handoff + compact"
-
-  // Fork the current session — copies all messages to a new session
-  const forked = await Session.fork({ sessionID: ctx.sessionID })
+  const shouldCompact = choice === "Switch + compact"
 
   if (shouldCompact) {
     const lastUser = [...ctx.messages].reverse().find(item => item.info.role === "user")?.info
@@ -240,12 +236,12 @@ async function executeHandoff(input: {
       const compacted = await SessionCompaction.process({
         parentID: lastUser.id,
         messages: ctx.messages,
-        sessionID: forked.id,
+        sessionID: ctx.sessionID,
         abort: ctx.abort,
         auto: false,
       })
       if (compacted === "stop") {
-        log.warn("compaction failed during handoff, proceeding without", { sessionID: forked.id })
+        log.warn("compaction failed during handoff, proceeding without", { sessionID: ctx.sessionID })
       }
     }
   }
@@ -268,22 +264,33 @@ async function executeHandoff(input: {
 
   const targetMode = agent.modes && agent.modes.length > 0 ? agent.modes[0] : undefined
 
-  // Start prompt on the forked session (fire and forget — TUI navigates to it)
-  void SessionPrompt.prompt({
-    sessionID: forked.id,
+  // Create a synthetic user message in the current session so the loop
+  // picks up the new agent on its next iteration
+  const userMsg: MessageV2.User = {
+    id: Identifier.ascending("message"),
+    sessionID: ctx.sessionID,
+    time: { created: Date.now() },
+    role: "user",
     agent: agent.name,
     agentMode: targetMode,
     model,
-    parts: [{ type: "text", text: promptLines.join("\n") }],
-  })
+  }
+  await Session.updateMessage(userMsg)
 
-  // Navigate TUI to the new session
-  await Bus.publish(TuiEvent.SessionSelect, { sessionID: forked.id })
+  const userPart: MessageV2.TextPart = {
+    type: "text",
+    id: Identifier.ascending("part"),
+    messageID: userMsg.id,
+    sessionID: ctx.sessionID,
+    text: promptLines.join("\n"),
+    synthetic: true,
+  }
+  await Session.updatePart(userPart)
 
   return {
     title: `Handoff to ${agent.name}`,
     metadata: {
-      sessionId: forked.id,
+      sessionId: undefined as string | undefined,
       model,
       handoff: {
         switched: true,
@@ -294,8 +301,9 @@ async function executeHandoff(input: {
     },
     output: [
       "<handoff_result>",
-      `Handed off to @${agent.name} in session ${forked.id}`,
-      shouldCompact ? "History was compacted before handoff." : "Full history was copied.",
+      `Switched to @${agent.name} in the current session.`,
+      shouldCompact ? "History was compacted before handoff." : "Full history preserved.",
+      "The next loop iteration will use the new agent.",
       "</handoff_result>",
     ].join("\n"),
   }
