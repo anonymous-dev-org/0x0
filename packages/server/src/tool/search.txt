@@ -1,5 +1,0 @@
-- Unified local search tool for files and file contents
-- Use `mode: "files"` with a glob pattern to find files by name
-- Use `mode: "content"` with a regex pattern to find matching lines
-- Supports optional root path and optional include glob for content mode
-- Returns results sorted by modification time with truncation metadata

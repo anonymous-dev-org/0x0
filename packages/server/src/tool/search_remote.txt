@@ -1,7 +1,0 @@
-- Unified remote search and fetch tool
-- Use `mode: "fetch"` to retrieve and convert content from a URL
-- Use `mode: "web"` to run Exa web searches for current information
-- Use `mode: "code"` to get Exa code context for libraries and APIs
-- Supports mode-specific options for format, timeouts, result depth, and token budget
-
-Today's date is {{date}}. Include this year when searching for current events.

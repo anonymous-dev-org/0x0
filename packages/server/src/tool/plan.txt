@@ -1,8 +1,0 @@
-Use this tool to save your finalized plan as a markdown file and update the session todo checklist in a single atomic operation. This is the only write operation available to the planner.
-
-**When to use:** After completing your self-review (Step 4) and before presenting the plan to the user or handing off to builder. If you revise the plan after saving it, call this tool again to overwrite the file.
-
-**Parameters:**
-- `filename`: Relative path within `.zeroxzero/`, must end in `.md`. Use a short, descriptive name like `"my-feature.md"` or `"plans/auth-refactor.md"`. No path traversal (`../`) allowed.
-- `content`: The full markdown plan (goal, requirements, numbered to-do checklist, risks sections).
-- `todos`: Structured task list derived from the plan. Set all tasks to `status: "pending"` initially. Use short unique IDs like `"1"`, `"2"`, etc.
