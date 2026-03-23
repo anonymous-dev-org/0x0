@@ -72,7 +72,7 @@ if (noTag) {
 }
 
 // Tag
-await $`git tag v${next}`
+await $`git tag -f v${next}`
 console.log(`Tagged v${next}`)
 console.log()
 console.log(`To release: git push && git push --tags`)

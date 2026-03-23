@@ -86,7 +86,7 @@ console.log()
 // 3. Push
 console.log("Pushing to origin...")
 await $`git push origin main`
-await $`git push origin v${next}`
+await $`git push origin v${next} --force`
 
 console.log()
 console.log(`Release v${next} pushed — CI will build, create a GitHub Release, and publish to npm.`)
