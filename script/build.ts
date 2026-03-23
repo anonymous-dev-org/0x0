@@ -15,8 +15,15 @@ const pkg = await Bun.file("package.json").json()
 
 const singleFlag = process.argv.includes("--single")
 const archiveFlag = process.argv.includes("--archive")
+const osFlag = argValue("--os")
+const archFlag = argValue("--arch")
 const version = process.env.ZEROXZERO_VERSION || pkg.version || "local"
 const channel = process.env.ZEROXZERO_CHANNEL || "local"
+
+function argValue(flag: string): string | undefined {
+  const idx = process.argv.indexOf(flag)
+  return idx !== -1 && idx + 1 < process.argv.length ? process.argv[idx + 1] : undefined
+}
 
 interface Target {
   os: string
@@ -31,12 +38,15 @@ const allTargets: Target[] = [
   { os: "win32", arch: "x64" },
 ]
 
+const targetOs = osFlag || process.platform
+const targetArch = archFlag || process.arch
+
 const targets = singleFlag
-  ? allTargets.filter((item) => item.os === process.platform && item.arch === process.arch)
+  ? allTargets.filter((item) => item.os === targetOs && item.arch === targetArch)
   : allTargets
 
 if (targets.length === 0) {
-  console.error(`No matching target for ${process.platform}/${process.arch}`)
+  console.error(`No matching target for ${targetOs}/${targetArch}`)
   process.exit(1)
 }
 
@@ -103,13 +113,8 @@ for (const item of targets) {
 
   // Create archive
   if (archiveFlag) {
-    if (item.os === "linux") {
-      await $`tar -czf dist/${name}.tar.gz -C ${binDir} ${binName}`.quiet()
-      checksums.push(await checksum(`dist/${name}.tar.gz`))
-    } else {
-      await $`cd ${binDir} && zip -r ../../${name}.zip ${binName}`.quiet()
-      checksums.push(await checksum(`dist/${name}.zip`))
-    }
+    await $`tar -czf dist/${name}.tar.gz -C ${binDir} ${binName}`.quiet()
+    checksums.push(await checksum(`dist/${name}.tar.gz`))
   }
 }
 
