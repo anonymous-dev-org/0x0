@@ -23,6 +23,8 @@
     "version:patch": "bun run script/version.ts patch",
     "version:minor": "bun run script/version.ts minor",
     "version:major": "bun run script/version.ts major",
+    "release": "bun run script/release.ts",
+    "publish:manual": "bun run script/publish.ts",
     "prepublishOnly": "bun tsc --noEmit && bun test --preload ./test/preload.ts"
   },
   "dependencies": {
