@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@anonymous-dev/0x0",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Lightweight completion server with memory and git commit message generation",
   "type": "module",
   "license": "MIT",
