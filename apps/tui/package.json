@@ -1,0 +1,10 @@
+{
+  "name": "@anonymous-dev/0x0-tui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "cargo build --release",
+    "dev": "cargo run",
+    "test": "cargo test"
+  }
+}

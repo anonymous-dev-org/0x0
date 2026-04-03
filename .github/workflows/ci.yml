@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-server:
+    name: Server — Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.8"
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx turbo run typecheck --filter=@anonymous-dev/0x0
+
+      - name: Test
+        run: bunx turbo run test --filter=@anonymous-dev/0x0
+
+  check-tui:
+    name: TUI — Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/tui
+
+      - name: Build
+        working-directory: apps/tui
+        run: cargo build
+
+      - name: Test
+        working-directory: apps/tui
+        run: cargo test

@@ -1,0 +1,281 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v7.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  BUN_VERSION: "1.3.8"
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  build-server:
+    name: Server — ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64,    runner: ubuntu-latest, os: linux,  arch: x64   }
+          - { name: linux-arm64,  runner: ubuntu-latest, os: linux,  arch: arm64 }
+          - { name: darwin-arm64, runner: macos-latest,  os: darwin, arch: arm64 }
+          - { name: darwin-x64,   runner: macos-latest,  os: darwin, arch: x64   }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build
+        working-directory: apps/server
+        run: |
+          ZEROXZERO_VERSION="${RELEASE_TAG#v}" \
+          ZEROXZERO_CHANNEL=latest \
+          bun run script/build.ts --single --archive --os ${{ matrix.os }} --arch ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.name }}
+          path: |
+            apps/server/dist/*.tar.gz
+            apps/server/dist/*.zip
+
+  build-tui:
+    name: TUI — ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64,    runner: ubuntu-latest, target: x86_64-unknown-linux-gnu,    ext: tar.gz }
+          - { name: linux-arm64,  runner: ubuntu-latest, target: aarch64-unknown-linux-gnu,   ext: tar.gz, cross: true }
+          - { name: darwin-arm64, runner: macos-latest,  target: aarch64-apple-darwin,        ext: zip }
+          - { name: darwin-x64,   runner: macos-latest,  target: x86_64-apple-darwin,         ext: zip }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/tui
+
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        working-directory: apps/tui
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Package
+        run: |
+          ARCHIVE="0x0-tui-${{ matrix.name }}.${{ matrix.ext }}"
+          mkdir -p staging
+          cp "apps/tui/target/${{ matrix.target }}/release/0x0-tui" staging/
+          cd staging
+          if [[ "${{ matrix.ext }}" == "zip" ]]; then
+            zip "../${ARCHIVE}" 0x0-tui
+          else
+            tar -czf "../${ARCHIVE}" 0x0-tui
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tui-${{ matrix.name }}
+          path: "0x0-tui-${{ matrix.name }}.${{ matrix.ext }}"
+
+  release:
+    name: Create Release
+    needs: [build-server, build-tui]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Collect archives and compute checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS
+          echo "--- Release artifacts ---"
+          ls -lh
+          echo "--- SHA256SUMS ---"
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: release/*
+
+  homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          mkdir -p dl
+          cd dl
+          gh release download "v${VERSION}" \
+            --repo anonymous-dev-org/0x0 \
+            --pattern '0x0-server-*' \
+            --pattern '0x0-tui-*'
+          echo "--- Downloaded ---"
+          ls -lh
+
+      - name: Compute checksums
+        id: sha
+        run: |
+          cd dl
+          for f in *; do
+            key=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g; s/\(tar_gz\|zip\)$//')
+            key="${key%_}"
+            hash=$(sha256sum "$f" | cut -d' ' -f1)
+            echo "${key}=${hash}" >> "$GITHUB_OUTPUT"
+          done
+          cat "$GITHUB_OUTPUT"
+
+      - name: Generate and push formulae
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          REPO="https://github.com/anonymous-dev-org/0x0/releases/download/v${VERSION}"
+
+          # --- Compute all checksums by downloading from the release ---
+          cd dl
+          SERVER_DARWIN_ARM64=$(sha256sum 0x0-server-darwin-arm64.zip   2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_DARWIN_X64=$(sha256sum 0x0-server-darwin-x64.zip     2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_LINUX_X64=$(sha256sum 0x0-server-linux-x64.tar.gz   2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_LINUX_ARM64=$(sha256sum 0x0-server-linux-arm64.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+
+          TUI_DARWIN_ARM64=$(sha256sum 0x0-tui-darwin-arm64.zip   2>/dev/null | cut -d' ' -f1 || echo "")
+          TUI_DARWIN_X64=$(sha256sum 0x0-tui-darwin-x64.zip     2>/dev/null | cut -d' ' -f1 || echo "")
+          TUI_LINUX_X64=$(sha256sum 0x0-tui-linux-x64.tar.gz   2>/dev/null | cut -d' ' -f1 || echo "")
+          TUI_LINUX_ARM64=$(sha256sum 0x0-tui-linux-arm64.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+          cd ..
+
+          # --- Clone tap ---
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/anonymous-dev-org/homebrew-tap.git" tap
+          cd tap
+
+          # --- Write zeroxzero-server.rb ---
+          cat > Formula/zeroxzero-server.rb << EOF
+          # typed: false
+          # frozen_string_literal: true
+
+          class ZeroxzeroServer < Formula
+            desc "0x0 execution server for AI coding agents"
+            homepage "https://github.com/anonymous-dev-org/0x0"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${REPO}/0x0-server-darwin-arm64.zip"
+                sha256 "${SERVER_DARWIN_ARM64}"
+              end
+              if Hardware::CPU.intel?
+                url "${REPO}/0x0-server-darwin-x64.zip"
+                sha256 "${SERVER_DARWIN_X64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
+                url "${REPO}/0x0-server-linux-arm64.tar.gz"
+                sha256 "${SERVER_LINUX_ARM64}"
+              end
+              if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
+                url "${REPO}/0x0-server-linux-x64.tar.gz"
+                sha256 "${SERVER_LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "0x0-server"
+            end
+          end
+          EOF
+
+          # --- Write zeroxzero-tui.rb ---
+          cat > Formula/zeroxzero-tui.rb << EOF
+          # typed: false
+          # frozen_string_literal: true
+
+          class ZeroxzeroTui < Formula
+            desc "AI coding agent TUI — cross-provider terminal interface"
+            homepage "https://github.com/anonymous-dev-org/0x0"
+            version "${VERSION}"
+
+            depends_on "anonymous-dev-org/tap/zeroxzero-server"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${REPO}/0x0-tui-darwin-arm64.zip"
+                sha256 "${TUI_DARWIN_ARM64}"
+              end
+              if Hardware::CPU.intel?
+                url "${REPO}/0x0-tui-darwin-x64.zip"
+                sha256 "${TUI_DARWIN_X64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
+                url "${REPO}/0x0-tui-linux-arm64.tar.gz"
+                sha256 "${TUI_LINUX_ARM64}"
+              end
+              if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
+                url "${REPO}/0x0-tui-linux-x64.tar.gz"
+                sha256 "${TUI_LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "0x0-tui"
+            end
+          end
+          EOF
+
+          # --- Remove stale formulae ---
+          rm -f Formula/zeroxzero-git.rb
+          rm -f Formula/zeroxzero.rb
+
+          # --- Commit and push ---
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/
+          git diff --staged --quiet && { echo "No formula changes"; exit 0; }
+          git commit -m "Update formulae to v${VERSION}"
+          git push
