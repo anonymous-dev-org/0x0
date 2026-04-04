@@ -8,17 +8,18 @@ import { Server } from "@/server/server"
  */
 
 let server: ReturnType<typeof Server.listen>
-const port = 14097
+const port = 20000 + Math.floor(Math.random() * 20000)
+const base = `http://127.0.0.1:${port}`
 
 beforeAll(() => {
   server = Server.listen({ port, hostname: "127.0.0.1" })
 })
 
 afterAll(async () => {
-  await server.stop()
+  if (server) {
+    await server.stop()
+  }
 })
-
-const base = `http://127.0.0.1:${port}`
 
 function post(path: string, body: unknown) {
   return fetch(`${base}${path}`, {
@@ -45,6 +46,7 @@ async function parseSSE(res: Response): Promise<Array<Record<string, unknown>>> 
 
 const claudeAvailable = Bun.which("claude") !== null
 const codexAvailable = Bun.which("codex") !== null
+const anyProviderAvailable = claudeAvailable || codexAvailable
 
 describe("claude integration", () => {
   const describeOrSkip = claudeAvailable ? describe : describe.skip
@@ -211,12 +213,12 @@ describe("codex integration", () => {
   })
 })
 
-describe("provider auto-detection", () => {
+const describeAutoDetectOrSkip = anyProviderAvailable ? describe : describe.skip
+
+describeAutoDetectOrSkip("provider auto-detection", () => {
   it("auto-selects a provider when none specified", async () => {
     const res = await post("/messages", {
       prompt: 'Say "auto"',
-      max_turns: 1,
-      permission_mode: "plan",
       stream: false,
     })
     expect(res.status).toBe(200)

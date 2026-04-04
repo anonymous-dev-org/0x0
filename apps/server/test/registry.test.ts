@@ -1,9 +1,23 @@
-import { describe, it, expect } from "bun:test"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { ProviderRegistry } from "@/provider/registry"
 import { ClaudeProvider } from "@/provider/claude"
 import { CodexProvider } from "@/provider/codex"
 
 describe("ProviderRegistry", () => {
+  const originalClaudeIsAvailable = ClaudeProvider.isAvailable
+  const originalCodexIsAvailable = CodexProvider.isAvailable
+
+  beforeEach(() => {
+    // Make availability-dependent tests deterministic in CI/local runs.
+    ClaudeProvider.isAvailable = async () => true
+    CodexProvider.isAvailable = async () => true
+  })
+
+  afterEach(() => {
+    ClaudeProvider.isAvailable = originalClaudeIsAvailable
+    CodexProvider.isAvailable = originalCodexIsAvailable
+  })
+
   describe("get()", () => {
     it("returns claude provider by id", () => {
       const p = ProviderRegistry.get("claude")
@@ -36,7 +50,6 @@ describe("ProviderRegistry", () => {
     it("returns only available providers", async () => {
       const available = await ProviderRegistry.available()
       expect(Array.isArray(available)).toBe(true)
-      // Both CLIs are installed per user confirmation
       const ids = available.map((p) => p.id)
       expect(ids).toContain("claude")
       expect(ids).toContain("codex")
@@ -64,7 +77,6 @@ describe("ProviderRegistry", () => {
     })
 
     it("prefers claude when both available", async () => {
-      // Since both are installed, claude should be preferred
       const p = await ProviderRegistry.resolve()
       expect(p.id).toBe("claude")
     })
