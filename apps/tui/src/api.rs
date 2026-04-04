@@ -82,10 +82,9 @@ impl ServerEvent {
                     options,
                 })
             }
-            ServerEvent::ExitPlanMode { reason } => Some(AppEvent::StreamExitPlanMode {
-                request_id,
-                reason,
-            }),
+            ServerEvent::ExitPlanMode { reason } => {
+                Some(AppEvent::StreamExitPlanMode { request_id, reason })
+            }
             ServerEvent::AgentEvent { name, data } => Some(AppEvent::StreamAgentEvent {
                 request_id,
                 name,

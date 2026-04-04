@@ -35,6 +35,16 @@ pub async fn ensure_running(base_url: &str) -> Result<bool> {
 
     // Spawn the server as a detached background process using std::process
     // so we can use process_group(0) to detach it from the TUI's process group.
+    let log_file = server_log_path();
+    let stderr_target = if let Some(path) = &log_file {
+        match std::fs::File::create(path) {
+            Ok(f) => Stdio::from(f),
+            Err(_) => Stdio::null(),
+        }
+    } else {
+        Stdio::null()
+    };
+
     let mut cmd = std::process::Command::new(&bun);
     cmd.arg("run")
         .arg(&server_entry)
@@ -43,7 +53,7 @@ pub async fn ensure_running(base_url: &str) -> Result<bool> {
         .arg(port.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(stderr_target)
         .env("ZEROXZERO_DAEMON", "1");
 
     #[cfg(unix)]
@@ -198,6 +208,11 @@ fn find_bun() -> Result<PathBuf> {
     Err(color_eyre::eyre::eyre!(
         "Could not find bun. Install bun or start the server manually."
     ))
+}
+
+/// Returns a path for the server log file, e.g. ~/.local/share/zeroxzero/server.log
+fn server_log_path() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|d| d.join("zeroxzero").join("server.log"))
 }
 
 /// Extract port from a URL like "http://localhost:4096".

@@ -1,0 +1,1 @@
+{"mcpServers":{"0x0-workgroup":{"command":"bun","args":["run","/Users/p78tr4/Documents/anonymous/0x0/apps/server/src/server/mcp/workgroup-server.ts"],"env":{"ZEROXZERO_URL":"http://127.0.0.1:4096"}}}}

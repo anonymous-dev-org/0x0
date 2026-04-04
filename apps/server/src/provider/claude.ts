@@ -105,10 +105,13 @@ export const ClaudeProvider: AgentProvider = {
     if (input.appendSystemPrompt) args.push("--append-system-prompt", input.appendSystemPrompt)
     if (input.permissionMode) args.push("--permission-mode", input.permissionMode)
     if (input.maxTurns) args.push("--max-turns", String(input.maxTurns))
+
+    // Prompt must come before any variadic flags (--allowed-tools, --disallowed-tools, --mcp-config)
+    args.push(input.prompt)
+
     if (input.allowedTools?.length) args.push("--allowed-tools", ...input.allowedTools)
     if (input.disallowedTools?.length) args.push("--disallowed-tools", ...input.disallowedTools)
-
-    args.push(input.prompt)
+    if (input.mcpConfig) args.push("--mcp-config", input.mcpConfig)
 
     log.info("spawning", { args: args.filter((_, i) => i < 6) })
 
@@ -188,8 +191,23 @@ export function* normalizeClaudeEvent(
 ): Generator<StreamEvent> {
   switch (msg.type) {
     case "system": {
-      const sessionId = (msg as Record<string, unknown>).session_id as string | undefined
-      yield { type: "init", session_id: sessionId }
+      const subtype = typeof msg.subtype === "string" ? msg.subtype : undefined
+      if (subtype === "init") {
+        const sessionId = (msg as Record<string, unknown>).session_id as string | undefined
+        yield { type: "init", session_id: sessionId }
+        break
+      }
+
+      if (subtype) {
+        yield {
+          type: "agent_event",
+          name: subtype,
+          data: msg,
+        }
+        break
+      }
+
+      yield { type: "raw", data: msg }
       break
     }
 
@@ -256,7 +274,31 @@ export function* normalizeClaudeEvent(
     }
 
     case "assistant": {
-      yield { type: "raw", data: msg }
+      const parentToolUseId =
+        typeof msg.parent_tool_use_id === "string" ? msg.parent_tool_use_id : undefined
+      const message = asRecord(msg.message)
+      const content = Array.isArray(message?.content) ? message.content : []
+      let yielded = false
+
+      // Subagent inner tool calls are emitted in assistant messages
+      // (with parent_tool_use_id set), not stream_event content blocks.
+      if (parentToolUseId) {
+        for (const item of content) {
+          const record = asRecord(item)
+          if (record?.type !== "tool_use") continue
+          yielded = true
+          yield {
+            type: "tool_use",
+            name: typeof record.name === "string" ? record.name : "unknown",
+            id: typeof record.id === "string" ? record.id : undefined,
+            input: record.input,
+          }
+        }
+      }
+
+      if (!yielded) {
+        yield { type: "raw", data: msg }
+      }
       break
     }
 

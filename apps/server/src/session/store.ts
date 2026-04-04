@@ -12,7 +12,23 @@ export interface Session {
   messageCount: number
 }
 
+export interface WorkgroupAgent {
+  name: string
+  sessionId: string
+  provider: string
+  model?: string
+  status: "idle" | "busy"
+  lastResponse?: string
+}
+
+export interface WorkgroupState {
+  id: string
+  agents: Map<string, WorkgroupAgent>
+  createdAt: Date
+}
+
 const sessions = new Map<string, Session>()
+const workgroups = new Map<string, WorkgroupState>()
 
 export namespace SessionStore {
   export function create(provider: string): Session {
@@ -73,5 +89,54 @@ export namespace SessionStore {
         log.info("expired", { id })
       }
     }
+    // Also clean up workgroups whose sessions have all expired
+    for (const [id, wg] of workgroups) {
+      const allExpired = Array.from(wg.agents.values()).every(
+        (a) => !sessions.has(a.sessionId),
+      )
+      if (allExpired) {
+        workgroups.delete(id)
+        log.info("workgroup expired", { id })
+      }
+    }
+  }
+
+  // Workgroup management
+
+  export function createWorkgroup(): WorkgroupState {
+    const id = crypto.randomUUID()
+    const wg: WorkgroupState = {
+      id,
+      agents: new Map(),
+      createdAt: new Date(),
+    }
+    workgroups.set(id, wg)
+    log.info("workgroup created", { id })
+    return wg
+  }
+
+  export function getWorkgroup(id: string): WorkgroupState | undefined {
+    return workgroups.get(id)
+  }
+
+  export function addWorkgroupAgent(
+    workgroupId: string,
+    agent: WorkgroupAgent,
+  ): void {
+    const wg = workgroups.get(workgroupId)
+    if (!wg) return
+    wg.agents.set(agent.name, agent)
+  }
+
+  export function removeWorkgroup(id: string): boolean {
+    const wg = workgroups.get(id)
+    if (!wg) return false
+    // Clean up all agent sessions
+    for (const agent of wg.agents.values()) {
+      sessions.delete(agent.sessionId)
+    }
+    workgroups.delete(id)
+    log.info("workgroup closed", { id })
+    return true
   }
 }

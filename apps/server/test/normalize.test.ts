@@ -20,6 +20,25 @@ describe("normalizeClaudeEvent", () => {
     expect(events).toEqual([{ type: "init", session_id: "abc-123" }])
   })
 
+  it("normalizes non-init system events to agent_event", () => {
+    const events = collect(normalizeClaudeEvent({
+      type: "system",
+      subtype: "task_progress",
+      description: "Searching files",
+      tool_use_id: "tool-1",
+    }))
+    expect(events).toEqual([{
+      type: "agent_event",
+      name: "task_progress",
+      data: {
+        type: "system",
+        subtype: "task_progress",
+        description: "Searching files",
+        tool_use_id: "tool-1",
+      },
+    }])
+  })
+
   it("normalizes text_delta stream event", () => {
     const events = collect(normalizeClaudeEvent({
       type: "stream_event",
@@ -166,6 +185,29 @@ describe("normalizeClaudeEvent", () => {
     }])
   })
 
+  it("normalizes nested assistant tool_use blocks", () => {
+    const events = collect(normalizeClaudeEvent({
+      type: "assistant",
+      parent_tool_use_id: "parent-agent-tool",
+      message: {
+        role: "assistant",
+        content: [{
+          type: "tool_use",
+          id: "tool-2",
+          name: "Glob",
+          input: { pattern: "**/*.rs" },
+        }],
+      },
+    }))
+
+    expect(events).toEqual([{
+      type: "tool_use",
+      id: "tool-2",
+      name: "Glob",
+      input: { pattern: "**/*.rs" },
+    }])
+  })
+
   it("keeps lifecycle-only stream events as raw", () => {
     const events = collect(normalizeClaudeEvent({
       type: "stream_event",
@@ -176,6 +218,22 @@ describe("normalizeClaudeEvent", () => {
 })
 
 describe("normalizeCodexEvent", () => {
+  it("normalizes turn.started to agent_event", () => {
+    const events = collect(normalizeCodexEvent({
+      type: "turn.started",
+      turn_id: "t1",
+    }))
+
+    expect(events).toEqual([{
+      type: "agent_event",
+      name: "turn_started",
+      data: {
+        type: "turn.started",
+        turn_id: "t1",
+      },
+    }])
+  })
+
   it("normalizes item.started command execution to tool_use", () => {
     const events = collect(normalizeCodexEvent({
       type: "item.started",

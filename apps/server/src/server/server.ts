@@ -19,6 +19,8 @@ import {
 import { MessageRoutes } from "./routes/messages"
 import { SessionRoutes } from "./routes/sessions"
 import { ProviderRoutes } from "./routes/providers"
+import { CompletionRoutes } from "./routes/completions"
+import { WorkgroupRoutes } from "./routes/workgroup"
 
 export namespace Server {
   const log = Log.create({ service: "server" })
@@ -101,7 +103,9 @@ export namespace Server {
       )
       .route("/messages", MessageRoutes())
       .route("/sessions", SessionRoutes())
-      .route("/providers", ProviderRoutes()),
+      .route("/providers", ProviderRoutes())
+      .route("/completions", CompletionRoutes())
+      .route("/workgroup", WorkgroupRoutes()),
   )
 
   export type AppType = ReturnType<typeof App>

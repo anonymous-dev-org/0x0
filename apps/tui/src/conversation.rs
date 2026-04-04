@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
 
+use crate::agent::AgentRegistry;
 use crate::message::{ChatMessage, ExecutionTarget};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,6 +14,8 @@ pub struct Conversation {
     pub title: String,
     pub messages: Vec<ChatMessage>,
     pub default_target: ExecutionTarget,
+    #[serde(default)]
+    pub agents: Option<AgentRegistry>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -25,6 +28,7 @@ impl Conversation {
             title: String::new(),
             messages: Vec::new(),
             default_target,
+            agents: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -40,7 +44,8 @@ impl Conversation {
             .iter()
             .find(|m| m.role == crate::message::Role::User)
         {
-            let content = msg.content.trim();
+            let raw = msg.text();
+            let content = raw.trim();
             if content.len() <= 30 {
                 self.title = content.to_string();
             } else {
@@ -182,7 +187,7 @@ mod tests {
 
         conv.messages.push(ChatMessage::user("hello".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "hi there".to_string();
+        assistant.push_text("hi there");
         conv.messages.push(assistant);
 
         conv.update_title();
@@ -192,8 +197,8 @@ mod tests {
         let loaded = load_from(&id, dir.path()).unwrap();
 
         assert_eq!(loaded.messages.len(), 2);
-        assert_eq!(loaded.messages[0].content, "hello");
-        assert_eq!(loaded.messages[1].content, "hi there");
+        assert_eq!(loaded.messages[0].text(), "hello");
+        assert_eq!(loaded.messages[1].text(), "hi there");
         assert_eq!(loaded.title, "hello");
     }
 
@@ -235,7 +240,7 @@ mod tests {
         let mut conv = Conversation::new("/tmp".into(), test_target());
 
         let mut msg = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        msg.content = "partial response\n[interrupted]".to_string();
+        msg.push_text("partial response\n[interrupted]");
         msg.interrupted = true;
         conv.messages.push(msg);
 
@@ -244,6 +249,6 @@ mod tests {
         let loaded = load_from(&id, dir.path()).unwrap();
 
         assert!(loaded.messages[0].interrupted);
-        assert!(loaded.messages[0].content.contains("[interrupted]"));
+        assert!(loaded.messages[0].text().contains("[interrupted]"));
     }
 }

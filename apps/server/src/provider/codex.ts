@@ -105,6 +105,21 @@ export const CodexProvider: AgentProvider = {
       }
 
       await proc.exited
+
+      // Surface non-JSON diagnostics that Codex writes to stderr
+      // (for example sandbox denials) as agent events.
+      const stderrText = await readStreamText(proc.stderr)
+      for (const line of stderrText
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean)) {
+        yield {
+          type: "agent_event",
+          name: "stderr",
+          data: { text: line },
+        }
+      }
+
       yield { type: "done" }
     } catch (err: unknown) {
       const e = err as { name?: string; message?: string }
@@ -126,6 +141,15 @@ export function* normalizeCodexEvent(msg: Record<string, unknown>): Generator<St
     case "thread.started": {
       const threadId = typeof msg.thread_id === "string" ? msg.thread_id : undefined
       yield { type: "init", session_id: threadId }
+      break
+    }
+
+    case "turn.started": {
+      yield {
+        type: "agent_event",
+        name: "turn_started",
+        data: msg,
+      }
       break
     }
 
@@ -224,6 +248,17 @@ export function* normalizeCodexEvent(msg: Record<string, unknown>): Generator<St
     default:
       yield { type: "raw", data: msg }
       break
+  }
+}
+
+async function readStreamText(stream: unknown): Promise<string> {
+  if (!stream || !(stream instanceof ReadableStream)) {
+    return ""
+  }
+  try {
+    return await new Response(stream).text()
+  } catch {
+    return ""
   }
 }
 

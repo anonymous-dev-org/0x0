@@ -12,49 +12,25 @@ pub enum Role {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCall {
-    pub name: String,
-    pub id: Option<String>,
-    pub input: Option<String>,
-    pub result: Option<String>,
-    #[serde(default)]
-    pub collapsed: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActivityKind {
-    Answer,
-    Thinking,
-    ToolUse,
-    ToolResult,
-    AskUserQuestion,
-    ExitPlanMode,
-    AgentEvent,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActivityItem {
-    pub kind: ActivityKind,
-    pub title: String,
-    pub preview: String,
-    pub detail: String,
-    pub related_id: Option<String>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlock {
+    Text { text: String },
+    Thinking { text: String },
+    ToolUse { name: String, id: Option<String>, input: Option<String> },
+    ToolResult { tool_use_id: Option<String>, content: Option<String> },
+    AgentStart { id: String, label: String },
+    AgentEnd { id: String },
+    Event { name: String, detail: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub id: Uuid,
     pub role: Role,
-    pub content: String,
+    #[serde(default)]
+    pub blocks: Vec<ContentBlock>,
     pub provider: Option<String>,
     pub model: Option<String>,
-    #[serde(default)]
-    pub tool_calls: Vec<ToolCall>,
-    #[serde(default)]
-    pub activities: Vec<ActivityItem>,
-    #[serde(default)]
-    pub thinking: Option<String>,
     #[serde(default)]
     pub interrupted: bool,
     #[serde(default)]
@@ -63,26 +39,34 @@ pub struct ChatMessage {
     pub is_handoff: bool,
     #[serde(default)]
     pub is_queued: bool,
+    #[serde(default)]
+    pub agent_name: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
 impl ChatMessage {
-    pub fn user(content: String) -> Self {
+    fn new(role: Role) -> Self {
         Self {
             id: Uuid::new_v4(),
-            role: Role::User,
-            content,
+            role,
+            blocks: Vec::new(),
             provider: None,
             model: None,
-            tool_calls: Vec::new(),
-            activities: Vec::new(),
-            thinking: None,
             interrupted: false,
             is_error: false,
             is_handoff: false,
             is_queued: false,
+            agent_name: None,
             created_at: Utc::now(),
         }
+    }
+
+    pub fn user(content: String) -> Self {
+        let mut msg = Self::new(Role::User);
+        if !content.is_empty() {
+            msg.blocks.push(ContentBlock::Text { text: content });
+        }
+        msg
     }
 
     pub fn queued(content: String) -> Self {
@@ -92,57 +76,33 @@ impl ChatMessage {
     }
 
     pub fn assistant(provider: String, model: String) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            role: Role::Assistant,
-            content: String::new(),
-            provider: Some(provider),
-            model: Some(model),
-            tool_calls: Vec::new(),
-            activities: Vec::new(),
-            thinking: None,
-            interrupted: false,
-            is_error: false,
-            is_handoff: false,
-            is_queued: false,
-            created_at: Utc::now(),
-        }
+        let mut msg = Self::new(Role::Assistant);
+        msg.provider = Some(provider);
+        msg.model = Some(model);
+        msg
+    }
+
+    pub fn agent_assistant(agent_name: String, provider: String, model: String) -> Self {
+        let mut msg = Self::assistant(provider, model);
+        msg.agent_name = Some(agent_name);
+        msg
     }
 
     pub fn system(content: String) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            role: Role::System,
-            content,
-            provider: None,
-            model: None,
-            tool_calls: Vec::new(),
-            activities: Vec::new(),
-            thinking: None,
-            interrupted: false,
-            is_error: false,
-            is_handoff: false,
-            is_queued: false,
-            created_at: Utc::now(),
+        let mut msg = Self::new(Role::System);
+        if !content.is_empty() {
+            msg.blocks.push(ContentBlock::Text { text: content });
         }
+        msg
     }
 
     pub fn error(content: String) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            role: Role::Error,
-            content,
-            provider: None,
-            model: None,
-            tool_calls: Vec::new(),
-            activities: Vec::new(),
-            thinking: None,
-            interrupted: false,
-            is_error: true,
-            is_handoff: false,
-            is_queued: false,
-            created_at: Utc::now(),
+        let mut msg = Self::new(Role::Error);
+        msg.is_error = true;
+        if !content.is_empty() {
+            msg.blocks.push(ContentBlock::Text { text: content });
         }
+        msg
     }
 
     pub fn handoff(content: String) -> Self {
@@ -151,14 +111,88 @@ impl ChatMessage {
         msg
     }
 
+    /// Concatenate all Text blocks into a single string.
+    pub fn text(&self) -> String {
+        let mut out = String::new();
+        for block in &self.blocks {
+            if let ContentBlock::Text { text } = block {
+                out.push_str(text);
+            }
+        }
+        out
+    }
+
+    /// Append text: extends the last Text block or creates a new one.
+    pub fn push_text(&mut self, s: &str) {
+        if let Some(ContentBlock::Text { text }) = self.blocks.last_mut() {
+            text.push_str(s);
+        } else {
+            self.blocks.push(ContentBlock::Text { text: s.to_string() });
+        }
+    }
+
+    /// Append thinking: extends the last Thinking block or creates a new one.
+    pub fn push_thinking(&mut self, s: &str) {
+        if let Some(ContentBlock::Thinking { text }) = self.blocks.last_mut() {
+            text.push_str(s);
+        } else {
+            self.blocks.push(ContentBlock::Thinking { text: s.to_string() });
+        }
+    }
+
+    /// Get the last few words of thinking for the pulse preview.
+    pub fn last_thinking_preview(&self, word_count: usize) -> Option<String> {
+        for block in self.blocks.iter().rev() {
+            if let ContentBlock::Thinking { text } = block {
+                let words: Vec<&str> = text.split_whitespace().collect();
+                if words.is_empty() {
+                    return None;
+                }
+                if words.len() <= word_count {
+                    return Some(words.join(" "));
+                }
+                return Some(format!("...{}", words[words.len() - word_count..].join(" ")));
+            }
+        }
+        None
+    }
+
+    /// Find the ToolResult content for a given tool_use_id.
+    pub fn tool_result_for(&self, tool_use_id: &str) -> Option<&str> {
+        for block in &self.blocks {
+            if let ContentBlock::ToolResult { tool_use_id: Some(tid), content } = block {
+                if tid == tool_use_id {
+                    return content.as_deref();
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if a tool_use_id belongs to an AgentStart block.
+    pub fn is_agent_start(&self, tool_use_id: &str) -> bool {
+        self.blocks.iter().any(|b| matches!(b, ContentBlock::AgentStart { id, .. } if id == tool_use_id))
+    }
+
+    /// Check if we have any text content (not just [thinking...] placeholder).
+    pub fn has_text(&self) -> bool {
+        self.blocks.iter().any(|b| matches!(b, ContentBlock::Text { text } if !text.is_empty()))
+    }
+
     pub fn display_name(&self) -> String {
         match self.role {
             Role::User => "You".to_string(),
-            Role::Assistant => match (&self.provider, &self.model) {
-                (Some(p), Some(m)) => format!("{p}/{m}"),
-                (Some(p), None) => p.clone(),
-                _ => "Assistant".to_string(),
-            },
+            Role::Assistant => {
+                let base = match (&self.provider, &self.model) {
+                    (Some(p), Some(m)) => format!("{p}/{m}"),
+                    (Some(p), None) => p.clone(),
+                    _ => "Assistant".to_string(),
+                };
+                match &self.agent_name {
+                    Some(name) => format!("{name} ({base})"),
+                    None => base,
+                }
+            }
             Role::System => "System".to_string(),
             Role::Error => "Error".to_string(),
         }

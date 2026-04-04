@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@hono/standard-validator": "^0.2.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "4.10.7",
     "hono-openapi": "1.1.2",
     "xdg-basedir": "5.1.0",

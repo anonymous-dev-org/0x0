@@ -245,8 +245,8 @@ describe("messages validation", () => {
   })
 
   it("accepts valid claude options", async () => {
-    // This will actually try to spawn claude, so we just check it doesn't
-    // fail validation (it may fail/succeed at spawn level)
+    // Use streaming so we can check the status code immediately without
+    // waiting for the full CLI response to complete
     const res = await post("/messages", {
       prompt: "say hi",
       provider: "claude",
@@ -254,7 +254,7 @@ describe("messages validation", () => {
       system_prompt: "be brief",
       permission_mode: "plan",
       max_turns: 1,
-      stream: false,
+      stream: true,
     })
     // Should not be 400 (validation error) — may be 200 or 500 (spawn error)
     expect(res.status).not.toBe(400)

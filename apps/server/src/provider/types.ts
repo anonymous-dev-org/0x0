@@ -73,6 +73,7 @@ export interface SpawnInput {
   maxTurns?: number
   cwd?: string
   abort?: AbortSignal
+  mcpConfig?: string
 }
 
 export type InputSchemaProperty = {

@@ -44,3 +44,15 @@ jobs:
       - name: Test
         working-directory: apps/tui
         run: cargo test
+
+  check-nvim-plugins:
+    name: Nvim Plugins — Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check apps/nvim apps/completion

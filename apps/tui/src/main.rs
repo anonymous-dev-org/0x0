@@ -1,8 +1,10 @@
+mod agent;
 mod api;
 mod app;
 mod context;
 mod conversation;
 mod event;
+mod mention;
 mod message;
 mod server;
 mod ui;
@@ -10,7 +12,14 @@ mod ui;
 use app::{App, Command};
 use color_eyre::Result;
 use conversation::Conversation;
-use crossterm::{execute, event::{EnableMouseCapture, DisableMouseCapture}, terminal::SetTitle};
+use crossterm::{
+    event::{
+        DisableMouseCapture, EnableMouseCapture, KeyboardEnhancementFlags,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    },
+    execute,
+    terminal::SetTitle,
+};
 use event::{AppEvent, spawn_input_task, spawn_tick_task};
 use std::io::stdout;
 use std::process::{Command as ProcessCommand, Stdio};
@@ -25,13 +34,18 @@ async fn main() -> Result<()> {
         std::env::var("ZEROXZERO_URL").unwrap_or_else(|_| "http://localhost:4096".to_string());
 
     // Ensure the server is running before starting the TUI
-    let managed = server::ensure_running(&base_url).await;
-    if let Err(e) = &managed {
-        eprintln!("Warning: could not start server: {e}");
-    }
+    let server_error = match server::ensure_running(&base_url).await {
+        Ok(_) => None,
+        Err(e) => Some(format!("{e}")),
+    };
 
     let mut terminal = ratatui::init();
     let _ = execute!(stdout(), EnableMouseCapture);
+    // Enable enhanced keyboard protocol so terminals can distinguish Shift+Enter from Enter
+    let _ = execute!(
+        stdout(),
+        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+    );
     let (tx, mut rx) = mpsc::channel::<AppEvent>(256);
 
     // Spawn terminal input reader and animation tick
@@ -39,8 +53,10 @@ async fn main() -> Result<()> {
     spawn_tick_task(tx.clone());
 
     let mut app = App::new(base_url);
+    app.server_error = server_error;
 
-    let mut cancel_token: Option<CancellationToken> = None;
+    let mut cancel_tokens: std::collections::HashMap<u64, CancellationToken> =
+        std::collections::HashMap::new();
 
     sync_terminal_title(&app);
 
@@ -49,9 +65,13 @@ async fn main() -> Result<()> {
 
     // Main event loop
     while let Some(event) = rx.recv().await {
-        if let Some(cmd) = app.handle_event(event) {
+        let mut should_quit = false;
+        for cmd in app.handle_event(event) {
             match cmd {
-                Command::Quit => break,
+                Command::Quit => {
+                    should_quit = true;
+                    break;
+                }
 
                 Command::SendMessage {
                     prompt,
@@ -62,13 +82,8 @@ async fn main() -> Result<()> {
                     extra_options,
                     request_id,
                 } => {
-                    // Cancel any existing stream
-                    if let Some(token) = cancel_token.take() {
-                        token.cancel();
-                    }
-
                     let token = CancellationToken::new();
-                    cancel_token = Some(token.clone());
+                    cancel_tokens.insert(request_id, token.clone());
                     let tx = tx.clone();
                     let base_url = app.base_url.clone();
 
@@ -90,7 +105,7 @@ async fn main() -> Result<()> {
                 }
 
                 Command::CancelStream => {
-                    if let Some(token) = cancel_token.take() {
+                    for (_, token) in cancel_tokens.drain() {
                         token.cancel();
                     }
                     if app.cancel_stream() {
@@ -118,13 +133,8 @@ async fn main() -> Result<()> {
                     extra_options,
                     request_id,
                 } => {
-                    // Cancel any existing stream
-                    if let Some(token) = cancel_token.take() {
-                        token.cancel();
-                    }
-
                     let token = CancellationToken::new();
-                    cancel_token = Some(token.clone());
+                    cancel_tokens.insert(request_id, token.clone());
                     let tx = tx.clone();
                     let base_url = app.base_url.clone();
 
@@ -152,13 +162,8 @@ async fn main() -> Result<()> {
                     extra_options,
                     request_id,
                 } => {
-                    // Reuse handoff send path — compaction is essentially a self-handoff
-                    if let Some(token) = cancel_token.take() {
-                        token.cancel();
-                    }
-
                     let token = CancellationToken::new();
-                    cancel_token = Some(token.clone());
+                    cancel_tokens.insert(request_id, token.clone());
                     let tx = tx.clone();
                     let base_url = app.base_url.clone();
 
@@ -203,6 +208,9 @@ async fn main() -> Result<()> {
                 Command::Redraw => {}
             }
         }
+        if should_quit {
+            break;
+        }
 
         sync_terminal_title(&app);
         terminal.draw(|f| ui::render(f, &mut app))?;
@@ -213,6 +221,7 @@ async fn main() -> Result<()> {
         let _ = conversation::save(&app.conversation);
     }
 
+    let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
     ratatui::restore();
     let _ = execute!(stdout(), DisableMouseCapture);
     Ok(())
@@ -237,10 +246,7 @@ fn save_conversation(conv: Conversation) {
 
 fn copy_to_clipboard(text: String) {
     tokio::task::spawn_blocking(move || {
-        let mut child = match ProcessCommand::new("pbcopy")
-            .stdin(Stdio::piped())
-            .spawn()
-        {
+        let mut child = match ProcessCommand::new("pbcopy").stdin(Stdio::piped()).spawn() {
             Ok(child) => child,
             Err(e) => {
                 eprintln!("Failed to access clipboard: {e}");

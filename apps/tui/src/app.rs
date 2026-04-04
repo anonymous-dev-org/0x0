@@ -4,17 +4,24 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tui_textarea::{Input, Key, TextArea};
 
+use crate::agent::{Agent, AgentRegistry};
 use crate::context;
 use crate::conversation::Conversation;
 use crate::event::{AppEvent, ProviderInfo};
-use crate::message::{
-    ActivityItem, ActivityKind, ChatMessage, ExecutionTarget, ProviderModeKind, Role, ToolCall,
-};
+use crate::mention::parse_mentions;
+use crate::message::{ChatMessage, ContentBlock, ExecutionTarget, ProviderModeKind, Role};
 
 /// Known models per provider. The server doesn't expose a models list,
 /// so we maintain a sensible set here.
 const CLAUDE_MODELS: &[&str] = &["sonnet", "opus", "haiku"];
-const CODEX_MODELS: &[&str] = &["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "o4-mini", "o3"];
+const CODEX_MODELS: &[&str] = &[
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex",
+    "gpt-5.3-codex-spark",
+    "codex-1",
+    "codex-mini-latest",
+];
 const CLAUDE_EFFORTS_FULL: &[&str] = &["low", "medium", "high", "max"];
 const CLAUDE_EFFORTS_NO_MAX: &[&str] = &["low", "medium", "high"];
 const CODEX_EFFORTS: &[&str] = &["minimal", "low", "medium", "high", "xhigh"];
@@ -51,6 +58,7 @@ impl std::fmt::Display for LlmOption {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteCommand {
+    CreateWorkgroup,
     ChooseLlm,
     ChooseMode,
     ChooseEffort,
@@ -63,6 +71,7 @@ pub enum PaletteCommand {
 impl PaletteCommand {
     pub fn label(self) -> &'static str {
         match self {
+            Self::CreateWorkgroup => "Create Workgroup",
             Self::ChooseLlm => "Choose LLM",
             Self::ChooseMode => "Choose Mode",
             Self::ChooseEffort => "Choose Effort",
@@ -75,6 +84,7 @@ impl PaletteCommand {
 
     pub fn shortcut(self) -> &'static str {
         match self {
+            Self::CreateWorkgroup => "via Ctrl+P",
             Self::ChooseLlm => "Ctrl+L",
             Self::ChooseMode => "Ctrl+M",
             Self::ChooseEffort => "Ctrl+E",
@@ -129,6 +139,7 @@ pub enum Status {
 pub enum Overlay {
     Help,
     CommandPalette,
+    AgentManager,
     LlmPicker,
     ModePicker,
     EffortPicker,
@@ -152,15 +163,15 @@ pub enum ActiveRequestKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ActivityRef {
+pub struct BlockRef {
     pub message_id: uuid::Uuid,
-    pub activity_index: usize,
+    pub block_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InspectableLine {
     pub line_index: usize,
-    pub activity: ActivityRef,
+    pub block_ref: BlockRef,
 }
 
 /// Trigger compaction when context usage exceeds this fraction of the window.
@@ -237,16 +248,18 @@ pub struct App<'a> {
     // Command palette and picker state
     pub palette_commands: Vec<PaletteCommand>,
     pub palette_index: usize,
+    pub agent_manager_index: usize,
     pub available_providers: Vec<ProviderInfo>,
     pub llm_options: Vec<LlmOption>,
     pub llm_index: usize,
     pub mode_index: usize,
     pub effort_index: usize,
+    pub picker_agent_name: Option<String>,
 
     // Handoff state
     pub handoff: Option<HandoffState>,
     pub pending_delete: Option<DeleteTarget>,
-    pub inspector_target: Option<ActivityRef>,
+    pub inspector_target: Option<BlockRef>,
     pub inspector_scroll: u16,
     pub inspectable_lines: Vec<InspectableLine>,
     pub pending_question: Option<PendingQuestion>,
@@ -261,9 +274,22 @@ pub struct App<'a> {
 
     // Message queue: messages sent while streaming, dispatched after StreamDone
     pub pending_messages: Vec<uuid::Uuid>,
+    pub pending_message_targets: HashMap<uuid::Uuid, Option<String>>,
+    pub deferred_commands: Vec<Command>,
 
     // Animation state for thinking indicator
     pub animation_tick: u64,
+
+    // Multi-agent tracking
+    /// Maps agent_name -> (request_kind, request_id) for multi-agent active requests
+    pub active_requests: HashMap<String, (ActiveRequestKind, u64)>,
+    /// Maps agent_name -> assistant message id for multi-agent
+    pub active_assistant_ids: HashMap<String, uuid::Uuid>,
+    /// Maps request_id -> agent_name for routing incoming stream events
+    pub request_agent_map: HashMap<u64, String>,
+
+    // Server spawn error (shown in UI if the server could not be started)
+    pub server_error: Option<String>,
 }
 
 impl<'a> App<'a> {
@@ -304,6 +330,7 @@ impl<'a> App<'a> {
             conversations: Vec::new(),
             switcher_index: 0,
             palette_commands: vec![
+                PaletteCommand::CreateWorkgroup,
                 PaletteCommand::ChooseLlm,
                 PaletteCommand::ChooseMode,
                 PaletteCommand::ChooseEffort,
@@ -313,11 +340,13 @@ impl<'a> App<'a> {
                 PaletteCommand::ShowHelp,
             ],
             palette_index: 0,
+            agent_manager_index: 0,
             available_providers: Vec::new(),
             llm_options: Vec::new(),
             llm_index: 0,
             mode_index: 0,
             effort_index: 0,
+            picker_agent_name: None,
             handoff: None,
             pending_delete: None,
             inspector_target: None,
@@ -329,12 +358,29 @@ impl<'a> App<'a> {
             context_window: None,
             last_ctrl_c: None,
             pending_messages: Vec::new(),
+            pending_message_targets: HashMap::new(),
+            deferred_commands: Vec::new(),
             animation_tick: 0,
+            active_requests: HashMap::new(),
+            active_assistant_ids: HashMap::new(),
+            request_agent_map: HashMap::new(),
+            server_error: None,
         }
     }
 
     /// Returns the current execution target.
     pub fn target(&self) -> &ExecutionTarget {
+        &self.conversation.default_target
+    }
+
+    pub fn picker_target(&self) -> &ExecutionTarget {
+        if let Some(agent_name) = self.picker_agent_name.as_deref() {
+            if let Some(registry) = &self.conversation.agents {
+                if let Some(agent) = registry.by_name(agent_name) {
+                    return &agent.target;
+                }
+            }
+        }
         &self.conversation.default_target
     }
 
@@ -348,7 +394,7 @@ impl<'a> App<'a> {
     }
 
     fn is_busy(&self) -> bool {
-        self.active_request.is_some()
+        self.active_request.is_some() || !self.active_requests.is_empty()
     }
 
     pub fn provider_mode_kind(provider: &str) -> ProviderModeKind {
@@ -409,18 +455,369 @@ impl<'a> App<'a> {
     }
 
     fn active_request_matches(&self, kind: ActiveRequestKind, request_id: u64) -> bool {
-        self.active_request == Some((kind, request_id))
+        if self.active_request == Some((kind, request_id)) {
+            return true;
+        }
+        self.request_agent_map
+            .get(&request_id)
+            .is_some_and(|agent_key| {
+                self.active_requests
+                    .get(agent_key)
+                    .is_some_and(|(active_kind, id)| *active_kind == kind && *id == request_id)
+            })
     }
 
     fn active_assistant_message_mut(&mut self) -> Option<&mut ChatMessage> {
         if let Some(id) = self.active_assistant_message_id {
-            return self.conversation.messages.iter_mut().find(|msg| msg.id == id);
+            return self
+                .conversation
+                .messages
+                .iter_mut()
+                .find(|msg| msg.id == id);
         }
         self.conversation
             .messages
             .iter_mut()
             .rev()
             .find(|msg| msg.role == Role::Assistant)
+    }
+
+    // --- Multi-agent helpers ---
+
+    /// Look up which agent a request_id belongs to.
+    fn agent_for_request(&self, request_id: u64) -> Option<String> {
+        self.request_agent_map.get(&request_id).cloned()
+    }
+
+    /// Get the active assistant message for a specific agent.
+    fn active_assistant_for_agent(&mut self, agent_key: &str) -> Option<&mut ChatMessage> {
+        if let Some(id) = self.active_assistant_ids.get(agent_key) {
+            let id = *id;
+            return self.conversation.messages.iter_mut().find(|m| m.id == id);
+        }
+        None
+    }
+
+    /// Get the assistant message for a request, using multi-agent map if available,
+    /// falling back to single-agent field.
+    fn assistant_for_request(&mut self, request_id: u64) -> Option<&mut ChatMessage> {
+        if let Some(agent_key) = self.request_agent_map.get(&request_id).cloned() {
+            return self.active_assistant_for_agent(&agent_key);
+        }
+        self.active_assistant_message_mut()
+    }
+
+    pub fn input_placeholder(&self) -> String {
+        if let Some(registry) = &self.conversation.agents {
+            if !registry.agents.is_empty() {
+                return "No @mention -> all agents".to_string();
+            }
+        }
+        "Type a message...".to_string()
+    }
+
+    fn agent_names(&self) -> Vec<&str> {
+        self.conversation
+            .agents
+            .as_ref()
+            .map(|registry| registry.agent_names())
+            .unwrap_or_default()
+    }
+
+    fn multi_agent_targets_for_text(&self, text: &str) -> Vec<String> {
+        let Some(registry) = self.conversation.agents.as_ref() else {
+            return Vec::new();
+        };
+        if registry.agents.is_empty() {
+            return Vec::new();
+        }
+
+        let known = self.agent_names();
+        let parsed = parse_mentions(text, &known);
+        if parsed.mentions.is_empty() {
+            registry.agents.iter().map(|a| a.name.clone()).collect()
+        } else {
+            parsed.mentions
+        }
+    }
+
+    fn relay_targets_for_agent_reply(&self, sender: &str, text: &str) -> Vec<String> {
+        let Some(_registry) = self.conversation.agents.as_ref() else {
+            return Vec::new();
+        };
+
+        let known = self.agent_names();
+        let parsed = parse_mentions(text, &known);
+        parsed
+            .mentions
+            .into_iter()
+            .filter(|name| !name.eq_ignore_ascii_case(sender))
+            .collect()
+    }
+
+    fn ensure_agent_registry(&mut self) -> &mut AgentRegistry {
+        if self.conversation.agents.is_none() {
+            let mut registry = AgentRegistry::new();
+            registry.add(Agent::new(
+                "Agent1".to_string(),
+                self.conversation.default_target.clone(),
+            ));
+            self.conversation.agents = Some(registry);
+        }
+        self.conversation
+            .agents
+            .as_mut()
+            .expect("agent registry set")
+    }
+
+    fn build_prompt_for_agent(&self, agent_name: &str, current_message: &str) -> String {
+        let history: Vec<String> = self
+            .conversation
+            .messages
+            .iter()
+            .filter_map(|msg| {
+                let t = msg.text();
+                match msg.role {
+                    Role::User if !msg.is_queued && !t.trim().is_empty() => {
+                        Some(format!("User: {}", t.trim()))
+                    }
+                    Role::Assistant if !t.trim().is_empty() => {
+                        let speaker = msg.agent_name.clone().unwrap_or_else(|| msg.display_name());
+                        Some(format!("{speaker}: {}", t.trim()))
+                    }
+                    Role::System if msg.is_handoff && !t.trim().is_empty() => {
+                        Some(format!("[Context summary]: {}", t.trim()))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        let mut parts: Vec<String> = Vec::new();
+        let mut total_chars = 0usize;
+        let max_chars = 4000usize;
+        let max_turns = 10usize;
+        let mut truncated = false;
+        for part in history.iter().rev().take(max_turns) {
+            total_chars += part.len();
+            if total_chars > max_chars && !parts.is_empty() {
+                truncated = true;
+                break;
+            }
+            parts.push(part.clone());
+        }
+        if history.len() > max_turns {
+            truncated = true;
+        }
+        parts.reverse();
+
+        if parts.is_empty() {
+            return current_message.to_string();
+        }
+
+        let mut preamble = format!("Given this group conversation so far for {agent_name}");
+        if truncated {
+            preamble.push_str(" (earlier messages omitted for brevity)");
+        }
+        preamble.push_str(":\n\n");
+        format!(
+            "{preamble}{}\n\nUser: {current_message}",
+            parts.join("\n\n")
+        )
+    }
+
+    fn estimated_tokens_for_agent_history(&self, agent_name: &str) -> usize {
+        let total_chars: usize = self
+            .conversation
+            .messages
+            .iter()
+            .filter_map(|msg| {
+                let t = msg.text();
+                match msg.role {
+                    Role::User => Some(format!("User: {}", t.trim())),
+                    Role::Assistant if !t.trim().is_empty() => {
+                        let speaker = msg.agent_name.clone().unwrap_or_else(|| msg.display_name());
+                        Some(format!("{speaker}: {}", t.trim()))
+                    }
+                    Role::System if msg.is_handoff && !t.trim().is_empty() => {
+                        Some(format!("[Context summary]: {}", t.trim()))
+                    }
+                    _ => None,
+                }
+            })
+            .map(|part| part.len())
+            .sum();
+        let _ = agent_name;
+        total_chars / 4
+    }
+
+    fn needs_compaction_for(
+        provider: &str,
+        last_input_tokens: Option<u64>,
+        context_window: Option<u64>,
+        estimated_tokens: usize,
+    ) -> bool {
+        // Claude has native context management — skip.
+        if provider == "claude" {
+            return false;
+        }
+
+        if let (Some(tokens), Some(window)) = (last_input_tokens, context_window) {
+            if window > 0 {
+                return tokens as f64 > window as f64 * COMPACTION_THRESHOLD;
+            }
+        }
+
+        let default_window = 128_000f64;
+        estimated_tokens as f64 > default_window * COMPACTION_THRESHOLD
+    }
+
+    fn maybe_compact_agent_context(&mut self, agent_name: &str) {
+        let Some(agent) = self
+            .conversation
+            .agents
+            .as_ref()
+            .and_then(|registry| registry.by_name(agent_name))
+        else {
+            return;
+        };
+
+        if agent.server_session_id.is_none() {
+            return;
+        }
+
+        let estimated_tokens = self.estimated_tokens_for_agent_history(agent_name);
+        let should_compact = Self::needs_compaction_for(
+            &agent.target.provider,
+            agent.last_input_tokens,
+            agent.context_window,
+            estimated_tokens,
+        );
+        if !should_compact {
+            return;
+        }
+
+        if let Some(registry) = self.conversation.agents.as_mut() {
+            if let Some(agent) = registry.by_name_mut(agent_name) {
+                agent.server_session_id = None;
+                agent.last_input_tokens = None;
+                agent.context_window = None;
+            }
+        }
+        self.conversation.messages.push(ChatMessage::system(format!(
+            "[Context compacted for {agent_name}]"
+        )));
+    }
+
+    fn dispatch_agent_request(
+        &mut self,
+        agent_name: &str,
+        user_text: &str,
+        surfaced_text: &str,
+    ) -> Option<Command> {
+        self.maybe_compact_agent_context(agent_name);
+
+        let agent = self
+            .conversation
+            .agents
+            .as_ref()?
+            .by_name(agent_name)?
+            .clone();
+        let assistant_msg = ChatMessage::agent_assistant(
+            agent.name.clone(),
+            agent.target.provider.clone(),
+            agent.target.model.clone(),
+        );
+        // The assistant starts empty; UI shows thinking indicator for active turns
+        let assistant_id = assistant_msg.id;
+        self.conversation.messages.push(assistant_msg);
+
+        let request_id = self.next_request_id;
+        self.next_request_id += 1;
+        self.active_requests
+            .insert(agent.name.clone(), (ActiveRequestKind::Message, request_id));
+        self.active_assistant_ids
+            .insert(agent.name.clone(), assistant_id);
+        self.request_agent_map
+            .insert(request_id, agent.name.clone());
+        self.status = Status::StreamingMessage;
+
+        let mut extra_options = HashMap::new();
+        self.apply_target_options(&agent.target, &mut extra_options);
+        if let Some(registry) = &self.conversation.agents {
+            extra_options.insert(
+                "append_system_prompt".to_string(),
+                serde_json::Value::String(registry.system_prompt_for(&agent.name)),
+            );
+        }
+
+        let prompt = if agent.server_session_id.is_some() {
+            surfaced_text.to_string()
+        } else {
+            self.build_prompt_for_agent(&agent.name, user_text)
+        };
+
+        Some(Command::SendMessage {
+            prompt,
+            provider: agent.target.provider,
+            model: agent.target.model,
+            cwd: self.cwd.to_string_lossy().to_string(),
+            session_id: self.session_for_agent(&agent.name),
+            extra_options,
+            request_id,
+        })
+    }
+
+    fn queue_pending_user_message(&mut self, text: String, target_agent: Option<String>) {
+        let queued = ChatMessage::queued(text);
+        self.pending_messages.push(queued.id);
+        self.pending_message_targets.insert(queued.id, target_agent);
+        self.conversation.messages.push(queued);
+        if self.auto_scroll {
+            self.scroll_to_bottom();
+        }
+    }
+
+    /// Returns true if a specific agent is busy.
+    pub fn is_agent_busy(&self, agent_key: &str) -> bool {
+        self.active_requests.contains_key(agent_key)
+    }
+
+    /// Check if any message is an active assistant turn (for rendering dots).
+    pub fn is_active_assistant(&self, msg_id: uuid::Uuid) -> bool {
+        if self.active_assistant_ids.values().any(|id| *id == msg_id) {
+            return true;
+        }
+        self.active_assistant_message_id == Some(msg_id)
+    }
+
+    /// Get the session_id for an agent, or the global one for single-agent mode.
+    fn session_for_agent(&self, agent_key: &str) -> Option<String> {
+        if let Some(registry) = &self.conversation.agents {
+            return registry
+                .by_name(agent_key)
+                .and_then(|a| a.server_session_id.clone());
+        }
+        self.server_session_id.clone()
+    }
+
+    /// Set session_id for an agent, or the global one for single-agent mode.
+    fn set_session_for_agent(&mut self, agent_key: &str, session_id: String) {
+        if let Some(registry) = &mut self.conversation.agents {
+            if let Some(agent) = registry.by_name_mut(agent_key) {
+                agent.server_session_id = Some(session_id);
+                return;
+            }
+        }
+        self.server_session_id = Some(session_id);
+    }
+
+    pub fn color_for_agent(&self, name: &str) -> ratatui::style::Color {
+        self.conversation
+            .agents
+            .as_ref()
+            .map(|registry| registry.color_for(name))
+            .unwrap_or(ratatui::style::Color::Rgb(150, 120, 255))
     }
 
     pub fn inspector_content(&self) -> (String, String) {
@@ -437,73 +834,80 @@ impl<'a> App<'a> {
             return ("Activity".to_string(), "No activity selected.".to_string());
         };
 
-        let Some(activity) = message.activities.get(target.activity_index) else {
+        let Some(block) = message.blocks.get(target.block_index) else {
             return ("Activity".to_string(), "No activity selected.".to_string());
         };
 
-        match activity.kind {
-            ActivityKind::ToolUse => {
-                if let Some(tool_call) = activity.related_id.as_deref().and_then(|id| {
-                    message
-                        .tool_calls
-                        .iter()
-                        .find(|tool| tool.id.as_deref() == Some(id))
-                }) {
-                    return (
-                        activity.title.clone(),
-                        format_full_tool_call(tool_call),
-                    );
+        match block {
+            ContentBlock::ToolUse { name, id, input } => {
+                let mut detail = format!("Tool: {name}");
+                if let Some(id) = id {
+                    detail.push_str(&format!("\nId: {id}"));
+                    // Find matching result
+                    if let Some(result) = message.tool_result_for(id) {
+                        if !result.trim().is_empty() {
+                            detail.push_str(&format!("\n\nOutput:\n{result}"));
+                        }
+                    }
                 }
-            }
-            ActivityKind::ToolResult => {
-                if let Some(tool_call) = activity.related_id.as_deref().and_then(|id| {
-                    message
-                        .tool_calls
-                        .iter()
-                        .find(|tool| tool.id.as_deref() == Some(id))
-                }) {
-                    return (
-                        activity.title.clone(),
-                        format_full_tool_result(tool_call),
-                    );
+                if let Some(input) = input.as_deref().filter(|v| !v.trim().is_empty()) {
+                    detail.push_str(&format!("\n\nInput:\n{input}"));
                 }
+                (format!("Tool: {name}"), detail)
             }
-            _ => {}
+            ContentBlock::ToolResult { tool_use_id, content } => {
+                let mut detail = String::from("Tool result");
+                if let Some(id) = tool_use_id {
+                    detail.push_str(&format!("\nTool id: {id}"));
+                }
+                if let Some(content) = content.as_deref().filter(|v| !v.trim().is_empty()) {
+                    detail.push_str(&format!("\n\nOutput:\n{content}"));
+                }
+                ("Tool result".to_string(), detail)
+            }
+            ContentBlock::Thinking { text } => {
+                ("Thinking".to_string(), text.clone())
+            }
+            ContentBlock::Event { name, detail } => {
+                (name.clone(), detail.clone())
+            }
+            ContentBlock::AgentStart { label, .. } => {
+                (label.clone(), format!("Agent: {label}"))
+            }
+            _ => ("Activity".to_string(), "No details.".to_string()),
         }
-
-        (activity.title.clone(), activity.detail.clone())
     }
 
     /// Process an event and return an optional command.
-    pub fn handle_event(&mut self, event: AppEvent) -> Option<Command> {
+    pub fn handle_event(&mut self, event: AppEvent) -> Vec<Command> {
         match event {
-            AppEvent::Key(key) => self.handle_key(key),
-            AppEvent::Mouse(mouse) => self.handle_mouse(mouse),
-            AppEvent::Resize(_, _) => Some(Command::Redraw),
+            AppEvent::Key(key) => {
+                let mut cmds: Vec<Command> = self.handle_key(key).into_iter().collect();
+                cmds.append(&mut self.deferred_commands);
+                cmds
+            }
+            AppEvent::Mouse(mouse) => self.handle_mouse(mouse).into_iter().collect(),
+            AppEvent::Resize(_, _) => vec![Command::Redraw],
             AppEvent::Tick => {
                 self.animation_tick = self.animation_tick.wrapping_add(1);
                 // Only redraw if there's an active animation
                 if self.is_busy() || self.show_quit_hint() {
-                    Some(Command::Redraw)
+                    vec![Command::Redraw]
                 } else {
-                    None
+                    vec![]
                 }
             }
 
             AppEvent::StreamTextDelta { request_id, text } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        if msg.content == "[thinking...]" {
-                            msg.content.clear();
-                        }
-                        msg.content.push_str(&text);
-                        append_answer_activity(msg, &text);
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        msg.push_text(&text);
                     }
                     if self.auto_scroll {
                         self.scroll_to_bottom();
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamToolUse {
@@ -513,29 +917,48 @@ impl<'a> App<'a> {
                 input,
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        let input_text = input.as_ref().map(pretty_json_or_text);
-                        msg.tool_calls.push(ToolCall {
-                            name: name.clone(),
-                            id: id.clone(),
-                            input: input_text.clone(),
-                            result: None,
-                            collapsed: true,
-                        });
-                        push_activity(
-                            msg,
-                            ActivityKind::ToolUse,
-                            format!("Tool: {name}"),
-                            input_text
-                                .as_deref()
-                                .map(|value| compact_preview_words(value, 14))
-                                .unwrap_or_default(),
-                            format_tool_use_detail(&name, id.as_deref(), input_text.as_deref()),
-                            id,
-                        );
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        if is_workgroup_open_tool(&name) {
+                            let labels = extract_workgroup_open_labels(&input);
+                            for (idx, label) in labels.iter().enumerate() {
+                                let synthetic_id = id
+                                    .as_ref()
+                                    .map(|tool_id| format!("{tool_id}::workgroup_open::{idx}"))
+                                    .unwrap_or_else(|| {
+                                        format!("workgroup_open::{}::{idx}", label)
+                                    });
+                                msg.blocks.push(ContentBlock::AgentStart {
+                                    id: synthetic_id.clone(),
+                                    label: format!("Workgroup: {label}"),
+                                });
+                                msg.blocks.push(ContentBlock::AgentEnd { id: synthetic_id });
+                            }
+                        } else if is_agent_tool(&name) {
+                            let label = extract_agent_label(&input);
+                            msg.blocks.push(ContentBlock::AgentStart {
+                                id: id.clone().unwrap_or_default(),
+                                label,
+                            });
+                        } else if is_workgroup_agent_tool(&name) {
+                            let label = extract_workgroup_agent_label(&name, &input);
+                            msg.blocks.push(ContentBlock::AgentStart {
+                                id: id.clone().unwrap_or_default(),
+                                label,
+                            });
+                        } else {
+                            let input_text = input.as_ref().map(pretty_json_or_text);
+                            msg.blocks.push(ContentBlock::ToolUse {
+                                name,
+                                id,
+                                input: input_text,
+                            });
+                        }
+                    }
+                    if self.auto_scroll {
+                        self.scroll_to_bottom();
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamToolResult {
@@ -544,40 +967,29 @@ impl<'a> App<'a> {
                 content,
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        let detail = content
-                            .as_ref()
-                            .map(pretty_json_or_text)
-                            .unwrap_or_default();
-                        // Look up tool name from matching tool call
-                        let tool_name = tool_use_id.as_deref().and_then(|id| {
-                            msg.tool_calls
-                                .iter()
-                                .find(|t| t.id.as_deref() == Some(id))
-                                .map(|t| t.name.clone())
-                        });
-                        if let Some(tc) = tool_use_id.as_deref().and_then(|id| {
-                            msg.tool_calls
-                                .iter_mut()
-                                .find(|t| t.id.as_deref() == Some(id))
-                        }) {
-                            tc.result = Some(detail.clone());
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        let is_agent_section = tool_use_id
+                            .as_deref()
+                            .is_some_and(|id| msg.is_agent_start(id));
+                        if is_agent_section {
+                            msg.blocks.push(ContentBlock::AgentEnd {
+                                id: tool_use_id.unwrap_or_default(),
+                            });
+                        } else {
+                            let content_text = content
+                                .as_ref()
+                                .map(pretty_json_or_text);
+                            msg.blocks.push(ContentBlock::ToolResult {
+                                tool_use_id,
+                                content: content_text,
+                            });
                         }
-                        let title = match tool_name {
-                            Some(name) => format!("Tool: {name}"),
-                            None => "Tool result".to_string(),
-                        };
-                        push_activity(
-                            msg,
-                            ActivityKind::ToolResult,
-                            title,
-                            compact_preview_words(&detail, 14),
-                            format_tool_result_detail(tool_use_id.as_deref(), &detail),
-                            tool_use_id,
-                        );
+                    }
+                    if self.auto_scroll {
+                        self.scroll_to_bottom();
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamResult {
@@ -588,20 +1000,33 @@ impl<'a> App<'a> {
                 ..
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    if let Some(msg) = self.active_assistant_message_mut() {
+                    if let Some(msg) = self.assistant_for_request(request_id) {
                         if is_error == Some(true) {
                             msg.is_error = true;
                         }
                     }
                     // Track context usage for compaction decisions
-                    if let Some(tokens) = input_tokens {
-                        self.last_input_tokens = Some(tokens);
-                    }
-                    if let Some(window) = context_window {
-                        self.context_window = Some(window);
+                    if let Some(agent_name) = self.agent_for_request(request_id) {
+                        if let Some(registry) = self.conversation.agents.as_mut() {
+                            if let Some(agent) = registry.by_name_mut(&agent_name) {
+                                if let Some(tokens) = input_tokens {
+                                    agent.last_input_tokens = Some(tokens);
+                                }
+                                if let Some(window) = context_window {
+                                    agent.context_window = Some(window);
+                                }
+                            }
+                        }
+                    } else {
+                        if let Some(tokens) = input_tokens {
+                            self.last_input_tokens = Some(tokens);
+                        }
+                        if let Some(window) = context_window {
+                            self.context_window = Some(window);
+                        }
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamAskUserQuestion {
@@ -611,27 +1036,22 @@ impl<'a> App<'a> {
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
                     let opts = options.clone();
-                    if let Some(msg) = self.active_assistant_message_mut() {
+                    if let Some(msg) = self.assistant_for_request(request_id) {
                         let mut detail = question.clone();
-                        let preview = if let Some(options) = options.filter(|items| !items.is_empty()) {
-                            detail.push_str(&format!("\n\nOptions:\n- {}", options.join("\n- ")));
-                            options.join(", ")
-                        } else {
-                            question.clone()
-                        };
-                        push_activity(
-                            msg,
-                            ActivityKind::AskUserQuestion,
-                            "Question".to_string(),
-                            preview,
-                            format_question_detail(&detail),
-                            None,
-                        );
-                        if self.auto_scroll {
-                            self.scroll_to_bottom();
+                        if let Some(ref options) = options {
+                            if !options.is_empty() {
+                                detail.push_str(&format!("\n\nOptions:\n- {}", options.join("\n- ")));
+                            }
                         }
+                        msg.blocks.push(ContentBlock::Event {
+                            name: "ask_user_question".to_string(),
+                            detail,
+                        });
                     }
-                    // Set up inline question buttons (append to support multiple questions)
+                    if self.auto_scroll {
+                        self.scroll_to_bottom();
+                    }
+                    // Set up inline question buttons
                     let btn_options = opts
                         .filter(|items| !items.is_empty())
                         .unwrap_or_else(|| vec!["Yes".to_string(), "No".to_string()]);
@@ -649,42 +1069,42 @@ impl<'a> App<'a> {
                         });
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamExitPlanMode { request_id, reason } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    // Switch away from plan mode to default/execute mode
-                    match self.conversation.default_target.provider.as_str() {
-                        "claude" => {
-                            self.conversation.default_target.provider_mode =
-                                Some("default".to_string());
-                        }
-                        // Codex doesn't have plan mode, but handle generically
-                        _ => {
-                            self.conversation.default_target.provider_mode =
-                                Some("default".to_string());
-                        }
+                    let detail = reason
+                        .filter(|r| !r.trim().is_empty())
+                        .unwrap_or_else(|| "Plan ready for approval.".to_string());
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        msg.blocks.push(ContentBlock::Event {
+                            name: "exit_plan_mode".to_string(),
+                            detail: detail.clone(),
+                        });
                     }
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        let detail = reason
-                            .clone()
-                            .filter(|r| !r.trim().is_empty())
-                            .unwrap_or_else(|| "Switched to execute mode.".to_string());
-                        push_activity(
-                            msg,
-                            ActivityKind::ExitPlanMode,
-                            "Mode change".to_string(),
-                            compact_preview_words(&detail, 14),
-                            format!("Exit plan mode\n\n{detail}"),
-                            None,
-                        );
-                        if self.auto_scroll {
-                            self.scroll_to_bottom();
-                        }
+                    if self.auto_scroll {
+                        self.scroll_to_bottom();
+                    }
+                    // Show approval prompt — mode switches only on user confirmation
+                    let entry = QuestionEntry {
+                        question: detail,
+                        options: vec![
+                            "Approve".to_string(),
+                            "Reject".to_string(),
+                        ],
+                        selected: 0,
+                    };
+                    if let Some(pq) = self.pending_question.as_mut() {
+                        pq.entries.push(entry);
+                    } else {
+                        self.pending_question = Some(PendingQuestion {
+                            entries: vec![entry],
+                            current: 0,
+                        });
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamAgentEvent {
@@ -694,59 +1114,51 @@ impl<'a> App<'a> {
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
                     if is_thinking_event(&name) {
-                        if let Some(msg) = self.active_assistant_message_mut() {
+                        if let Some(msg) = self.assistant_for_request(request_id) {
                             let text = data
                                 .as_ref()
                                 .and_then(|d| d.get("text"))
                                 .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
+                                .unwrap_or("");
                             if !text.is_empty() {
-                                append_thinking_activity(msg, &text);
-                            }
-                            // Update the transient thinking preview
-                            if let Some(last) = msg.activities.last() {
-                                if last.kind == ActivityKind::Thinking {
-                                    msg.thinking = Some(tail_words(&last.detail, 10));
-                                }
+                                msg.push_thinking(text);
                             }
                         }
                     } else {
-                        if let Some(msg) = self.active_assistant_message_mut() {
+                        if let Some(msg) = self.assistant_for_request(request_id) {
                             let detail = data
                                 .as_ref()
                                 .and_then(summarize_agent_event)
                                 .unwrap_or_else(|| name.clone());
-                            push_activity(
-                                msg,
-                                ActivityKind::AgentEvent,
-                                "Event".to_string(),
-                                compact_preview_words(&detail, 14),
-                                format_agent_event_detail(&name, data.as_ref(), &detail),
-                                None,
-                            );
-                            if self.auto_scroll {
-                                self.scroll_to_bottom();
-                            }
+                            msg.blocks.push(ContentBlock::Event {
+                                name,
+                                detail,
+                            });
+                        }
+                        if self.auto_scroll {
+                            self.scroll_to_bottom();
                         }
                     }
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamError { request_id, error } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
-                    // Fix the assistant placeholder if it's still [thinking...]
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        if msg.role == Role::Assistant && msg.content == "[thinking...]" {
-                            msg.content.clear();
+                    let _sender_agent = self.agent_for_request(request_id);
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        if msg.role == Role::Assistant && !msg.has_text() {
                             msg.is_error = true;
                         }
-                        msg.thinking = None;
                     }
                     self.status = Status::Idle;
                     self.active_request = None;
                     self.active_assistant_message_id = None;
+                    if let Some(agent_key) = self.agent_for_request(request_id) {
+                        self.active_requests.remove(&agent_key);
+                        self.active_assistant_ids.remove(&agent_key);
+                    }
+                    self.request_agent_map.remove(&request_id);
                     self.conversation.messages.push(ChatMessage::error(error));
                     self.conversation.touch();
                     self.conversation.update_title();
@@ -754,37 +1166,86 @@ impl<'a> App<'a> {
                         self.scroll_to_bottom();
                     }
 
+                    let mut commands = Vec::new();
+
                     // Dispatch next queued message if any
                     if let Some(cmd) = self.dispatch_next_queued() {
-                        return Some(cmd);
+                        commands.push(cmd);
+                        commands.append(&mut self.deferred_commands);
+                        commands.push(Command::SaveConversation(self.conversation.clone()));
+                        return commands;
                     }
-                    return Some(Command::SaveConversation(self.conversation.clone()));
+                    commands.push(Command::SaveConversation(self.conversation.clone()));
+                    return commands;
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamDone { request_id } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
+                    let sender_agent = self.agent_for_request(request_id);
+                    let final_text = self
+                        .assistant_for_request(request_id)
+                        .map(|m| m.text())
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string();
                     // Fix the assistant placeholder if stream ended without content
-                    if let Some(msg) = self.active_assistant_message_mut() {
-                        if msg.role == Role::Assistant && msg.content == "[thinking...]" {
-                            msg.content = "[no response]".to_string();
+                    if let Some(msg) = self.assistant_for_request(request_id) {
+                        if msg.role == Role::Assistant && !msg.has_text() {
+                            msg.push_text("[no response]");
                         }
-                        msg.thinking = None;
                     }
                     self.status = Status::Idle;
                     self.active_request = None;
                     self.active_assistant_message_id = None;
+                    if let Some(agent_key) = sender_agent.clone() {
+                        self.active_requests.remove(&agent_key);
+                        self.active_assistant_ids.remove(&agent_key);
+                    }
+                    self.request_agent_map.remove(&request_id);
                     self.conversation.touch();
                     self.conversation.update_title();
 
+                    let mut commands = Vec::new();
+                    if let (Some(sender), Some(registry)) =
+                        (sender_agent.clone(), self.conversation.agents.as_mut())
+                    {
+                        if let Some(idx) = registry.index_of(&sender) {
+                            registry.last_active = idx;
+                        }
+                    }
+
+                    let should_relay = !final_text.is_empty()
+                        && !final_text.eq_ignore_ascii_case("[pass]")
+                        && sender_agent.is_some();
+                    if should_relay {
+                        let sender = sender_agent.clone().unwrap_or_default();
+                        let relay_text = format!("{sender}: {final_text}");
+                        let targets = self.relay_targets_for_agent_reply(&sender, &final_text);
+                        for target in targets {
+                            if self.is_agent_busy(&target) {
+                                self.queue_pending_user_message(
+                                    relay_text.clone(),
+                                    Some(target.clone()),
+                                );
+                            } else if let Some(cmd) =
+                                self.dispatch_agent_request(&target, &relay_text, &relay_text)
+                            {
+                                commands.push(cmd);
+                            }
+                        }
+                    }
+
                     // Dispatch next queued message if any
                     if let Some(cmd) = self.dispatch_next_queued() {
-                        return Some(cmd);
+                        commands.push(cmd);
+                        commands.append(&mut self.deferred_commands);
                     }
-                    return Some(Command::SaveConversation(self.conversation.clone()));
+                    commands.push(Command::SaveConversation(self.conversation.clone()));
+                    return commands;
                 }
-                None
+                vec![]
             }
 
             AppEvent::StreamInit {
@@ -793,16 +1254,21 @@ impl<'a> App<'a> {
             } => {
                 if self.active_request_matches(ActiveRequestKind::Message, request_id) {
                     if let Some(id) = session_id {
-                        self.server_session_id = Some(id);
+                        if let Some(agent_key) = self.agent_for_request(request_id) {
+                            self.set_session_for_agent(&agent_key, id);
+                        } else {
+                            self.server_session_id = Some(id);
+                        }
                     }
+                    // No additional state to reset
                 }
-                None
+                vec![]
             }
 
             AppEvent::ProvidersList(providers) => {
                 self.available_providers = providers;
                 self.build_llm_options();
-                None
+                vec![]
             }
 
             AppEvent::HandoffComplete {
@@ -815,14 +1281,18 @@ impl<'a> App<'a> {
                     self.active_request = None;
                     // Remove the "Compacting..." system message
                     if let Some(msg) = self.conversation.messages.last() {
-                        if msg.role == Role::System && msg.content.contains("Compacting") {
+                        if msg.role == Role::System && msg.text().contains("Compacting") {
                             self.conversation.messages.pop();
                         }
                     }
                     // Keep only recent messages + add summary
                     let keep_count = 4; // Keep last N user/assistant pairs
                     let mut kept: Vec<ChatMessage> = Vec::new();
-                    let recent: Vec<ChatMessage> = self.conversation.messages.iter().rev()
+                    let recent: Vec<ChatMessage> = self
+                        .conversation
+                        .messages
+                        .iter()
+                        .rev()
                         .filter(|m| matches!(m.role, Role::User | Role::Assistant))
                         .take(keep_count)
                         .cloned()
@@ -839,17 +1309,17 @@ impl<'a> App<'a> {
                     if self.auto_scroll {
                         self.scroll_to_bottom();
                     }
-                    return Some(Command::SaveConversation(self.conversation.clone()));
+                    return vec![Command::SaveConversation(self.conversation.clone())];
                 }
 
                 if !self.active_request_matches(ActiveRequestKind::Handoff, request_id) {
-                    return None;
+                    return vec![];
                 }
                 self.status = Status::Idle;
                 self.active_request = None;
                 // Store the handoff summary as a system message
                 if let Some(msg) = self.conversation.messages.last() {
-                    if msg.role == Role::System && msg.content.contains("Generating handoff") {
+                    if msg.role == Role::System && msg.text().contains("Generating handoff") {
                         self.conversation.messages.pop();
                     }
                 }
@@ -867,7 +1337,7 @@ impl<'a> App<'a> {
                 if let Some(hs) = self.handoff.take() {
                     self.conversation.default_target = hs.new_target;
                 }
-                Some(Command::SaveConversation(self.conversation.clone()))
+                vec![Command::SaveConversation(self.conversation.clone())]
             }
 
             AppEvent::HandoffError { request_id, error } => {
@@ -876,27 +1346,27 @@ impl<'a> App<'a> {
                     self.status = Status::Idle;
                     self.active_request = None;
                     if let Some(msg) = self.conversation.messages.last() {
-                        if msg.role == Role::System && msg.content.contains("Compacting") {
+                        if msg.role == Role::System && msg.text().contains("Compacting") {
                             self.conversation.messages.pop();
                         }
                     }
-                    self.conversation.messages.push(ChatMessage::system(format!(
-                        "[Compaction failed: {error}]"
-                    )));
+                    self.conversation
+                        .messages
+                        .push(ChatMessage::system(format!("[Compaction failed: {error}]")));
                     if self.auto_scroll {
                         self.scroll_to_bottom();
                     }
-                    return None;
+                    return vec![];
                 }
 
                 if !self.active_request_matches(ActiveRequestKind::Handoff, request_id) {
-                    return None;
+                    return vec![];
                 }
                 self.status = Status::Idle;
                 self.active_request = None;
                 // Remove the [Generating handoff...] message
                 if let Some(msg) = self.conversation.messages.last() {
-                    if msg.role == Role::System && msg.content.contains("Generating handoff") {
+                    if msg.role == Role::System && msg.text().contains("Generating handoff") {
                         self.conversation.messages.pop();
                     }
                 }
@@ -910,17 +1380,17 @@ impl<'a> App<'a> {
                 if self.auto_scroll {
                     self.scroll_to_bottom();
                 }
-                Some(Command::SaveConversation(self.conversation.clone()))
+                vec![Command::SaveConversation(self.conversation.clone())]
             }
 
             AppEvent::ConversationsLoaded(convs) => {
                 self.conversations = convs;
-                None
+                vec![]
             }
 
             AppEvent::ConversationDeleted(_id) => {
                 // Deletion confirmed — start fresh
-                None
+                vec![]
             }
 
             AppEvent::ApiError(err) => {
@@ -928,7 +1398,7 @@ impl<'a> App<'a> {
                 if self.auto_scroll {
                     self.scroll_to_bottom();
                 }
-                None
+                vec![]
             }
         }
     }
@@ -943,7 +1413,7 @@ impl<'a> App<'a> {
         if self.status == Status::StreamingHandoff && key.code == KeyCode::Esc {
             // Remove [Generating handoff...] message
             if let Some(msg) = self.conversation.messages.last() {
-                if msg.role == Role::System && msg.content.contains("Generating handoff") {
+                if msg.role == Role::System && msg.text().contains("Generating handoff") {
                     self.conversation.messages.pop();
                 }
             }
@@ -985,9 +1455,6 @@ impl<'a> App<'a> {
                     return self.new_conversation();
                 }
                 KeyCode::Char('p') => {
-                    if self.is_busy() {
-                        return None;
-                    }
                     self.palette_index = 0;
                     self.overlay = Some(Overlay::CommandPalette);
                     return None;
@@ -996,12 +1463,14 @@ impl<'a> App<'a> {
                     if self.is_busy() {
                         return None;
                     }
+                    self.picker_agent_name = None;
                     return self.open_llm_picker();
                 }
                 KeyCode::Char('m') => {
                     if self.is_busy() {
                         return None;
                     }
+                    self.picker_agent_name = None;
                     self.open_mode_picker();
                     return None;
                 }
@@ -1009,6 +1478,7 @@ impl<'a> App<'a> {
                     if self.is_busy() {
                         return None;
                     }
+                    self.picker_agent_name = None;
                     self.open_effort_picker();
                     return None;
                 }
@@ -1066,7 +1536,7 @@ impl<'a> App<'a> {
         }
 
         // Pending question: Up/Down for options, Left/Right for questions, Esc to dismiss
-        if self.pending_question.is_some() && !self.is_busy() {
+        if self.pending_question.is_some() {
             match key.code {
                 KeyCode::Esc => {
                     self.pending_question = None;
@@ -1083,8 +1553,8 @@ impl<'a> App<'a> {
                 KeyCode::Down => {
                     if let Some(pq) = self.pending_question.as_mut() {
                         if let Some(entry) = pq.entries.get_mut(pq.current) {
-                            entry.selected = (entry.selected + 1)
-                                .min(entry.options.len().saturating_sub(1));
+                            entry.selected =
+                                (entry.selected + 1).min(entry.options.len().saturating_sub(1));
                         }
                     }
                     return None;
@@ -1097,8 +1567,7 @@ impl<'a> App<'a> {
                 }
                 KeyCode::Right => {
                     if let Some(pq) = self.pending_question.as_mut() {
-                        pq.current = (pq.current + 1)
-                            .min(pq.entries.len().saturating_sub(1));
+                        pq.current = (pq.current + 1).min(pq.entries.len().saturating_sub(1));
                     }
                     return None;
                 }
@@ -1109,13 +1578,22 @@ impl<'a> App<'a> {
         // Enter sends unless Shift is held.
         if key.code == KeyCode::Enter && !key.modifiers.contains(KeyModifiers::SHIFT) {
             // If pending question and input is empty, send the selected option
-            if self.pending_question.is_some() && !self.is_busy() {
+            if self.pending_question.is_some() {
                 let input_text: String = self.input.lines().join("\n").trim().to_string();
                 if input_text.is_empty() {
                     if let Some(pq) = self.pending_question.take() {
                         // Collect selected answer from the current question
                         if let Some(entry) = pq.entries.get(pq.current) {
-                            let answer = entry.options.get(entry.selected).cloned().unwrap_or_default();
+                            let answer = entry
+                                .options
+                                .get(entry.selected)
+                                .cloned()
+                                .unwrap_or_default();
+                            // Handle exit_plan_mode approval
+                            if answer == "Approve" {
+                                self.conversation.default_target.provider_mode =
+                                    Some("default".to_string());
+                            }
                             self.input.insert_str(&answer);
                         }
                     }
@@ -1200,11 +1678,31 @@ impl<'a> App<'a> {
             return None;
         }
 
-        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
-            return None;
+        match mouse.kind {
+            MouseEventKind::ScrollUp => {
+                let scroll_amount = 3u16;
+                self.scroll_offset = self.scroll_offset.saturating_sub(scroll_amount);
+                self.auto_scroll = false;
+                return None;
+            }
+            MouseEventKind::ScrollDown => {
+                let scroll_amount = 3u16;
+                self.scroll_offset = self
+                    .scroll_offset
+                    .saturating_add(scroll_amount)
+                    .min(self.max_scroll());
+                if self.scroll_offset >= self.max_scroll() {
+                    self.auto_scroll = true;
+                }
+                return None;
+            }
+            MouseEventKind::Down(MouseButton::Left) => {}
+            _ => return None,
         }
 
-        if mouse.row < self.messages_area_y || mouse.row >= self.messages_area_y + self.viewport_height {
+        if mouse.row < self.messages_area_y
+            || mouse.row >= self.messages_area_y + self.viewport_height
+        {
             return None;
         }
 
@@ -1214,7 +1712,7 @@ impl<'a> App<'a> {
             .inspectable_lines
             .iter()
             .find(|entry| entry.line_index == line_index)
-            .map(|entry| entry.activity)
+            .map(|entry| entry.block_ref)
         {
             self.inspector_target = Some(target);
             self.inspector_scroll = 0;
@@ -1229,6 +1727,7 @@ impl<'a> App<'a> {
 
         match overlay {
             Overlay::CommandPalette => self.handle_command_palette_key(key),
+            Overlay::AgentManager => self.handle_agent_manager_key(key),
             Overlay::LlmPicker => self.handle_llm_picker_key(key),
             Overlay::ModePicker => self.handle_mode_picker_key(key),
             Overlay::EffortPicker => self.handle_effort_picker_key(key),
@@ -1279,6 +1778,7 @@ impl<'a> App<'a> {
     fn handle_command_palette_key(&mut self, key: KeyEvent) -> Option<Command> {
         match key.code {
             KeyCode::Esc => {
+                self.picker_agent_name = None;
                 self.overlay = None;
                 None
             }
@@ -1297,12 +1797,18 @@ impl<'a> App<'a> {
             KeyCode::Enter => {
                 self.overlay = None;
                 match self.palette_commands.get(self.palette_index).copied() {
-                    Some(PaletteCommand::ChooseLlm) => self.open_llm_picker(),
+                    Some(PaletteCommand::CreateWorkgroup) => None,
+                    Some(PaletteCommand::ChooseLlm) => {
+                        self.picker_agent_name = None;
+                        self.open_llm_picker()
+                    }
                     Some(PaletteCommand::ChooseMode) => {
+                        self.picker_agent_name = None;
                         self.open_mode_picker();
                         None
                     }
                     Some(PaletteCommand::ChooseEffort) => {
+                        self.picker_agent_name = None;
                         self.open_effort_picker();
                         None
                     }
@@ -1332,17 +1838,118 @@ impl<'a> App<'a> {
         }
     }
 
+    fn handle_agent_manager_key(&mut self, key: KeyEvent) -> Option<Command> {
+        let len = self
+            .conversation
+            .agents
+            .as_ref()
+            .map(|r| r.agents.len())
+            .unwrap_or(0);
+        match key.code {
+            KeyCode::Esc => {
+                self.overlay = None;
+                None
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.agent_manager_index > 0 {
+                    self.agent_manager_index -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.agent_manager_index + 1 < len {
+                    self.agent_manager_index += 1;
+                }
+                None
+            }
+            KeyCode::Char('a') => {
+                let target = self.conversation.default_target.clone();
+                let registry = self.ensure_agent_registry();
+                let name = registry.next_name();
+                registry.add(Agent::new(name, target));
+                self.agent_manager_index = registry.agents.len().saturating_sub(1);
+                Some(Command::SaveConversation(self.conversation.clone()))
+            }
+            KeyCode::Char('l') => {
+                let agent_name = self
+                    .conversation
+                    .agents
+                    .as_ref()
+                    .and_then(|registry| registry.agents.get(self.agent_manager_index))
+                    .map(|a| a.name.clone());
+                self.picker_agent_name = agent_name;
+                self.open_llm_picker()
+            }
+            KeyCode::Char('m') => {
+                let agent_name = self
+                    .conversation
+                    .agents
+                    .as_ref()
+                    .and_then(|registry| registry.agents.get(self.agent_manager_index))
+                    .map(|a| a.name.clone());
+                self.picker_agent_name = agent_name;
+                self.open_mode_picker();
+                None
+            }
+            KeyCode::Char('e') => {
+                let agent_name = self
+                    .conversation
+                    .agents
+                    .as_ref()
+                    .and_then(|registry| registry.agents.get(self.agent_manager_index))
+                    .map(|a| a.name.clone());
+                self.picker_agent_name = agent_name;
+                self.open_effort_picker();
+                None
+            }
+            KeyCode::Char('r') => None,
+            KeyCode::Char('d') => {
+                let (name, can_remove) = self
+                    .conversation
+                    .agents
+                    .as_ref()
+                    .and_then(|registry| registry.agents.get(self.agent_manager_index))
+                    .map(|a| (a.name.clone(), len > 1))
+                    .unwrap_or_default();
+                if !can_remove {
+                    return None;
+                }
+                if let Some(registry) = self.conversation.agents.as_mut() {
+                    registry.remove(&name);
+                    self.active_requests.remove(&name);
+                    self.active_assistant_ids.remove(&name);
+                    self.request_agent_map
+                        .retain(|_, v| !v.eq_ignore_ascii_case(&name));
+                    if self.agent_manager_index >= registry.agents.len()
+                        && self.agent_manager_index > 0
+                    {
+                        self.agent_manager_index -= 1;
+                    }
+                }
+                Some(Command::SaveConversation(self.conversation.clone()))
+            }
+            KeyCode::Enter => {
+                if let Some(registry) = self.conversation.agents.as_mut() {
+                    if self.agent_manager_index < registry.agents.len() {
+                        registry.last_active = self.agent_manager_index;
+                        return Some(Command::SaveConversation(self.conversation.clone()));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     fn open_llm_picker(&mut self) -> Option<Command> {
         if self.llm_options.is_empty() {
             self.build_llm_options();
         }
+        let target = self.picker_target();
         self.llm_index = self
             .llm_options
             .iter()
-            .position(|t| {
-                t.provider == self.conversation.default_target.provider
-                    && t.model == self.conversation.default_target.model
-            })
+            .position(|t| t.provider == target.provider && t.model == target.model)
             .unwrap_or(0);
         self.overlay = Some(Overlay::LlmPicker);
         if self.available_providers.is_empty() {
@@ -1353,10 +1960,10 @@ impl<'a> App<'a> {
     }
 
     fn open_mode_picker(&mut self) {
-        let options = Self::provider_mode_options(&self.conversation.default_target.provider);
+        let target = self.picker_target();
+        let options = Self::provider_mode_options(&target.provider);
         self.mode_index = self
-            .conversation
-            .default_target
+            .picker_target()
             .provider_mode
             .as_deref()
             .and_then(|mode| options.iter().position(|candidate| *candidate == mode))
@@ -1365,13 +1972,10 @@ impl<'a> App<'a> {
     }
 
     fn open_effort_picker(&mut self) {
-        let options = Self::effort_options(
-            &self.conversation.default_target.provider,
-            &self.conversation.default_target.model,
-        );
+        let target = self.picker_target();
+        let options = Self::effort_options(&target.provider, &target.model);
         self.effort_index = self
-            .conversation
-            .default_target
+            .picker_target()
             .thinking_effort
             .as_deref()
             .and_then(|effort| options.iter().position(|candidate| *candidate == effort))
@@ -1382,7 +1986,11 @@ impl<'a> App<'a> {
     fn handle_llm_picker_key(&mut self, key: KeyEvent) -> Option<Command> {
         match key.code {
             KeyCode::Esc => {
-                self.overlay = None;
+                self.overlay = if self.picker_agent_name.is_some() {
+                    Some(Overlay::AgentManager)
+                } else {
+                    None
+                };
                 None
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -1399,18 +2007,30 @@ impl<'a> App<'a> {
             }
             KeyCode::Enter => {
                 if self.llm_options.is_empty() {
-                    self.overlay = None;
+                    self.overlay = if self.picker_agent_name.is_some() {
+                        Some(Overlay::AgentManager)
+                    } else {
+                        None
+                    };
                     return None;
                 }
                 let selected = &self.llm_options[self.llm_index];
                 let new_target = ExecutionTarget {
                     provider: selected.provider.clone(),
                     model: selected.model.clone(),
-                    provider_mode: default_provider_mode(&selected.provider)
-                        .map(str::to_string),
+                    provider_mode: default_provider_mode(&selected.provider).map(str::to_string),
                     thinking_effort: default_thinking_effort(&selected.provider)
                         .map(str::to_string),
                 };
+                if let Some(agent_name) = self.picker_agent_name.clone() {
+                    if let Some(registry) = self.conversation.agents.as_mut() {
+                        if let Some(agent) = registry.by_name_mut(&agent_name) {
+                            agent.target = new_target;
+                        }
+                    }
+                    self.overlay = Some(Overlay::AgentManager);
+                    return Some(Command::SaveConversation(self.conversation.clone()));
+                }
                 self.overlay = None;
                 self.apply_target_switch(new_target)
             }
@@ -1421,7 +2041,11 @@ impl<'a> App<'a> {
     fn handle_mode_picker_key(&mut self, key: KeyEvent) -> Option<Command> {
         match key.code {
             KeyCode::Esc => {
-                self.overlay = None;
+                self.overlay = if self.picker_agent_name.is_some() {
+                    Some(Overlay::AgentManager)
+                } else {
+                    None
+                };
                 None
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -1431,23 +2055,34 @@ impl<'a> App<'a> {
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.mode_index + 1
-                    < Self::provider_mode_options(&self.conversation.default_target.provider).len()
-                {
+                let provider = self.picker_target().provider.clone();
+                if self.mode_index + 1 < Self::provider_mode_options(&provider).len() {
                     self.mode_index += 1;
                 }
                 None
             }
             KeyCode::Enter => {
-                let mode = Self::provider_mode_options(&self.conversation.default_target.provider)
+                let provider = self.picker_target().provider.clone();
+                let model = self.picker_target().model.clone();
+                let effort = self.picker_target().thinking_effort.clone();
+                let mode = Self::provider_mode_options(&provider)
                     .get(self.mode_index)
                     .copied();
                 let new_target = ExecutionTarget {
-                    provider: self.conversation.default_target.provider.clone(),
-                    model: self.conversation.default_target.model.clone(),
+                    provider,
+                    model,
                     provider_mode: mode.map(str::to_string),
-                    thinking_effort: self.conversation.default_target.thinking_effort.clone(),
+                    thinking_effort: effort,
                 };
+                if let Some(agent_name) = self.picker_agent_name.clone() {
+                    if let Some(registry) = self.conversation.agents.as_mut() {
+                        if let Some(agent) = registry.by_name_mut(&agent_name) {
+                            agent.target = new_target;
+                        }
+                    }
+                    self.overlay = Some(Overlay::AgentManager);
+                    return Some(Command::SaveConversation(self.conversation.clone()));
+                }
                 self.overlay = None;
                 self.apply_target_switch(new_target)
             }
@@ -1458,7 +2093,11 @@ impl<'a> App<'a> {
     fn handle_effort_picker_key(&mut self, key: KeyEvent) -> Option<Command> {
         match key.code {
             KeyCode::Esc => {
-                self.overlay = None;
+                self.overlay = if self.picker_agent_name.is_some() {
+                    Some(Overlay::AgentManager)
+                } else {
+                    None
+                };
                 None
             }
             KeyCode::Up | KeyCode::Char('k') => {
@@ -1468,29 +2107,35 @@ impl<'a> App<'a> {
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.effort_index + 1
-                    < Self::effort_options(
-                        &self.conversation.default_target.provider,
-                        &self.conversation.default_target.model,
-                    ).len()
-                {
+                let provider = self.picker_target().provider.clone();
+                let model = self.picker_target().model.clone();
+                if self.effort_index + 1 < Self::effort_options(&provider, &model).len() {
                     self.effort_index += 1;
                 }
                 None
             }
             KeyCode::Enter => {
-                let effort = Self::effort_options(
-                    &self.conversation.default_target.provider,
-                    &self.conversation.default_target.model,
-                )
+                let provider = self.picker_target().provider.clone();
+                let model = self.picker_target().model.clone();
+                let mode = self.picker_target().provider_mode.clone();
+                let effort = Self::effort_options(&provider, &model)
                     .get(self.effort_index)
                     .copied();
                 let new_target = ExecutionTarget {
-                    provider: self.conversation.default_target.provider.clone(),
-                    model: self.conversation.default_target.model.clone(),
-                    provider_mode: self.conversation.default_target.provider_mode.clone(),
+                    provider,
+                    model,
+                    provider_mode: mode,
                     thinking_effort: effort.map(str::to_string),
                 };
+                if let Some(agent_name) = self.picker_agent_name.clone() {
+                    if let Some(registry) = self.conversation.agents.as_mut() {
+                        if let Some(agent) = registry.by_name_mut(&agent_name) {
+                            agent.target = new_target;
+                        }
+                    }
+                    self.overlay = Some(Overlay::AgentManager);
+                    return Some(Command::SaveConversation(self.conversation.clone()));
+                }
                 self.overlay = None;
                 self.apply_target_switch(new_target)
             }
@@ -1674,27 +2319,97 @@ impl<'a> App<'a> {
     /// conversation — we just need to add the assistant placeholder and
     /// build the send command.
     fn dispatch_next_queued(&mut self) -> Option<Command> {
-        let queued_id = *self.pending_messages.first()?;
-        self.pending_messages.remove(0);
+        let mut attempts = self.pending_messages.len();
+        let mut target_agent = None;
+        let mut text = None;
 
-        // Promote the queued message by stable identity.
-        let text = if let Some(msg) = self
-            .conversation
-            .messages
-            .iter_mut()
-            .find(|m| m.id == queued_id && m.is_queued)
-        {
+        while attempts > 0 {
+            let id = *self.pending_messages.first()?;
+            self.pending_messages.remove(0);
+            let target = self.pending_message_targets.remove(&id).flatten();
+
+            let Some(candidate_text) = self
+                .conversation
+                .messages
+                .iter()
+                .find(|m| m.id == id && m.is_queued)
+                .map(|m| m.text())
+            else {
+                attempts -= 1;
+                continue;
+            };
+
+            if let Some(agent_name) = target.as_ref() {
+                if self.is_agent_busy(agent_name) {
+                    self.pending_messages.push(id);
+                    self.pending_message_targets
+                        .insert(id, Some(agent_name.clone()));
+                    attempts -= 1;
+                    continue;
+                }
+            } else if self
+                .conversation
+                .agents
+                .as_ref()
+                .is_some_and(|r| !r.agents.is_empty())
+            {
+                let targets = self.multi_agent_targets_for_text(&candidate_text);
+                if targets.iter().any(|name| self.is_agent_busy(name)) {
+                    self.pending_messages.push(id);
+                    self.pending_message_targets.insert(id, None);
+                    attempts -= 1;
+                    continue;
+                }
+            }
+
+            let Some(msg) = self
+                .conversation
+                .messages
+                .iter_mut()
+                .find(|m| m.id == id && m.is_queued)
+            else {
+                attempts -= 1;
+                continue;
+            };
+
             msg.is_queued = false;
-            msg.content.clone()
-        } else {
-            return self.dispatch_next_queued();
-        };
+            target_agent = target;
+            text = Some(candidate_text);
+            break;
+        }
+
+        let text = text?;
+
+        if let Some(agent_name) = target_agent {
+            return self.dispatch_agent_request(&agent_name, &text, &text);
+        }
+
+        if self
+            .conversation
+            .agents
+            .as_ref()
+            .is_some_and(|r| !r.agents.is_empty())
+        {
+            let targets = self.multi_agent_targets_for_text(&text);
+            let mut commands = Vec::new();
+            for target in targets {
+                if let Some(cmd) = self.dispatch_agent_request(&target, &text, &text) {
+                    commands.push(cmd);
+                }
+            }
+            if commands.is_empty() {
+                return None;
+            }
+            let first = commands.remove(0);
+            self.deferred_commands.extend(commands);
+            return Some(first);
+        }
 
         // Add assistant placeholder
         let target = self.conversation.default_target.clone();
-        let mut assistant_msg =
+        let assistant_msg =
             ChatMessage::assistant(target.provider.clone(), target.model.clone());
-        assistant_msg.content = "[thinking...]".to_string();
+        // The assistant starts empty; UI shows thinking indicator for active turns
         self.active_assistant_message_id = Some(assistant_msg.id);
         self.conversation.messages.push(assistant_msg);
 
@@ -1774,7 +2489,7 @@ impl<'a> App<'a> {
             .conversation
             .messages
             .iter()
-            .map(|m| m.content.len())
+            .map(|m| m.text().len())
             .sum();
         let estimated_tokens = total_chars / 4;
         let default_window = 128_000u64;
@@ -1788,22 +2503,21 @@ impl<'a> App<'a> {
         // Build a summary prompt from the full conversation
         let mut history_text = String::new();
         for msg in &self.conversation.messages {
+            let t = msg.text();
             match msg.role {
                 Role::User => {
-                    history_text.push_str(&format!("User: {}\n\n", msg.content.trim()));
+                    history_text.push_str(&format!("User: {}\n\n", t.trim()));
                 }
                 Role::Assistant => {
                     history_text.push_str(&format!(
                         "{}: {}\n\n",
                         msg.display_name(),
-                        msg.content.trim()
+                        t.trim()
                     ));
                 }
                 Role::System if msg.is_handoff => {
-                    history_text.push_str(&format!(
-                        "[Context summary]: {}\n\n",
-                        msg.content.trim()
-                    ));
+                    history_text
+                        .push_str(&format!("[Context summary]: {}\n\n", t.trim()));
                 }
                 _ => {}
             }
@@ -1815,9 +2529,9 @@ impl<'a> App<'a> {
              needed to continue the work. Be thorough but compact.\n\n{history_text}"
         );
 
-        self.conversation.messages.push(ChatMessage::system(
-            "[Compacting context...]".to_string(),
-        ));
+        self.conversation
+            .messages
+            .push(ChatMessage::system("[Compacting context...]".to_string()));
         if self.auto_scroll {
             self.scroll_to_bottom();
         }
@@ -1876,7 +2590,7 @@ impl<'a> App<'a> {
 
     fn reset_input(&mut self) {
         self.input = TextArea::default();
-        self.input.set_placeholder_text("Type a message...");
+        self.input.set_placeholder_text(self.input_placeholder());
         self.input
             .set_cursor_line_style(ratatui::style::Style::default());
         self.input.set_cursor_style(
@@ -1900,13 +2614,54 @@ impl<'a> App<'a> {
 
         // If streaming, queue the message for later dispatch (grayed out)
         if self.is_busy() {
-            let queued = ChatMessage::queued(text);
-            self.pending_messages.push(queued.id);
-            self.conversation.messages.push(queued);
-            if self.auto_scroll {
-                self.scroll_to_bottom();
-            }
+            self.queue_pending_user_message(text, None);
             return None;
+        }
+
+        // Multi-agent mode: route to mentioned agents or last active.
+        if self
+            .conversation
+            .agents
+            .as_ref()
+            .is_some_and(|registry| !registry.agents.is_empty())
+        {
+            let target_names = self.multi_agent_targets_for_text(&text);
+            if target_names.is_empty() {
+                return None;
+            }
+
+            self.conversation
+                .messages
+                .push(ChatMessage::user(text.clone()));
+            self.auto_scroll = true;
+
+            let mut commands: Vec<Command> = Vec::new();
+            for target_name in &target_names {
+                if self.is_agent_busy(target_name) {
+                    self.queue_pending_user_message(text.clone(), Some(target_name.clone()));
+                    continue;
+                }
+                if let Some(cmd) = self.dispatch_agent_request(target_name, &text, &text) {
+                    commands.push(cmd);
+                }
+            }
+            let primary_target = target_names.first().cloned();
+
+            if let Some(registry) = self.conversation.agents.as_mut() {
+                if let Some(first_target) = primary_target.as_ref() {
+                    if let Some(index) = registry.index_of(first_target) {
+                        registry.last_active = index;
+                    }
+                }
+            }
+
+            self.scroll_to_bottom();
+            if commands.is_empty() {
+                return None;
+            }
+            let first = commands.remove(0);
+            self.deferred_commands.extend(commands);
+            return Some(first);
         }
 
         // Add user message
@@ -1916,9 +2671,9 @@ impl<'a> App<'a> {
 
         // Add assistant placeholder
         let target = self.conversation.default_target.clone();
-        let mut assistant_msg =
+        let assistant_msg =
             ChatMessage::assistant(target.provider.clone(), target.model.clone());
-        assistant_msg.content = "[thinking...]".to_string();
+        // The assistant starts empty; UI shows thinking indicator for active turns
         self.active_assistant_message_id = Some(assistant_msg.id);
         self.conversation.messages.push(assistant_msg);
 
@@ -1986,7 +2741,7 @@ impl<'a> App<'a> {
                 // The current send just added 1 user + 1 assistant placeholder = 2
                 // If we've seen more than 2, the handoff was already consumed
                 return if user_assistant_count <= 2 {
-                    Some(msg.content.clone())
+                    Some(msg.text())
                 } else {
                     None
                 };
@@ -2005,6 +2760,12 @@ impl<'a> App<'a> {
         self.server_session_id = None;
         self.last_input_tokens = None;
         self.context_window = None;
+        self.active_requests.clear();
+        self.active_assistant_ids.clear();
+        self.request_agent_map.clear();
+        self.pending_messages.clear();
+        self.pending_message_targets.clear();
+        self.deferred_commands.clear();
         if should_save {
             Some(Command::SaveConversation(old_conversation))
         } else {
@@ -2019,15 +2780,20 @@ impl<'a> App<'a> {
             self.status = Status::Idle;
             self.active_request = None;
             self.active_assistant_message_id = None;
+            self.active_requests.clear();
+            self.active_assistant_ids.clear();
+            self.request_agent_map.clear();
+            self.pending_messages.clear();
+            self.pending_message_targets.clear();
+            self.deferred_commands.clear();
             // Mark last assistant message as interrupted
             if let Some(msg) = self.active_assistant_message_mut() {
                 if msg.role == Role::Assistant {
                     msg.interrupted = true;
-                    msg.thinking = None;
-                    if msg.content == "[thinking...]" {
-                        msg.content = "[interrupted]".to_string();
+                    if !msg.has_text() {
+                        msg.push_text("[interrupted]");
                     } else {
-                        msg.content.push_str("\n[interrupted]");
+                        msg.push_text("\n[interrupted]");
                     }
                 }
             }
@@ -2053,9 +2819,7 @@ impl<'a> App<'a> {
             .messages
             .iter()
             .filter(|m| match m.role {
-                Role::User | Role::Assistant => {
-                    !m.content.is_empty() && m.content != "[thinking...]"
-                }
+                Role::User | Role::Assistant => m.has_text(),
                 Role::System => m.is_handoff,
                 _ => false,
             })
@@ -2081,11 +2845,12 @@ impl<'a> App<'a> {
         let mut truncated = false;
 
         for msg in history.iter().rev().take(max_turns) {
+            let t = msg.text();
             let part = match msg.role {
-                Role::User => format!("User: {}", msg.content.trim()),
-                Role::Assistant => format!("{}: {}", msg.display_name(), msg.content.trim()),
+                Role::User => format!("User: {}", t.trim()),
+                Role::Assistant => format!("{}: {}", msg.display_name(), t.trim()),
                 Role::System if msg.is_handoff => {
-                    format!("[Handoff summary]: {}", msg.content.trim())
+                    format!("[Handoff summary]: {}", t.trim())
                 }
                 _ => continue,
             };
@@ -2129,8 +2894,8 @@ impl<'a> App<'a> {
             return None;
         }
 
-        let provider_changed = current.provider != new_target.provider
-            || current.model != new_target.model;
+        let provider_changed =
+            current.provider != new_target.provider || current.model != new_target.model;
         let has_history = self
             .conversation
             .messages
@@ -2159,10 +2924,7 @@ impl<'a> App<'a> {
         }
 
         if has_history {
-            let event = format!(
-                "[→ {}]",
-                Self::target_summary(&new_target)
-            );
+            let event = format!("[→ {}]", Self::target_summary(&new_target));
             self.conversation.messages.push(ChatMessage::system(event));
             if self.auto_scroll {
                 self.scroll_to_bottom();
@@ -2256,7 +3018,14 @@ fn summarize_agent_event(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(text) if !text.trim().is_empty() => Some(text.clone()),
         serde_json::Value::Object(map) => {
-            for key in ["message", "text", "detail", "status", "reason"] {
+            for key in [
+                "message",
+                "text",
+                "detail",
+                "description",
+                "status",
+                "reason",
+            ] {
                 if let Some(serde_json::Value::String(text)) = map.get(key) {
                     if !text.trim().is_empty() {
                         return Some(text.clone());
@@ -2273,32 +3042,87 @@ fn pretty_json_or_text(value: &serde_json::Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
+/// Returns true if the tool name represents an agent/subagent invocation.
+fn is_agent_tool(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower == "agent"
+        || lower == "task"
+        || lower.contains("subagent")
+        || lower.contains("dispatch_agent")
+        || lower.contains("spawn_agent")
+        || lower.contains("launch_agent")
+}
+
+/// Extract a human-readable label from agent tool input.
+fn extract_agent_label(input: &Option<serde_json::Value>) -> String {
+    input
+        .as_ref()
+        .and_then(|v| v.get("description"))
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            input
+                .as_ref()
+                .and_then(|v| v.get("prompt"))
+                .and_then(|v| v.as_str())
+                .map(|s| if s.len() > 40 { &s[..40] } else { s })
+        })
+        .unwrap_or("Agent")
+        .to_string()
+}
+
+/// Returns true if the tool name is a workgroup MCP tool that represents
+/// a per-agent interaction (message). These get C-shape sections.
+fn is_workgroup_agent_tool(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    // Match both direct "workgroup_message" and MCP-prefixed "mcp__0x0-workgroup__workgroup_message".
+    lower.contains("workgroup_message")
+}
+
+/// Returns true if the tool name is workgroup_open.
+fn is_workgroup_open_tool(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("workgroup_open")
+}
+
+/// Extract agent name from workgroup_message input.
+fn extract_workgroup_agent_label(_name: &str, input: &Option<serde_json::Value>) -> String {
+    input
+        .as_ref()
+        .and_then(|v| v.get("agent_name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("agent")
+        .to_string()
+}
+
+/// Extract all agent names from a workgroup_open input payload.
+fn extract_workgroup_open_labels(input: &Option<serde_json::Value>) -> Vec<String> {
+    let Some(agents) = input
+        .as_ref()
+        .and_then(|v| v.get("agents"))
+        .and_then(|v| v.as_array())
+    else {
+        return Vec::new();
+    };
+
+    agents
+        .iter()
+        .enumerate()
+        .map(|(idx, agent)| {
+            agent
+                .get("name")
+                .and_then(|v| v.as_str())
+                .filter(|name| !name.trim().is_empty())
+                .map(|name| name.to_string())
+                .unwrap_or_else(|| format!("agent-{}", idx + 1))
+        })
+        .collect()
+}
+
 fn is_thinking_event(name: &str) -> bool {
     let normalized = name.to_ascii_lowercase().replace(['_', '-', ' '], "");
     matches!(
         normalized.as_str(),
         "thinking" | "thought" | "reasoning" | "reason" | "planning" | "plan"
     )
-}
-
-fn tail_words(text: &str, count: usize) -> String {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    if words.len() <= count {
-        words.join(" ")
-    } else {
-        format!("...{}", words[words.len() - count..].join(" "))
-    }
-}
-
-fn compact_preview_words(text: &str, count: usize) -> String {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    if words.is_empty() {
-        String::new()
-    } else if words.len() <= count {
-        words.join(" ")
-    } else {
-        format!("{}...", words[..count].join(" "))
-    }
 }
 
 fn default_provider_mode(provider: &str) -> Option<&'static str> {
@@ -2317,130 +3141,6 @@ fn default_thinking_effort(provider: &str) -> Option<&'static str> {
     }
 }
 
-fn append_answer_activity(msg: &mut ChatMessage, text: &str) {
-    if let Some(last) = msg.activities.last_mut() {
-        if last.kind == ActivityKind::Answer {
-            last.detail.push_str(text);
-            last.preview = compact_preview_words(&last.detail, 14);
-            return;
-        }
-    }
-
-    msg.activities.push(ActivityItem {
-        kind: ActivityKind::Answer,
-        title: "Answer".to_string(),
-        preview: compact_preview_words(text, 14),
-        detail: text.to_string(),
-        related_id: None,
-    });
-}
-
-fn format_tool_use_detail(name: &str, id: Option<&str>, input: Option<&str>) -> String {
-    let mut detail = format!("Tool: {name}");
-    if let Some(id) = id {
-        detail.push_str(&format!("\nId: {id}"));
-    }
-    if let Some(input) = input.filter(|value| !value.trim().is_empty()) {
-        detail.push_str(&format!("\n\nInput:\n{input}"));
-    }
-    detail
-}
-
-fn format_tool_result_detail(tool_use_id: Option<&str>, content: &str) -> String {
-    let mut detail = String::from("Tool result");
-    if let Some(id) = tool_use_id {
-        detail.push_str(&format!("\nTool id: {id}"));
-    }
-    if !content.trim().is_empty() {
-        detail.push_str(&format!("\n\nOutput:\n{content}"));
-    }
-    detail
-}
-
-fn format_question_detail(detail: &str) -> String {
-    format!("Ask user question\n\n{detail}")
-}
-
-fn format_agent_event_detail(
-    name: &str,
-    data: Option<&serde_json::Value>,
-    summary: &str,
-) -> String {
-    let mut detail = format!("Event: {name}\n\nSummary:\n{summary}");
-    if let Some(data) = data {
-        detail.push_str(&format!("\n\nPayload:\n{}", pretty_json_or_text(data)));
-    }
-    detail
-}
-
-fn format_full_tool_call(tool_call: &ToolCall) -> String {
-    let mut detail = format!("Tool: {}", tool_call.name);
-    if let Some(id) = tool_call.id.as_deref() {
-        detail.push_str(&format!("\nId: {id}"));
-    }
-    if let Some(input) = tool_call.input.as_deref().filter(|value| !value.trim().is_empty()) {
-        detail.push_str(&format!("\n\nInput:\n{input}"));
-    }
-    if let Some(result) = tool_call.result.as_deref().filter(|value| !value.trim().is_empty()) {
-        detail.push_str(&format!("\n\nLatest result:\n{result}"));
-    }
-    detail
-}
-
-fn format_full_tool_result(tool_call: &ToolCall) -> String {
-    let mut detail = format!("Tool result: {}", tool_call.name);
-    if let Some(id) = tool_call.id.as_deref() {
-        detail.push_str(&format!("\nId: {id}"));
-    }
-    if let Some(input) = tool_call.input.as_deref().filter(|value| !value.trim().is_empty()) {
-        detail.push_str(&format!("\n\nInput:\n{input}"));
-    }
-    if let Some(result) = tool_call.result.as_deref().filter(|value| !value.trim().is_empty()) {
-        detail.push_str(&format!("\n\nOutput:\n{result}"));
-    }
-    detail
-}
-
-fn push_activity(
-    msg: &mut ChatMessage,
-    kind: ActivityKind,
-    title: String,
-    preview: String,
-    detail: String,
-    related_id: Option<String>,
-) {
-    msg.activities.push(ActivityItem {
-        kind,
-        title,
-        preview,
-        detail,
-        related_id,
-    });
-}
-
-/// Append thinking text to the current thinking activity, or create a new one.
-/// A thinking block is "open" if the last activity is Thinking.
-/// Once a non-thinking activity is pushed, the block is sealed.
-fn append_thinking_activity(msg: &mut ChatMessage, text: &str) {
-    if let Some(last) = msg.activities.last_mut() {
-        if last.kind == ActivityKind::Thinking {
-            // Append to the open thinking block
-            last.detail.push_str(text);
-            last.preview = tail_words(&last.detail, 10);
-            return;
-        }
-    }
-
-    // Start a new thinking block
-    msg.activities.push(ActivityItem {
-        kind: ActivityKind::Thinking,
-        title: "Thinking".to_string(),
-        preview: tail_words(text, 10),
-        detail: text.to_string(),
-        related_id: None,
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2451,13 +3151,44 @@ mod tests {
     }
 
     #[test]
+    fn workgroup_message_is_c_shape_broadcast_is_not() {
+        assert!(is_workgroup_agent_tool("workgroup_message"));
+        assert!(is_workgroup_agent_tool(
+            "mcp__0x0-workgroup__workgroup_message"
+        ));
+        assert!(!is_workgroup_agent_tool("workgroup_broadcast"));
+        assert!(!is_workgroup_agent_tool(
+            "mcp__0x0-workgroup__workgroup_broadcast"
+        ));
+    }
+
+    #[test]
+    fn workgroup_open_extracts_all_agent_labels() {
+        let input = Some(serde_json::json!({
+            "agents": [
+                { "name": "Agent1" },
+                { "name": "Agent2" },
+                { "name": "" }
+            ]
+        }));
+        let labels = extract_workgroup_open_labels(&input);
+        assert_eq!(
+            labels,
+            vec![
+                "Agent1".to_string(),
+                "Agent2".to_string(),
+                "agent-3".to_string()
+            ]
+        );
+    }
+
+    #[test]
     fn stream_text_delta_appends_to_assistant() {
         let mut app = test_app();
         app.conversation
             .messages
             .push(ChatMessage::user("hi".to_string()));
-        let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "[thinking...]".to_string();
+        let assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.status = Status::StreamingMessage;
@@ -2466,14 +3197,14 @@ mod tests {
             request_id: 1,
             text: "Hello".to_string(),
         });
-        assert_eq!(app.conversation.messages.last().unwrap().content, "Hello");
+        assert_eq!(app.conversation.messages.last().unwrap().text(), "Hello");
 
         app.handle_event(AppEvent::StreamTextDelta {
             request_id: 1,
             text: " world".to_string(),
         });
         assert_eq!(
-            app.conversation.messages.last().unwrap().content,
+            app.conversation.messages.last().unwrap().text(),
             "Hello world"
         );
     }
@@ -2484,8 +3215,7 @@ mod tests {
         app.conversation
             .messages
             .push(ChatMessage::user("hi".to_string()));
-        let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "[thinking...]".to_string();
+        let assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 2));
 
@@ -2493,9 +3223,8 @@ mod tests {
             request_id: 1,
             text: "stale".to_string(),
         });
-        assert_eq!(
-            app.conversation.messages.last().unwrap().content,
-            "[thinking...]"
+        assert!(
+            app.conversation.messages.last().unwrap().text().is_empty()
         );
     }
 
@@ -2505,8 +3234,7 @@ mod tests {
         app.conversation
             .messages
             .push(ChatMessage::user("hi".to_string()));
-        let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "[thinking...]".to_string();
+        let assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.status = Status::StreamingMessage;
@@ -2516,16 +3244,16 @@ mod tests {
             error: "connection failed".to_string(),
         });
 
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.status, Status::Idle);
         assert!(app.active_request.is_none());
 
         let assistant_msg = &app.conversation.messages[1];
-        assert!(assistant_msg.content.is_empty());
+        assert!(assistant_msg.text().is_empty());
         assert!(assistant_msg.is_error);
 
         let error_msg = &app.conversation.messages[2];
-        assert_eq!(error_msg.content, "connection failed");
+        assert_eq!(error_msg.text(), "connection failed");
     }
 
     #[test]
@@ -2535,14 +3263,14 @@ mod tests {
             .messages
             .push(ChatMessage::user("hi".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "response text".to_string();
+        assistant.push_text("response text");
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.status = Status::StreamingMessage;
 
         let cmd = app.handle_event(AppEvent::StreamDone { request_id: 1 });
 
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.status, Status::Idle);
         assert!(app.active_request.is_none());
     }
@@ -2555,7 +3283,6 @@ mod tests {
             .push(ChatMessage::user("hi".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         let assistant_id = assistant.id;
-        assistant.content = "[thinking...]".to_string();
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.active_assistant_message_id = Some(assistant_id);
@@ -2577,19 +3304,20 @@ mod tests {
             .iter()
             .find(|msg| msg.id == assistant_id)
             .unwrap();
-        assert_eq!(assistant_msg.content, "answer");
-        assert!(assistant_msg
-            .activities
-            .iter()
-            .any(|activity| activity.kind == ActivityKind::AskUserQuestion));
+        assert_eq!(assistant_msg.text(), "answer");
+        assert!(
+            assistant_msg
+                .blocks
+                .iter()
+                .any(|b| matches!(b, ContentBlock::Event { name, .. } if name == "ask_user_question"))
+        );
     }
 
     #[test]
-    fn exit_plan_mode_switches_claude_mode_to_default() {
+    fn exit_plan_mode_shows_approval_prompt() {
         let mut app = test_app();
-        let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
+        let assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         let assistant_id = assistant.id;
-        assistant.content = "[thinking...]".to_string();
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.active_assistant_message_id = Some(assistant_id);
@@ -2604,17 +3332,24 @@ mod tests {
             reason: Some("Need to execute".to_string()),
         });
 
+        // Mode should NOT switch immediately — requires user approval
         assert_eq!(
             app.conversation.default_target.provider_mode.as_deref(),
-            Some("default")
+            Some("plan")
         );
-        assert!(app
-            .conversation
-            .messages
-            .iter()
-            .filter(|msg| msg.role == Role::Assistant)
-            .flat_map(|msg| msg.activities.iter())
-            .any(|activity| activity.kind == ActivityKind::ExitPlanMode));
+        // Pending question should be set
+        assert!(app.pending_question.is_some());
+        let pq = app.pending_question.as_ref().unwrap();
+        assert_eq!(pq.entries[0].options, vec!["Approve", "Reject"]);
+        // Event block should be present
+        assert!(
+            app.conversation
+                .messages
+                .iter()
+                .filter(|msg| msg.role == Role::Assistant)
+                .flat_map(|msg| msg.blocks.iter())
+                .any(|b| matches!(b, ContentBlock::Event { name, .. } if name == "exit_plan_mode"))
+        );
     }
 
     #[test]
@@ -2622,7 +3357,6 @@ mod tests {
         let mut app = test_app();
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         let assistant_id = assistant.id;
-        assistant.content = "[thinking...]".to_string();
         app.conversation.messages.push(assistant);
         app.active_request = Some((ActiveRequestKind::Message, 1));
         app.active_assistant_message_id = Some(assistant_id);
@@ -2643,7 +3377,7 @@ mod tests {
             .find(|msg| msg.id == assistant_id)
             .unwrap();
         assert_eq!(
-            assistant_msg.thinking.as_deref(),
+            assistant_msg.last_thinking_preview(10).as_deref(),
             Some("...three four five six seven eight nine ten eleven twelve")
         );
     }
@@ -2655,7 +3389,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("hi".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "partial".to_string();
+        assistant.push_text("partial");
         app.conversation.messages.push(assistant);
         app.status = Status::StreamingMessage;
         app.active_request = Some((ActiveRequestKind::Message, 1));
@@ -2667,7 +3401,7 @@ mod tests {
 
         let msg = app.conversation.messages.last().unwrap();
         assert!(msg.interrupted);
-        assert!(msg.content.contains("[interrupted]"));
+        assert!(msg.text().contains("[interrupted]"));
     }
 
     #[test]
@@ -2676,8 +3410,7 @@ mod tests {
         app.conversation
             .messages
             .push(ChatMessage::user("hi".to_string()));
-        let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "[thinking...]".to_string();
+        let assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         app.conversation.messages.push(assistant);
         app.status = Status::StreamingMessage;
         app.active_request = Some((ActiveRequestKind::Message, 1));
@@ -2685,7 +3418,7 @@ mod tests {
         app.cancel_stream();
 
         let msg = app.conversation.messages.last().unwrap();
-        assert_eq!(msg.content, "[interrupted]");
+        assert_eq!(msg.text(), "[interrupted]");
     }
 
     #[test]
@@ -2708,7 +3441,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("first".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "response".to_string();
+        assistant.push_text("response");
         app.conversation.messages.push(assistant);
         // Current user message (just added before build_prompt is called)
         app.conversation
@@ -2728,7 +3461,7 @@ mod tests {
     fn llm_options_built_from_defaults() {
         let mut app = test_app();
         app.build_llm_options();
-        assert_eq!(app.llm_options.len(), 8);
+        assert_eq!(app.llm_options.len(), 9);
         assert_eq!(app.llm_options[0].provider, "claude");
         assert_eq!(app.llm_options[0].model, "sonnet");
     }
@@ -2764,7 +3497,7 @@ mod tests {
             thinking_effort: Some("medium".to_string()),
         };
         let cmd = app.apply_target_switch(new_target);
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.conversation.default_target.model, "opus");
     }
 
@@ -2778,7 +3511,7 @@ mod tests {
             thinking_effort: Some("medium".to_string()),
         };
         let cmd = app.apply_target_switch(new_target);
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(
             app.conversation.default_target.provider_mode.as_deref(),
             Some("default")
@@ -2796,7 +3529,7 @@ mod tests {
             thinking_effort: Some("medium".to_string()),
         };
         let cmd = app.apply_target_switch(new_target);
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.conversation.default_target.provider, "codex");
     }
 
@@ -2807,7 +3540,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("hello".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "hi there".to_string();
+        assistant.push_text("hi there");
         app.conversation.messages.push(assistant);
 
         let new_target = ExecutionTarget {
@@ -2818,16 +3551,16 @@ mod tests {
         };
         let cmd = app.apply_target_switch(new_target);
 
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.conversation.default_target.provider, "codex");
         let system_msgs: Vec<_> = app
             .conversation
             .messages
             .iter()
-            .filter(|m| m.role == Role::System && m.content.starts_with("[→"))
+            .filter(|m| m.role == Role::System && m.text().starts_with("[→"))
             .collect();
         assert_eq!(system_msgs.len(), 1);
-        assert!(system_msgs[0].content.contains("codex/o4-mini"));
+        assert!(system_msgs[0].text().contains("codex/o4-mini"));
     }
 
     #[test]
@@ -2853,7 +3586,7 @@ mod tests {
             summary: "User wants to build X. Done Y so far.".to_string(),
         });
 
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.conversation.default_target.provider, "codex");
         assert_eq!(app.conversation.default_target.model, "o4-mini");
         assert_eq!(app.status, Status::Idle);
@@ -2865,7 +3598,7 @@ mod tests {
             .filter(|m| m.is_handoff)
             .collect();
         assert_eq!(handoff_msgs.len(), 1);
-        assert!(handoff_msgs[0].content.contains("User wants to build X"));
+        assert!(handoff_msgs[0].text().contains("User wants to build X"));
     }
 
     #[test]
@@ -2888,7 +3621,7 @@ mod tests {
             error: "timeout".to_string(),
         });
 
-        assert!(matches!(cmd, Some(Command::SaveConversation(_))));
+        assert!(matches!(cmd.as_slice(), [Command::SaveConversation(_)]));
         assert_eq!(app.conversation.default_target.provider, "codex");
         assert_eq!(app.status, Status::Idle);
         assert!(app.active_request.is_none());
@@ -2927,8 +3660,7 @@ mod tests {
         app.conversation
             .messages
             .push(ChatMessage::user("next question".to_string()));
-        let mut asst = ChatMessage::assistant("codex".to_string(), "o4-mini".to_string());
-        asst.content = "[thinking...]".to_string();
+        let asst = ChatMessage::assistant("codex".to_string(), "o4-mini".to_string());
         app.conversation.messages.push(asst);
 
         let result = app.find_pending_handoff();
@@ -2949,14 +3681,13 @@ mod tests {
             .messages
             .push(ChatMessage::user("first after handoff".to_string()));
         let mut asst = ChatMessage::assistant("codex".to_string(), "o4-mini".to_string());
-        asst.content = "response".to_string();
+        asst.push_text("response");
         app.conversation.messages.push(asst);
         // Now current send
         app.conversation
             .messages
             .push(ChatMessage::user("second question".to_string()));
-        let mut asst2 = ChatMessage::assistant("codex".to_string(), "o4-mini".to_string());
-        asst2.content = "[thinking...]".to_string();
+        let asst2 = ChatMessage::assistant("codex".to_string(), "o4-mini".to_string());
         app.conversation.messages.push(asst2);
 
         let result = app.find_pending_handoff();
@@ -2994,7 +3725,7 @@ mod tests {
         match cmd {
             Some(Command::SaveConversation(saved)) => {
                 assert_eq!(saved.messages.len(), 1);
-                assert_eq!(saved.messages[0].content, "hi");
+                assert_eq!(saved.messages[0].text(), "hi");
             }
             other => panic!("expected saved conversation, got {other:?}"),
         }
@@ -3030,7 +3761,10 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(matches!(cmd, Some(Command::DeleteConversation { .. })));
+        assert!(matches!(
+            cmd.as_slice(),
+            [Command::DeleteConversation { .. }]
+        ));
         assert!(app.overlay.is_none());
         // Should have reset to a fresh conversation
         assert!(app.conversation.messages.is_empty());
@@ -3049,7 +3783,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert!(app.overlay.is_none());
         // Conversation should still have messages
         assert!(!app.conversation.messages.is_empty());
@@ -3089,7 +3823,7 @@ mod tests {
             .conversation
             .messages
             .iter()
-            .filter(|m| m.role == Role::System && m.content.contains("Warning"))
+            .filter(|m| m.role == Role::System && m.text().contains("Warning"))
             .collect();
         assert_eq!(warnings.len(), 1);
     }
@@ -3119,7 +3853,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("first".to_string()));
         let mut assistant = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        assistant.content = "response".to_string();
+        assistant.push_text("response");
         app.conversation.messages.push(assistant);
         // Handoff summary
         app.conversation
@@ -3144,7 +3878,7 @@ mod tests {
                 .messages
                 .push(ChatMessage::user(format!("msg {i}")));
             let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-            asst.content = format!("reply {i}");
+            asst.push_text(&format!("reply {i}"));
             app.conversation.messages.push(asst);
         }
         // Current message
@@ -3163,7 +3897,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("hello".to_string()));
         let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        asst.content = "hi".to_string();
+        asst.push_text("hi");
         app.conversation.messages.push(asst);
 
         let new_target = ExecutionTarget {
@@ -3178,10 +3912,10 @@ mod tests {
             .conversation
             .messages
             .iter()
-            .filter(|m| m.role == Role::System && m.content.starts_with("[→"))
+            .filter(|m| m.role == Role::System && m.text().starts_with("[→"))
             .collect();
         assert_eq!(system_msgs.len(), 1);
-        assert!(system_msgs[0].content.contains("claude/opus"));
+        assert!(system_msgs[0].text().contains("claude/opus"));
     }
 
     #[test]
@@ -3191,7 +3925,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("hello".to_string()));
         let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        asst.content = "hi".to_string();
+        asst.push_text("hi");
         app.conversation.messages.push(asst);
 
         let new_target = ExecutionTarget {
@@ -3206,10 +3940,10 @@ mod tests {
             .conversation
             .messages
             .iter()
-            .filter(|m| m.role == Role::System && m.content.starts_with("[→"))
+            .filter(|m| m.role == Role::System && m.text().starts_with("[→"))
             .collect();
         assert_eq!(system_msgs.len(), 1);
-        assert!(system_msgs[0].content.contains("Mode: default"));
+        assert!(system_msgs[0].text().contains("Mode: default"));
     }
 
     #[test]
@@ -3219,8 +3953,7 @@ mod tests {
         app.conversation
             .messages
             .push(ChatMessage::user("first".to_string()));
-        let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        asst.content = "[thinking...]".to_string();
+        let asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
         app.conversation.messages.push(asst);
         app.status = Status::StreamingMessage;
         app.active_request = Some((ActiveRequestKind::Message, 1));
@@ -3229,7 +3962,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert_eq!(app.pending_messages.len(), 1);
         let user_msgs: Vec<_> = app
             .conversation
@@ -3250,7 +3983,21 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
+        assert_eq!(app.overlay, Some(Overlay::CommandPalette));
+    }
+
+    #[test]
+    fn ctrl_p_opens_command_palette_while_streaming() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let mut app = test_app();
+        app.status = Status::StreamingMessage;
+        app.active_request = Some((ActiveRequestKind::Message, 1));
+
+        let key = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
+        let cmd = app.handle_event(AppEvent::Key(key));
+
+        assert!(cmd.is_empty());
         assert_eq!(app.overlay, Some(Overlay::CommandPalette));
     }
 
@@ -3262,7 +4009,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(matches!(cmd, Some(Command::FetchProviders)));
+        assert!(matches!(cmd.as_slice(), [Command::FetchProviders]));
         assert_eq!(app.overlay, Some(Overlay::LlmPicker));
     }
 
@@ -3274,7 +4021,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert_eq!(app.overlay, Some(Overlay::ModePicker));
     }
 
@@ -3287,7 +4034,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert_eq!(app.input.lines().len(), 2);
         assert_eq!(app.input.lines()[0], "hello");
     }
@@ -3301,7 +4048,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(matches!(cmd, Some(Command::SendMessage { .. })));
+        assert!(cmd.iter().any(|c| matches!(c, Command::SendMessage { .. })));
         assert_eq!(app.status, Status::StreamingMessage);
         assert!(app.active_request.is_some());
     }
@@ -3313,18 +4060,19 @@ mod tests {
             .messages
             .push(ChatMessage::user("first".to_string()));
         let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        asst.content = "response".to_string();
+        asst.push_text("response");
         app.conversation.messages.push(asst);
         let queued = ChatMessage::queued("queued".to_string());
         let queued_id = queued.id;
         app.conversation.messages.push(queued);
         app.pending_messages.push(queued_id);
+        app.pending_message_targets.insert(queued_id, None);
         app.status = Status::StreamingMessage;
         app.active_request = Some((ActiveRequestKind::Message, 1));
 
         let cmd = app.handle_event(AppEvent::StreamDone { request_id: 1 });
 
-        assert!(matches!(cmd, Some(Command::SendMessage { .. })));
+        assert!(cmd.iter().any(|c| matches!(c, Command::SendMessage { .. })));
         assert!(app.pending_messages.is_empty());
         assert_eq!(app.status, Status::StreamingMessage);
 
@@ -3332,9 +4080,10 @@ mod tests {
             .conversation
             .messages
             .iter()
-            .find(|m| m.role == Role::User && m.content == "queued")
+            .find(|m| m.role == Role::User && m.text() == "queued")
             .unwrap();
         assert!(!queued_msg.is_queued);
+        assert!(app.pending_message_targets.is_empty());
     }
 
     #[test]
@@ -3357,7 +4106,7 @@ mod tests {
             summary: "stale".to_string(),
         });
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert_eq!(app.status, Status::StreamingHandoff);
         assert_eq!(app.conversation.default_target.provider, "claude");
     }
@@ -3373,7 +4122,7 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        assert!(cmd.is_none());
+        assert!(cmd.is_empty());
         assert_eq!(app.pending_messages.len(), 1);
         assert!(app.conversation.messages.iter().any(|m| m.is_queued));
     }
@@ -3396,8 +4145,8 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         let cmd = app.handle_event(AppEvent::Key(key));
 
-        match cmd {
-            Some(Command::DeleteConversation { id }) => assert_eq!(id, current_id),
+        match cmd.as_slice() {
+            [Command::DeleteConversation { id }] => assert_eq!(*id, current_id),
             other => panic!("expected delete command, got {other:?}"),
         }
         assert_eq!(app.conversations[0].id, other_id);
@@ -3410,7 +4159,7 @@ mod tests {
             .messages
             .push(ChatMessage::user("first".to_string()));
         let mut asst = ChatMessage::assistant("claude".to_string(), "sonnet".to_string());
-        asst.content = "response".to_string();
+        asst.push_text("response");
         app.conversation.messages.push(asst);
 
         let first = ChatMessage::queued("same".to_string());
@@ -3421,12 +4170,14 @@ mod tests {
         app.conversation.messages.push(second);
         app.pending_messages.push(first_id);
         app.pending_messages.push(second_id);
+        app.pending_message_targets.insert(first_id, None);
+        app.pending_message_targets.insert(second_id, None);
         app.status = Status::StreamingMessage;
         app.active_request = Some((ActiveRequestKind::Message, 1));
 
         let cmd = app.handle_event(AppEvent::StreamDone { request_id: 1 });
 
-        assert!(matches!(cmd, Some(Command::SendMessage { .. })));
+        assert!(cmd.iter().any(|c| matches!(c, Command::SendMessage { .. })));
         let first_msg = app
             .conversation
             .messages
@@ -3462,5 +4213,81 @@ mod tests {
             .filter(|m| m.role == Role::System)
             .collect();
         assert!(system_msgs.is_empty());
+    }
+
+    #[test]
+    fn stream_result_updates_agent_context_usage() {
+        let mut app = test_app();
+        let mut registry = AgentRegistry::new();
+        let target = ExecutionTarget {
+            provider: "codex".to_string(),
+            model: "gpt-5.4".to_string(),
+            provider_mode: Some("workspace-write".to_string()),
+            thinking_effort: Some("medium".to_string()),
+        };
+        registry.add(Agent::new("Agent1".to_string(), target));
+        app.conversation.agents = Some(registry);
+        app.active_requests
+            .insert("Agent1".to_string(), (ActiveRequestKind::Message, 7));
+        app.request_agent_map.insert(7, "Agent1".to_string());
+        app.status = Status::StreamingMessage;
+
+        app.handle_event(AppEvent::StreamResult {
+            request_id: 7,
+            session_id: None,
+            result: None,
+            duration_ms: None,
+            is_error: Some(false),
+            input_tokens: Some(98_000),
+            context_window: Some(128_000),
+        });
+
+        let reg = app.conversation.agents.as_ref().unwrap();
+        let agent = reg.by_name("Agent1").unwrap();
+        assert_eq!(agent.last_input_tokens, Some(98_000));
+        assert_eq!(agent.context_window, Some(128_000));
+        assert_eq!(app.last_input_tokens, None);
+        assert_eq!(app.context_window, None);
+    }
+
+    #[test]
+    fn dispatch_agent_request_compacts_agent_session_when_threshold_crossed() {
+        let mut app = test_app();
+        let mut registry = AgentRegistry::new();
+        let target = ExecutionTarget {
+            provider: "codex".to_string(),
+            model: "gpt-5.4".to_string(),
+            provider_mode: Some("workspace-write".to_string()),
+            thinking_effort: Some("medium".to_string()),
+        };
+        let mut agent = Agent::new("Agent1".to_string(), target);
+        agent.server_session_id = Some("session-1".to_string());
+        agent.last_input_tokens = Some(100_000);
+        agent.context_window = Some(128_000);
+        registry.add(agent);
+        app.conversation.agents = Some(registry);
+        app.conversation
+            .messages
+            .push(ChatMessage::user("hello".to_string()));
+
+        let cmd = app
+            .dispatch_agent_request("Agent1", "follow up", "follow up")
+            .expect("agent dispatch should produce command");
+
+        let reg = app.conversation.agents.as_ref().unwrap();
+        let updated = reg.by_name("Agent1").unwrap();
+        assert_eq!(updated.server_session_id, None);
+        assert_eq!(updated.last_input_tokens, None);
+        assert_eq!(updated.context_window, None);
+        assert!(app
+            .conversation
+            .messages
+            .iter()
+            .any(|m| m.role == Role::System && m.text().contains("Context compacted for Agent1")));
+
+        match cmd {
+            Command::SendMessage { session_id, .. } => assert_eq!(session_id, None),
+            other => panic!("expected send command, got {other:?}"),
+        }
     }
 }
