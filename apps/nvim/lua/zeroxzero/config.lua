@@ -3,6 +3,7 @@
 local M = {}
 
 ---@class zeroxzero.Config
+---@field transport "server"|"native"
 ---@field server_url string
 ---@field provider? string
 ---@field model? string
@@ -13,6 +14,10 @@ local M = {}
 
 ---@class zeroxzero.Keymaps
 ---@field edit string
+---@field session string
+---@field chat string
+---@field add_context string
+---@field clear_context string
 ---@field accept string
 ---@field reject string
 ---@field accept_all string
@@ -23,6 +28,7 @@ local M = {}
 
 ---@type zeroxzero.Config
 M.defaults = {
+  transport = "native",
   server_url = "http://localhost:4096",
   provider = nil,
   model = nil,
@@ -31,6 +37,10 @@ M.defaults = {
   permission_mode = nil,
   keymaps = {
     edit = "<leader>ze",
+    session = "<leader>zs",
+    chat = "<leader>zc",
+    add_context = "<leader>za",
+    clear_context = "<leader>zA",
     accept = "<CR>",
     reject = "cx",
     accept_all = "ca",

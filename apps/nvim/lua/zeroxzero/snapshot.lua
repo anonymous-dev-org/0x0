@@ -110,7 +110,7 @@ end
 ---@param filepath string Relative path from repo root
 ---@param callback fun(err?: string)
 function M.restore_file(stash_ref, filepath, callback)
-  vim.fn.jobstart({ "git", "checkout", stash_ref, "--", filepath }, {
+  vim.fn.jobstart({ "git", "restore", "--worktree", "--source", stash_ref, "--", filepath }, {
     on_exit = function(_, code)
       vim.schedule(function()
         if code == 0 then

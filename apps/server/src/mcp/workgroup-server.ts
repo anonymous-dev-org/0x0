@@ -47,7 +47,7 @@ async function callWorkgroupApi(body: Record<string, unknown>): Promise<string> 
 
 /**
  * Streaming variant: call the workgroup API and emit MCP progress notifications
- * as the sub-agent works, so the orchestrator can relay activity to the TUI.
+ * as the sub-agent works, so the orchestrator can relay activity to clients.
  */
 async function callWorkgroupApiWithProgress(
   body: Record<string, unknown>,
@@ -92,7 +92,7 @@ async function callWorkgroupApiWithProgress(
       if (event.type === "result" && event.result) {
         result = event.result
       }
-      // Emit progress for tool_use events so the TUI sees sub-agent activity
+      // Emit progress for tool_use events so clients can surface sub-agent activity.
       if (
         event.type === "tool_use" &&
         progressToken !== undefined &&

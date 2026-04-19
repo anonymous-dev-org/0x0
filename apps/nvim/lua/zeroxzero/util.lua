@@ -123,4 +123,42 @@ function M.relative_path(filepath)
   return filepath
 end
 
+---@param bufnr integer
+---@return table?
+function M.buffer_snapshot(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return nil
+  end
+
+  local filepath = vim.api.nvim_buf_get_name(bufnr)
+  return {
+    filepath = filepath,
+    relative_path = filepath ~= "" and M.relative_path(filepath) or "[No Name]",
+    filetype = vim.bo[bufnr].filetype,
+    lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false),
+  }
+end
+
+---@return table[]
+function M.collect_diagnostics()
+  local items = {}
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      local filepath = vim.api.nvim_buf_get_name(bufnr)
+      for _, diagnostic in ipairs(vim.diagnostic.get(bufnr)) do
+        table.insert(items, {
+          filepath = filepath,
+          relative_path = filepath ~= "" and M.relative_path(filepath) or "[No Name]",
+          line = diagnostic.lnum + 1,
+          column = diagnostic.col + 1,
+          severity = diagnostic.severity,
+          message = diagnostic.message,
+          source = diagnostic.source,
+        })
+      end
+    end
+  end
+  return items
+end
+
 return M

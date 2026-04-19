@@ -73,16 +73,9 @@ node -e "
 mv "$TMP" package.json
 cd "$REPO_ROOT"
 
-echo "Bumping TUI version..."
-sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" apps/tui/Cargo.toml
-rm -f apps/tui/Cargo.toml.bak
-
-# Update Cargo.lock
-(cd apps/tui && cargo check --quiet 2>/dev/null || true)
-
 # --- Commit and tag ---
 
-git add apps/server/package.json apps/tui/Cargo.toml apps/tui/Cargo.lock
+git add apps/server/package.json
 git commit -m "chore: bump version to $NEW_VERSION"
 git tag "v$NEW_VERSION"
 
@@ -93,6 +86,6 @@ echo "To publish:"
 echo "  git push origin main && git push origin v$NEW_VERSION"
 echo ""
 echo "CI will then:"
-echo "  1. Build 0x0-server and 0x0-tui for all platforms"
+echo "  1. Build 0x0-server for all platforms"
 echo "  2. Create a GitHub release with all artifacts"
 echo "  3. Update the Homebrew tap with new checksums"

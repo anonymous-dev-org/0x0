@@ -12,6 +12,34 @@ function M.setup(opts)
   local cfg = config.current
   local km = cfg.keymaps
 
+  if km.session and km.session ~= "" then
+    vim.keymap.set("n", km.session, function()
+      M.select_session()
+    end, { desc = "0x0: Select Claude/Codex session" })
+  end
+
+  if km.chat and km.chat ~= "" then
+    vim.keymap.set("n", km.chat, function()
+      M.chat()
+    end, { desc = "0x0: Chat with active session" })
+  end
+
+  if km.add_context and km.add_context ~= "" then
+    vim.keymap.set("n", km.add_context, function()
+      M.add_context()
+    end, { desc = "0x0: Queue current file as context" })
+
+    vim.keymap.set("v", km.add_context, function()
+      M.add_context_visual()
+    end, { desc = "0x0: Queue selection as context" })
+  end
+
+  if km.clear_context and km.clear_context ~= "" then
+    vim.keymap.set("n", km.clear_context, function()
+      M.clear_context()
+    end, { desc = "0x0: Clear queued context" })
+  end
+
   -- Edit keymap (normal mode: treesitter scope, visual mode: selection)
   if km.edit and km.edit ~= "" then
     vim.keymap.set("n", km.edit, function()
@@ -22,6 +50,26 @@ function M.setup(opts)
       M.edit_visual()
     end, { desc = "0x0: Edit selection with AI" })
   end
+end
+
+function M.select_session()
+  require("zeroxzero.chat").select_session()
+end
+
+function M.chat()
+  require("zeroxzero.chat").send()
+end
+
+function M.add_context()
+  require("zeroxzero.chat").add_context()
+end
+
+function M.add_context_visual()
+  require("zeroxzero.chat").add_context_visual()
+end
+
+function M.clear_context()
+  require("zeroxzero.chat").clear_context()
 end
 
 --- Start an edit from normal mode using treesitter scope detection.

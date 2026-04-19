@@ -25,26 +25,6 @@ jobs:
       - name: Test
         run: bunx turbo run test --filter=@anonymous-dev/0x0
 
-  check-tui:
-    name: TUI — Build & Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/tui
-
-      - name: Build
-        working-directory: apps/tui
-        run: cargo build
-
-      - name: Test
-        working-directory: apps/tui
-        run: cargo test
-
   check-nvim-plugins:
     name: Nvim Plugins — Lint
     runs-on: ubuntu-latest

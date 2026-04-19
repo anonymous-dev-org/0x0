@@ -12,7 +12,7 @@ local ns = vim.api.nvim_create_namespace("zeroxzero_review")
 ---@field current_hunk integer Index into hunks (1-based)
 ---@field stash_ref string Git stash ref for restoring rejected hunks
 ---@field original_keymaps table Saved keymaps to restore on close
----@field on_complete? fun(accepted: string[], rejected: string[]) Callback when review finishes
+---@field on_complete? fun(accepted: zeroxzero.Hunk[], rejected: zeroxzero.Hunk[]) Callback when review finishes
 
 ---@type zeroxzero.ReviewState?
 local _state = nil
@@ -25,7 +25,7 @@ local function setup_highlights()
 end
 
 --- Start a review session for a single file's hunks.
----@param opts { bufnr: integer, filepath: string, hunks: zeroxzero.Hunk[], stash_ref: string, on_complete?: fun(accepted: string[], rejected: string[]) }
+---@param opts { bufnr: integer, filepath: string, hunks: zeroxzero.Hunk[], stash_ref: string, on_complete?: fun(accepted: zeroxzero.Hunk[], rejected: zeroxzero.Hunk[]) }
 function M.start(opts)
   if _state then
     M.cleanup()
@@ -74,6 +74,7 @@ function M._render_hunk(index, hunk)
   local bufnr = _state.bufnr
 
   local is_current = (index == _state.current_hunk)
+  local cfg = require("zeroxzero.config").current
 
   -- For modified hunks: highlight old lines with DiffDelete, show new lines as virtual lines
   if hunk.old_count > 0 then
@@ -142,6 +143,23 @@ function M._render_hunk(index, hunk)
       sign_text = is_current and ">>" or "||",
       sign_hl_group = is_current and "ZeroReviewCurrentHunk" or "Comment",
       priority = 200,
+    })
+  end
+
+  if is_current and sign_line < vim.api.nvim_buf_line_count(bufnr) then
+    local helper = string.format(
+      "[%d/%d] %s accept  %s reject  %s/%s next/prev",
+      index,
+      #_state.hunks,
+      cfg.keymaps.accept,
+      cfg.keymaps.reject,
+      cfg.keymaps.next_hunk,
+      cfg.keymaps.prev_hunk
+    )
+    vim.api.nvim_buf_set_extmark(bufnr, ns, sign_line, 0, {
+      virt_text = { { helper, "Comment" } },
+      virt_text_pos = "eol",
+      priority = 250,
     })
   end
 end
