@@ -1,0 +1,6 @@
+{
+  "name": "@anonymous-dev/0x0-completion.nvim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neovim inline ghost-text completion client for the local 0x0 server"
+}

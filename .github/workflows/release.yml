@@ -41,9 +41,7 @@ jobs:
       - name: Build
         working-directory: apps/server
         run: |
-          ZEROXZERO_VERSION="${RELEASE_TAG#v}" \
-          ZEROXZERO_CHANNEL=latest \
-          bun run script/build.ts --single --archive --os ${{ matrix.os }} --arch ${{ matrix.arch }}
+          bun run package --os ${{ matrix.os }} --arch ${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,7 +95,7 @@ jobs:
           cd dl
           gh release download "v${VERSION}" \
             --repo anonymous-dev-org/0x0 \
-            --pattern '0x0-server-*'
+            --pattern '0x0-*'
           echo "--- Downloaded ---"
           ls -lh
 
@@ -122,10 +120,14 @@ jobs:
 
           # --- Compute all checksums by downloading from the release ---
           cd dl
-          SERVER_DARWIN_ARM64=$(sha256sum 0x0-server-darwin-arm64.zip   2>/dev/null | cut -d' ' -f1 || echo "")
-          SERVER_DARWIN_X64=$(sha256sum 0x0-server-darwin-x64.zip     2>/dev/null | cut -d' ' -f1 || echo "")
-          SERVER_LINUX_X64=$(sha256sum 0x0-server-linux-x64.tar.gz   2>/dev/null | cut -d' ' -f1 || echo "")
-          SERVER_LINUX_ARM64=$(sha256sum 0x0-server-linux-arm64.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_DARWIN_ARM64=$(sha256sum 0x0-darwin-arm64.zip   2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_DARWIN_X64=$(sha256sum 0x0-darwin-x64.zip     2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_LINUX_X64=$(sha256sum 0x0-linux-x64.tar.gz   2>/dev/null | cut -d' ' -f1 || echo "")
+          SERVER_LINUX_ARM64=$(sha256sum 0x0-linux-arm64.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+          test -n "${SERVER_DARWIN_ARM64}"
+          test -n "${SERVER_DARWIN_X64}"
+          test -n "${SERVER_LINUX_X64}"
+          test -n "${SERVER_LINUX_ARM64}"
 
           cd ..
 
@@ -133,7 +135,7 @@ jobs:
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/anonymous-dev-org/homebrew-tap.git" tap
           cd tap
 
-          # --- Write zeroxzero-server.rb ---
+          # --- Write formula and 0x0 alias ---
           cat > Formula/zeroxzero-server.rb << EOF
           # typed: false
           # frozen_string_literal: true
@@ -145,31 +147,33 @@ jobs:
 
             on_macos do
               if Hardware::CPU.arm?
-                url "${REPO}/0x0-server-darwin-arm64.zip"
+                url "${REPO}/0x0-darwin-arm64.zip"
                 sha256 "${SERVER_DARWIN_ARM64}"
               end
               if Hardware::CPU.intel?
-                url "${REPO}/0x0-server-darwin-x64.zip"
+                url "${REPO}/0x0-darwin-x64.zip"
                 sha256 "${SERVER_DARWIN_X64}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
-                url "${REPO}/0x0-server-linux-arm64.tar.gz"
+                url "${REPO}/0x0-linux-arm64.tar.gz"
                 sha256 "${SERVER_LINUX_ARM64}"
               end
               if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
-                url "${REPO}/0x0-server-linux-x64.tar.gz"
+                url "${REPO}/0x0-linux-x64.tar.gz"
                 sha256 "${SERVER_LINUX_X64}"
               end
             end
 
             def install
-              bin.install "0x0-server"
+              bin.install "0x0"
             end
           end
           EOF
+          mkdir -p Aliases
+          ln -sf ../Formula/zeroxzero-server.rb Aliases/0x0
 
           # --- Remove stale formulae ---
           rm -f Formula/zeroxzero-git.rb
@@ -179,7 +183,7 @@ jobs:
           # --- Commit and push ---
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/
+          git add Formula/ Aliases/
           git diff --staged --quiet && { echo "No formula changes"; exit 0; }
           git commit -m "Update formulae to v${VERSION}"
           git push

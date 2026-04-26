@@ -1,9 +1,0 @@
-dist/
-test/
-script/
-.github/
-*.test.ts
-*.spec.ts
-.gitignore
-biome.json
-bun.lock

@@ -20,13 +20,22 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: bunx turbo run typecheck --filter=@anonymous-dev/0x0
+        run: bunx turbo run typecheck
 
       - name: Test
-        run: bunx turbo run test --filter=@anonymous-dev/0x0
+        run: bunx turbo run test
 
-  check-nvim-plugins:
-    name: Nvim Plugins — Lint
+      - name: Build server
+        run: bunx turbo run build --filter=@anonymous-dev/0x0-server
+
+      - name: Package server smoke test
+        working-directory: apps/server
+        run: |
+          bun run package --os linux --arch x64
+          test -f dist/0x0-linux-x64.tar.gz
+
+  check-neovim-plugins:
+    name: Neovim Plugins — Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,4 +44,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check apps/nvim apps/completion
+          args: --check apps/chat-nvim apps/completion-nvim

@@ -1,0 +1,67 @@
+name: Sync Plugin Repos
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync ${{ matrix.name }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chat plugin
+            app: apps/chat-nvim
+            target_repo: anonymous-dev-org/0x0-chat.nvim
+            checkout_path: chat-plugin
+          - name: completion plugin
+            app: apps/completion-nvim
+            target_repo: anonymous-dev-org/0x0-completion.nvim
+            checkout_path: completion-plugin
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout plugin repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.target_repo }}
+          token: ${{ secrets.PLUGIN_SYNC_TOKEN }}
+          path: ${{ matrix.checkout_path }}
+
+      - name: Sync plugin source
+        run: |
+          rsync -a --delete \
+            --exclude .git \
+            --exclude .github \
+            --exclude LICENSE \
+            --exclude LICENSE.md \
+            --exclude LICENSE.txt \
+            source/${{ matrix.app }}/ ${{ matrix.checkout_path }}/
+
+      - name: Commit plugin changes
+        working-directory: ${{ matrix.checkout_path }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "No plugin changes."
+            exit 0
+          fi
+          git commit -m "Sync from anonymous-dev-org/0x0@${SOURCE_SHA}"
+          git push
