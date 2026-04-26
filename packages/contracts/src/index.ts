@@ -17,6 +17,7 @@ export const ChatRequestSchema = z.object({
   model: z.string().min(1),
   messages: z.array(ChatMessageSchema).min(1),
   systemPrompt: z.string().min(1).optional(),
+  effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
   stream: z.boolean().default(true),
 })
 export type ChatRequest = z.infer<typeof ChatRequestSchema>
@@ -30,6 +31,7 @@ export const CompletionRequestSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   provider: ProviderIdSchema.optional(),
   model: z.string().min(1).optional(),
+  effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
   stream: z.boolean().default(true),
 })
 export type CompletionRequest = z.infer<typeof CompletionRequestSchema>

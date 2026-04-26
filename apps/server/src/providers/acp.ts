@@ -146,7 +146,7 @@ export class AcpProvider implements ChatProvider {
     }
 
     yield { type: "start", provider: this.id, model: input.model }
-    const session = await this.createAcpSession(process.cwd(), { model: input.model })
+    const session = await this.createAcpSession(process.cwd(), { model: input.model, effort: input.effort })
     const prompt = this.promptSession({
       sessionId: session.sessionId,
       prompt: requestToPrompt(input),
@@ -191,7 +191,7 @@ export class AcpProvider implements ChatProvider {
 
   async complete(input: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
     let text = ""
-    const session = await this.createAcpSession(process.cwd(), { model: input.model })
+    const session = await this.createAcpSession(process.cwd(), { model: input.model, effort: input.effort })
     const summary = await this.promptSession({
       sessionId: session.sessionId,
       prompt: requestToPrompt(input),
@@ -248,7 +248,7 @@ export class AcpProvider implements ChatProvider {
     return session.sessionId
   }
 
-  private async createAcpSession(cwd: string, initial: { model?: string; mode?: string } = {}) {
+  private async createAcpSession(cwd: string, initial: { model?: string; mode?: string; effort?: string } = {}) {
     const connection = await this.ensureConnection()
     const result = await connection.newSession({
       cwd,
@@ -260,6 +260,9 @@ export class AcpProvider implements ChatProvider {
     }
     if (initial.mode) {
       await this.setInitialMode(result, initial.mode)
+    }
+    if (initial.effort) {
+      await this.setInitialEffort(result, initial.effort)
     }
 
     return result
@@ -305,6 +308,21 @@ export class AcpProvider implements ChatProvider {
     if (session.modes?.availableModes.some(available => available.id === mode)) {
       await this.connection?.setSessionMode({ sessionId: session.sessionId, modeId: mode }).catch(() => undefined)
     }
+  }
+
+  private async setInitialEffort(session: NewSessionResponse, effort: string) {
+    const effortCategories = new Set(["effort", "reasoning_effort", "reasoning-effort", "thinking_effort"])
+    const configOption = session.configOptions?.find(
+      option => typeof option.category === "string" && effortCategories.has(option.category) && hasSelectValue(option, effort),
+    )
+    if (!configOption) {
+      return
+    }
+    await this.connection?.setSessionConfigOption({
+      sessionId: session.sessionId,
+      configId: configOption.id,
+      value: effort,
+    })
   }
 
   private async promptSession(input: {

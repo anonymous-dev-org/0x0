@@ -5,6 +5,6 @@ if vim.g.loaded_zeroxzero_completion then
 end
 vim.g.loaded_zeroxzero_completion = true
 
-vim.api.nvim_create_user_command("ZeroCompletionToggle", function()
-  require("zeroxzero-completion").toggle()
-end, { desc = "0x0: Toggle inline completion" })
+vim.api.nvim_create_user_command("ZeroCompletionSettings", function()
+  require("zeroxzero-completion").settings()
+end, { desc = "0x0: Configure inline completion" })

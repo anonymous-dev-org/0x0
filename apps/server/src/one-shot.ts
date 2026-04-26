@@ -43,6 +43,7 @@ export function toCompletionChatRequest(
   return {
     provider: providerId,
     model: request.model ?? provider.info.defaultModel,
+    effort: request.effort,
     stream: request.stream,
     systemPrompt:
       "You are an inline code completion engine. Produce concise code continuations without markdown fences or explanation.",

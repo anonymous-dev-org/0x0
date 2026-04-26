@@ -330,6 +330,7 @@ function M.stream_completion(server_url, request, on_chunk, on_done)
       temperature = request.temperature,
       provider = request.provider,
       model = request.model,
+      effort = request.effort,
       stream = true,
     },
   })

@@ -6,6 +6,7 @@ local M = {}
 ---@field server_url string
 ---@field provider? string
 ---@field model? string
+---@field effort? string
 ---@field debounce_ms integer
 ---@field max_tokens integer
 ---@field temperature number
@@ -31,6 +32,7 @@ M.defaults = {
   server_url = "http://localhost:4096",
   provider = nil,
   model = nil,
+  effort = nil,
   debounce_ms = 150,
   max_tokens = 128,
   temperature = 0,

@@ -139,6 +139,7 @@ function M._request_completion()
     temperature = cfg.temperature,
     provider = cfg.provider,
     model = cfg.model,
+    effort = cfg.effort,
   }, function(chunk)
     -- On each text chunk
     _streaming_text = _streaming_text .. chunk
@@ -224,6 +225,164 @@ function M.toggle()
     M.dismiss()
   end
   vim.notify("0x0-completion: " .. (config.current.enabled and "enabled" or "disabled"), vim.log.levels.INFO)
+end
+
+local function notify_setting(name, value)
+  vim.notify("0x0-completion: " .. name .. " set to " .. tostring(value), vim.log.levels.INFO)
+end
+
+local function providers_url()
+  return (config.current.server_url or ""):gsub("/$", "") .. "/providers"
+end
+
+local function fetch_providers(callback)
+  local function handle_output(code, stdout, stderr)
+    vim.schedule(function()
+      if code ~= 0 then
+        vim.notify("0x0-completion: could not load providers: " .. (stderr or "curl failed"), vim.log.levels.ERROR)
+        callback(nil)
+        return
+      end
+
+      local ok, decoded = pcall(vim.json.decode, stdout or "")
+      if not ok or type(decoded) ~= "table" or type(decoded.providers) ~= "table" then
+        vim.notify("0x0-completion: could not parse provider list", vim.log.levels.ERROR)
+        callback(nil)
+        return
+      end
+
+      callback(decoded.providers)
+    end)
+  end
+
+  if vim.system then
+    vim.system({ "curl", "-fsS", providers_url() }, { text = true }, function(result)
+      handle_output(result.code, result.stdout, result.stderr)
+    end)
+    return
+  end
+
+  local output = vim.fn.system({ "curl", "-fsS", providers_url() })
+  handle_output(vim.v.shell_error, output, output)
+end
+
+local function choose_effort()
+  local efforts = { "minimal", "low", "medium", "high", "xhigh" }
+  vim.ui.select(efforts, { prompt = "0x0 completion effort" }, function(effort)
+    if not effort then
+      return
+    end
+    config.current.effort = effort
+    notify_setting("effort", effort)
+  end)
+end
+
+local function choose_temperature()
+  vim.ui.input({
+    prompt = "0x0 completion temperature",
+    default = tostring(config.current.temperature or 0),
+  }, function(value)
+    local temperature = tonumber(value)
+    if not temperature then
+      return
+    end
+    temperature = math.max(0, math.min(2, temperature))
+    config.current.temperature = temperature
+    notify_setting("temperature", temperature)
+  end)
+end
+
+local function choose_max_tokens()
+  vim.ui.input({
+    prompt = "0x0 completion max tokens",
+    default = tostring(config.current.max_tokens or 128),
+  }, function(value)
+    local max_tokens = tonumber(value)
+    if not max_tokens then
+      return
+    end
+    config.current.max_tokens = math.max(1, math.floor(max_tokens))
+    notify_setting("max tokens", config.current.max_tokens)
+  end)
+end
+
+local function choose_provider()
+  fetch_providers(function(providers)
+    if not providers or #providers == 0 then
+      return
+    end
+
+    vim.ui.select(providers, {
+      prompt = "0x0 completion provider",
+      format_item = function(provider)
+        local suffix = provider.configured == false and " unavailable" or ""
+        return string.format("%s (%s)%s", provider.label or provider.id, provider.id, suffix)
+      end,
+    }, function(provider)
+      if not provider then
+        return
+      end
+      if provider.configured == false then
+        vim.notify("0x0-completion: " .. (provider.label or provider.id) .. " is unavailable", vim.log.levels.WARN)
+        return
+      end
+
+      vim.ui.select(provider.models or {}, {
+        prompt = "0x0 completion model",
+        format_item = function(model)
+          if model == provider.defaultModel then
+            return model .. " (default)"
+          end
+          return model
+        end,
+      }, function(model)
+        if not model then
+          return
+        end
+        config.current.provider = provider.id
+        config.current.model = model
+        notify_setting("model", provider.id .. " / " .. model)
+      end)
+    end)
+  end)
+end
+
+function M.settings()
+  local actions = {
+    {
+      label = "Enabled: " .. tostring(config.current.enabled),
+      run = M.toggle,
+    },
+    {
+      label = "Provider / model: " .. tostring(config.current.provider or "server default") .. " / " .. tostring(
+        config.current.model or "default"
+      ),
+      run = choose_provider,
+    },
+    {
+      label = "Effort: " .. tostring(config.current.effort or "server default"),
+      run = choose_effort,
+    },
+    {
+      label = "Max tokens: " .. tostring(config.current.max_tokens),
+      run = choose_max_tokens,
+    },
+    {
+      label = "Temperature: " .. tostring(config.current.temperature),
+      run = choose_temperature,
+    },
+  }
+
+  vim.ui.select(actions, {
+    prompt = "0x0 completion settings",
+    format_item = function(action)
+      return action.label
+    end,
+  }, function(action)
+    if action then
+      action.run()
+    end
+  end)
 end
 
 --- Set up insert-mode keymaps.

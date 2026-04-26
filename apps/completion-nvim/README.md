@@ -21,7 +21,15 @@ Neovim inline ghost-text completion client for the local 0x0 server.
 
 ## Commands
 
-- `:ZeroCompletionToggle`
+- `:ZeroCompletionSettings`
+
+`ZeroCompletionSettings` opens a small selector for:
+
+- enabled/disabled
+- provider and model
+- effort
+- max tokens
+- temperature
 
 ## Server
 
