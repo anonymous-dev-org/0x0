@@ -3,8 +3,8 @@ import { dirname, join } from "node:path"
 import { homedir } from "node:os"
 
 export type ServerConfig = {
-  openAiApiKey?: string
-  anthropicApiKey?: string
+  codexAcpCommand?: string
+  claudeAcpCommand?: string
 }
 
 const CONFIG_DIR = join(homedir(), ".0x0")
@@ -30,9 +30,8 @@ export async function readServerConfig(): Promise<ServerConfig> {
     }
 
     return {
-      openAiApiKey: typeof parsed.openAiApiKey === "string" ? parsed.openAiApiKey : undefined,
-      anthropicApiKey:
-        typeof parsed.anthropicApiKey === "string" ? parsed.anthropicApiKey : undefined,
+      codexAcpCommand: typeof parsed.codexAcpCommand === "string" ? parsed.codexAcpCommand : undefined,
+      claudeAcpCommand: typeof parsed.claudeAcpCommand === "string" ? parsed.claudeAcpCommand : undefined,
     }
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
@@ -49,20 +48,23 @@ export async function writeServerConfig(config: ServerConfig) {
 }
 
 export function mergeProviderEnv(config: ServerConfig): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? config.openAiApiKey,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? config.anthropicApiKey,
+  const env = { ...process.env }
+  if (!env.ZEROXZERO_CODEX_ACP_COMMAND && config.codexAcpCommand) {
+    env.ZEROXZERO_CODEX_ACP_COMMAND = config.codexAcpCommand
   }
+  if (!env.ZEROXZERO_CLAUDE_ACP_COMMAND && config.claudeAcpCommand) {
+    env.ZEROXZERO_CLAUDE_ACP_COMMAND = config.claudeAcpCommand
+  }
+  return env
 }
 
 export function applyProviderEnv(config: ServerConfig) {
-  process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? config.openAiApiKey
-  process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? config.anthropicApiKey
-}
-
-export function hasProviderKey(config: ServerConfig) {
-  return Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || config.openAiApiKey || config.anthropicApiKey)
+  if (!process.env.ZEROXZERO_CODEX_ACP_COMMAND && config.codexAcpCommand) {
+    process.env.ZEROXZERO_CODEX_ACP_COMMAND = config.codexAcpCommand
+  }
+  if (!process.env.ZEROXZERO_CLAUDE_ACP_COMMAND && config.claudeAcpCommand) {
+    process.env.ZEROXZERO_CLAUDE_ACP_COMMAND = config.claudeAcpCommand
+  }
 }
 
 export async function ensureParentDir(path: string) {

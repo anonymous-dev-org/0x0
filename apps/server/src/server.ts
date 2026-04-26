@@ -12,8 +12,8 @@ export async function startServer(options: StartServerOptions = {}) {
   const port = options.port ?? Number(process.env.PORT ?? 4096)
   const hostname = options.hostname ?? "127.0.0.1"
   const registry = createProviderRegistry({
-    openAiApiKey: process.env.OPENAI_API_KEY,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    codexCommand: process.env.ZEROXZERO_CODEX_ACP_COMMAND,
+    claudeCommand: process.env.ZEROXZERO_CLAUDE_ACP_COMMAND,
   })
   const worktrees = new WorktreeManager()
   await worktrees.loadSessions()

@@ -266,7 +266,13 @@ describe("websocket session", () => {
         { role: "user", content: "second" },
       ],
     })
-    await waitFor(() => sent.some(message => (message as { type?: string }).type === "assistant.done"))
+    await waitFor(
+      () =>
+        sent.some(message => {
+          const typed = message as { type?: string; id?: string }
+          return typed.type === "assistant.done" && typed.id === "turn-2"
+        })
+    )
     expect(sent).toContainEqual({
       type: "assistant.done",
       id: "turn-1",
@@ -274,10 +280,83 @@ describe("websocket session", () => {
       summary: "done",
       messages: [
         { role: "user", content: "first" },
+        { role: "assistant", content: "hi" },
+      ],
+    })
+    expect(sent).toContainEqual({
+      type: "assistant.done",
+      id: "turn-2",
+      sessionId: created?.session.id,
+      summary: "done",
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "hi" },
         { role: "user", content: "second" },
         { role: "assistant", content: "hi" },
       ],
     })
+  })
+
+  it("cancels queued chat turns when the active session run is cancelled", async () => {
+    const sent: unknown[] = []
+    const session = createWebSocketSession(
+      {
+        codex: fakeProvider("codex", true, 30),
+        claude: fakeProvider("claude"),
+      },
+      fakeManager(),
+      message => sent.push(message)
+    )
+
+    session.message(
+      JSON.stringify({
+        type: "session.create",
+        id: "create-1",
+        repoRoot: "/repo",
+        provider: "codex",
+        model: "test-model",
+      })
+    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "session.created"))
+
+    const created = sent.find(
+      (message): message is { type: "session.created"; session: { id: string } } =>
+        (message as { type?: string }).type === "session.created"
+    )
+    expect(created).toBeDefined()
+
+    session.message(
+      JSON.stringify({
+        type: "chat.turn",
+        id: "turn-1",
+        sessionId: created?.session.id,
+        prompt: "first",
+      })
+    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "run.status"))
+    session.message(
+      JSON.stringify({
+        type: "chat.turn",
+        id: "turn-2",
+        sessionId: created?.session.id,
+        prompt: "second",
+      })
+    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "user.queued"))
+
+    session.message(
+      JSON.stringify({
+        type: "run.cancel",
+        id: "turn-1",
+        sessionId: created?.session.id,
+      })
+    )
+
+    await waitFor(() =>
+      sent.some(message => (message as { type?: string; id?: string }).type === "cancelled" && (message as { id?: string }).id === "turn-2")
+    )
+    expect(sent).toContainEqual({ type: "cancelled", id: "turn-1" })
+    expect(sent).toContainEqual({ type: "cancelled", id: "turn-2" })
   })
 
   it("returns inline edit replacements", async () => {

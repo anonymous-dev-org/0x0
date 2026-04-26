@@ -10,6 +10,7 @@ import {
   type Session,
   SessionsResponseSchema,
 } from "@anonymous-dev/0x0-contracts"
+import type { Context } from "hono"
 import { Hono } from "hono"
 import { toCompletionChatRequest, toInlineEditChatRequest } from "./one-shot"
 import { createProviderRegistry, type ProviderRegistry } from "./providers"
@@ -39,10 +40,31 @@ function publicSession(session: SessionRecord): Session {
   }
 }
 
+async function handleChatRequest(c: Context<AppBindings>) {
+  const input = ChatRequestSchema.parse(await c.req.json())
+  const provider = c.get("providers")[input.provider]
+
+  if (!provider.info.configured) {
+    return c.json(
+      {
+        error: `${provider.info.label} is not configured on the server.`,
+      },
+      400
+    )
+  }
+
+  if (input.stream) {
+    return createSseResponse(provider.stream(input, c.req.raw.signal))
+  }
+
+  const response = await provider.complete(input, c.req.raw.signal)
+  return c.json(ChatResponseSchema.parse(response))
+}
+
 export function createApp(
   registry = createProviderRegistry({
-    openAiApiKey: process.env.OPENAI_API_KEY,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    codexCommand: process.env.ZEROXZERO_CODEX_ACP_COMMAND,
+    claudeCommand: process.env.ZEROXZERO_CLAUDE_ACP_COMMAND,
   }),
   sessions: HttpSessionManager = new WorktreeManager()
 ) {
@@ -94,26 +116,8 @@ export function createApp(
     return c.json(publicSession(session))
   })
 
-  app.post("/chat", async c => {
-    const input = ChatRequestSchema.parse(await c.req.json())
-    const provider = c.get("providers")[input.provider]
-
-    if (!provider.info.configured) {
-      return c.json(
-        {
-          error: `${provider.info.label} is not configured on the server.`,
-        },
-        400
-      )
-    }
-
-    if (input.stream) {
-      return createSseResponse(provider.stream(input, c.req.raw.signal))
-    }
-
-    const response = await provider.complete(input, c.req.raw.signal)
-    return c.json(ChatResponseSchema.parse(response))
-  })
+  app.post("/chat", handleChatRequest)
+  app.post("/messages", handleChatRequest)
 
   app.post("/completions", async c => {
     const input = CompletionRequestSchema.parse(await c.req.json())

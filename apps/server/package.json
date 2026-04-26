@@ -14,10 +14,10 @@
     "typecheck": "bun tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.71",
-    "@ai-sdk/openai": "^3.0.53",
+    "@agentclientprotocol/claude-agent-acp": "^0.31.0",
+    "@agentclientprotocol/sdk": "^0.20.0",
     "@anonymous-dev/0x0-contracts": "workspace:*",
-    "ai": "^6.0.168",
+    "@zed-industries/codex-acp": "^0.12.0",
     "hono": "^4.12.14",
     "zod": "^4.3.6"
   }

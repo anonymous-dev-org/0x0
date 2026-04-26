@@ -8,8 +8,6 @@ import {
   WebSocketServerMessageSchema,
 } from "@anonymous-dev/0x0-contracts"
 import type { ServerWebSocket, WebSocketHandler } from "bun"
-import { AGENT_SYSTEM_PROMPT } from "./agent/prompts"
-import { runAgentTurn } from "./agent/runner"
 import { getDefaultProviderId, toCompletionChatRequest, toInlineEditChatRequest } from "./one-shot"
 import type { ProviderRegistry } from "./providers"
 import { publicRefName, type SessionRecord, type SessionSnapshot, WorktreeManager } from "./worktree"
@@ -19,7 +17,14 @@ type SendMessage = (message: WebSocketServerMessage) => void
 type ActiveRun = {
   controller: AbortController
   messages: SessionRecord["messages"]
-  queued: SessionRecord["messages"]
+  queued: QueuedTurn[]
+  currentId?: string
+}
+
+type QueuedTurn = {
+  id: string
+  prompt: string
+  userMessage: SessionRecord["messages"][number]
 }
 
 type ActiveEntry = AbortController | ActiveRun
@@ -71,15 +76,24 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
 
   const cancelSession = (id: string, sessionId: string) => {
     const entry = active.get(sessionId)
+    const cancelledIds = new Set([id])
     if (entry) {
       if ("controller" in entry) {
+        if (entry.currentId) {
+          cancelledIds.add(entry.currentId)
+        }
+        for (const turn of entry.queued) {
+          cancelledIds.add(turn.id)
+        }
         entry.controller.abort()
       } else {
         entry.abort()
       }
       active.delete(sessionId)
     }
-    sendChecked({ type: "cancelled", id })
+    for (const cancelledId of cancelledIds) {
+      sendChecked({ type: "cancelled", id: cancelledId })
+    }
     sendChecked({ type: "run.status", id, sessionId, status: "done" })
   }
 
@@ -137,14 +151,13 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
         sendChecked({ type: "error", id: message.id, error: `Session is already running: ${session.id}` })
         return
       }
-      running.messages = [...running.messages, userMessage]
-      running.queued.push(userMessage)
-      const updatedSession = await manager.updateSessionMessages(session.id, running.messages)
+      running.queued.push({ id: message.id, prompt: message.prompt, userMessage })
+      const visibleMessages = [...running.messages, ...running.queued.map(turn => turn.userMessage)]
       sendChecked({
         type: "user.queued",
         id: message.id,
         sessionId: session.id,
-        messages: updatedSession.messages,
+        messages: visibleMessages,
       })
       return
     }
@@ -160,96 +173,29 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
     }
 
     const controller = new AbortController()
-    const messages = [...session.messages, userMessage]
     const activeRun: ActiveRun = {
       controller,
-      messages,
-      queued: [],
+      messages: session.messages,
+      queued: [{ id: message.id, prompt: message.prompt, userMessage }],
     }
     active.set(session.id, activeRun)
-    await manager.updateSessionMessages(session.id, messages)
-    let assistantText = ""
 
-    const request: ChatRequest = {
-      provider: session.provider,
-      model: session.model,
-      stream: true,
-      systemPrompt: AGENT_SYSTEM_PROMPT,
-      messages,
-    }
-
+    let currentTurnId = message.id
     try {
-      sendChecked({ type: "run.status", id: message.id, sessionId: session.id, status: "syncing" })
-      await manager.sync(session.id)
-      sendChecked({ type: "run.status", id: message.id, sessionId: session.id, status: "running" })
-      const hasWorktree = Boolean(session.worktreePath)
-      let summary: string | undefined
-      if (hasWorktree) {
-        summary = await runAgentTurn({
-          provider,
-          model: session.model,
-          prompt: message.prompt,
-          messages,
-          systemPrompt: request.systemPrompt ?? AGENT_SYSTEM_PROMPT,
-          repoRoot: session.repoRoot,
-          worktreePath: session.worktreePath,
-          signal: controller.signal,
-          drainQueuedMessages() {
-            const queued = activeRun.queued.splice(0)
-            return queued
-          },
-          onDelta(text) {
-            assistantText += text
-            sendChecked({
-              type: "assistant.delta",
-              id: message.id,
-              sessionId: session.id,
-              text,
-            })
-          },
-        })
-      } else {
-        for await (const event of provider.stream(request, controller.signal)) {
-          if (event.type === "text_delta") {
-            assistantText += event.text
-            sendChecked({
-              type: "assistant.delta",
-              id: message.id,
-              sessionId: session.id,
-              text: event.text,
-            })
-          }
-          if (event.type === "done") {
-            summary = event.text
-          }
+      while (!controller.signal.aborted && activeRun.queued.length > 0) {
+        const turn = activeRun.queued.shift()
+        if (!turn) {
+          break
         }
+        currentTurnId = turn.id
+        activeRun.currentId = turn.id
+        await runQueuedSessionTurn(session, provider, activeRun, turn)
       }
-      let updatedMessages = activeRun.messages
-      if (assistantText.trim()) {
-        updatedMessages = [...activeRun.messages, { role: "assistant", content: assistantText }]
-        await manager.updateSessionMessages(session.id, updatedMessages)
-      }
-      sendChecked({
-        type: "assistant.done",
-        id: message.id,
-        sessionId: session.id,
-        summary,
-        messages: updatedMessages,
-      })
-      sendChecked({
-        type: "run.status",
-        id: message.id,
-        sessionId: session.id,
-        status: "checkpointing",
-      })
-      const snapshot = await manager.checkpoint(session.id)
-      await sendChanges(message.id, session.id, snapshot)
-      sendChecked({ type: "run.status", id: message.id, sessionId: session.id, status: "done" })
     } catch (error) {
       if (!controller.signal.aborted) {
         sendChecked({
           type: "error",
-          id: message.id,
+          id: currentTurnId,
           error: error instanceof Error ? error.message : String(error),
         })
       }
@@ -258,6 +204,92 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
         active.delete(session.id)
       }
     }
+  }
+
+  const runQueuedSessionTurn = async (
+    session: SessionRecord,
+    provider: ProviderRegistry[ProviderId],
+    activeRun: ActiveRun,
+    turn: QueuedTurn
+  ) => {
+    activeRun.messages = [...activeRun.messages, turn.userMessage]
+    await manager.updateSessionMessages(session.id, activeRun.messages)
+
+    let assistantText = ""
+    const request: ChatRequest = {
+      provider: session.provider,
+      model: session.model,
+      stream: true,
+      messages: activeRun.messages,
+    }
+
+    sendChecked({ type: "run.status", id: turn.id, sessionId: session.id, status: "syncing" })
+    await manager.sync(session.id)
+    sendChecked({ type: "run.status", id: turn.id, sessionId: session.id, status: "running" })
+
+    const hasWorktree = Boolean(session.worktreePath)
+    let summary: string | undefined
+    if (hasWorktree && provider.runSessionTurn) {
+      summary = await provider.runSessionTurn({
+        sessionId: session.id,
+        cwd: session.worktreePath,
+        prompt: turn.prompt,
+        signal: activeRun.controller.signal,
+        onStatus(status) {
+          if (status === "thinking") {
+            sendChecked({ type: "run.status", id: turn.id, sessionId: session.id, status: "running" })
+          }
+        },
+        onDelta(text) {
+          assistantText += text
+          sendChecked({
+            type: "assistant.delta",
+            id: turn.id,
+            sessionId: session.id,
+            text,
+          })
+        },
+      })
+    } else {
+      for await (const event of provider.stream(request, activeRun.controller.signal)) {
+        if (event.type === "text_delta") {
+          assistantText += event.text
+          sendChecked({
+            type: "assistant.delta",
+            id: turn.id,
+            sessionId: session.id,
+            text: event.text,
+          })
+        }
+        if (event.type === "done") {
+          summary = event.text
+        }
+      }
+    }
+
+    const assistantMessageText = assistantText || summary || ""
+    if (assistantMessageText.trim()) {
+      activeRun.messages = [...activeRun.messages, { role: "assistant", content: assistantMessageText }]
+      await manager.updateSessionMessages(session.id, activeRun.messages)
+    }
+    const distinctSummary = summary && assistantText.trim() && summary.trim() !== assistantText.trim() ? summary : undefined
+
+    sendChecked({
+      type: "assistant.done",
+      id: turn.id,
+      sessionId: session.id,
+      summary: distinctSummary,
+      messages: activeRun.messages,
+    })
+    sendChecked({
+      type: "run.status",
+      id: turn.id,
+      sessionId: session.id,
+      status: "checkpointing",
+    })
+    const snapshot = await manager.checkpoint(session.id)
+    await sendChanges(turn.id, session.id, snapshot)
+    sendChecked({ type: "run.status", id: turn.id, sessionId: session.id, status: "done" })
   }
 
   const runInlineEdit = async (message: Extract<WebSocketClientMessage, { type: "inline.edit" }>) => {

@@ -4,8 +4,13 @@ import type {
   InlineEditRequest,
   ProviderId,
 } from "@anonymous-dev/0x0-contracts"
-import { INLINE_EDIT_SYSTEM_PROMPT } from "./agent/prompts"
 import type { ProviderRegistry } from "./providers"
+
+const INLINE_EDIT_SYSTEM_PROMPT = [
+  "You are an inline code editor.",
+  "Return only the replacement text for the selected range.",
+  "Do not include markdown fences, explanations, or surrounding unchanged text unless it belongs in the replacement.",
+].join("\n")
 
 export function getDefaultProviderId(registry: ProviderRegistry): ProviderId {
   return Object.values(registry).find((provider) => provider.info.configured)?.id ?? "codex"

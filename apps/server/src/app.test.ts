@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { ChatProvider } from "./providers/types"
 import { createApp } from "./app"
+import { createProviderRegistry } from "./providers"
 import type { ChatRequest, ChatResponse, ChatStreamEvent } from "@anonymous-dev/0x0-contracts"
 
 function fakeProvider(id: "codex" | "claude", configured = true): ChatProvider {
@@ -58,6 +59,26 @@ describe("server app", () => {
     expect(json.text).toBe("hello")
   })
 
+  it("keeps /messages as a chat compatibility alias", async () => {
+    const res = await app.request("/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "codex",
+        model: "test-model",
+        messages: [{ role: "user", content: "hi" }],
+        stream: false,
+      }),
+    })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json).toMatchObject({
+      provider: "codex",
+      model: "test-model",
+      text: "hello",
+    })
+  })
+
   it("rejects unavailable providers", async () => {
     const res = await app.request("/chat", {
       method: "POST",
@@ -110,5 +131,23 @@ describe("server app", () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toEqual({ replacementText: "hello" })
+  })
+
+  it("reports ACP providers as unavailable when configured commands are missing", () => {
+    const registry = createProviderRegistry({
+      codexCommand: "/tmp/0x0-missing-codex-acp",
+      claudeCommand: "/tmp/0x0-missing-claude-agent-acp",
+    })
+
+    expect(registry.codex.info).toMatchObject({
+      id: "codex",
+      label: "Codex",
+      configured: false,
+    })
+    expect(registry.claude.info).toMatchObject({
+      id: "claude",
+      label: "Claude Code",
+      configured: false,
+    })
   })
 })

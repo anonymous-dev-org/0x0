@@ -5,11 +5,10 @@ import type {
   ProviderId,
   ProviderInfo,
 } from "@anonymous-dev/0x0-contracts"
-import type { LanguageModel } from "ai"
 
 export type ProviderRuntimeConfig = {
-  openAiApiKey?: string
-  anthropicApiKey?: string
+  codexCommand?: string
+  claudeCommand?: string
 }
 
 export interface ChatProvider {
@@ -17,5 +16,14 @@ export interface ChatProvider {
   readonly info: ProviderInfo
   stream(input: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatStreamEvent>
   complete(input: ChatRequest, signal?: AbortSignal): Promise<ChatResponse>
-  aiModel?(model: string): LanguageModel
+  runSessionTurn?(input: {
+    sessionId: string
+    cwd: string
+    prompt: string
+    signal?: AbortSignal
+    onDelta?: (text: string) => void
+    onStatus?: (status: string) => void
+  }): Promise<string>
+  cancelSession?(sessionId: string): Promise<void>
+  close?(): void
 }

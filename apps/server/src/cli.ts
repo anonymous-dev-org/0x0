@@ -1,12 +1,8 @@
 import packageJson from "../package.json"
 import { readFile } from "node:fs/promises"
-import { CONFIG_PATH, hasProviderKey, LOG_PATH, readServerConfig, writeServerConfig, applyProviderEnv } from "./config"
+import { CONFIG_PATH, LOG_PATH, readServerConfig, writeServerConfig, applyProviderEnv } from "./config"
 import { startDaemon, statusServer, stopDaemon, logPathExists } from "./daemon"
 import { startServer } from "./server"
-
-type RawModeInput = typeof process.stdin & {
-  setRawMode?: (mode: boolean) => void
-}
 
 function printHelp() {
   console.log(`0x0 ${packageJson.version}
@@ -23,7 +19,7 @@ Usage:
   0x0 --help
 
 Commands:
-  init      Store provider keys in ${CONFIG_PATH}
+  init      Store optional ACP adapter command overrides in ${CONFIG_PATH}
   server    Start the local 0x0 server in the background
   serve     Run the local 0x0 server in the foreground
   status    Print server status
@@ -45,23 +41,20 @@ function readOption(args: string[], name: string) {
   return args[index + 1]
 }
 
-async function readSecret(prompt: string) {
-  const stdin = process.stdin as RawModeInput
+async function readInput(prompt: string) {
+  const stdin = process.stdin
   if (!stdin.isTTY || !process.stdout.isTTY) {
     return ""
   }
 
   process.stdout.write(prompt)
   stdin.resume()
-  stdin.setRawMode?.(true)
 
   let value = ""
   return new Promise<string>((resolve, reject) => {
     const cleanup = () => {
       stdin.off("data", onData)
-      stdin.setRawMode?.(false)
       stdin.pause()
-      process.stdout.write("\n")
     }
 
     const onData = (chunk: Buffer) => {
@@ -69,17 +62,15 @@ async function readSecret(prompt: string) {
         const char = String.fromCharCode(byte)
         if (char === "\r" || char === "\n") {
           cleanup()
+          process.stdout.write("\n")
           resolve(value)
           return
         }
         if (char === "\u0003") {
           cleanup()
+          process.stdout.write("\n")
           reject(new Error("Cancelled."))
           return
-        }
-        if (char === "\u007f" || char === "\b") {
-          value = value.slice(0, -1)
-          continue
         }
         value += char
       }
@@ -89,40 +80,24 @@ async function readSecret(prompt: string) {
   })
 }
 
-async function ensureProviderKeys(options: { forcePrompt?: boolean } = {}) {
+async function readProviderConfig(options: { forcePrompt?: boolean } = {}) {
   const existing = await readServerConfig()
-  if (!options.forcePrompt && hasProviderKey(existing)) {
+  if (!options.forcePrompt) {
     return existing
   }
 
-  const envConfig = {
-    openAiApiKey: process.env.OPENAI_API_KEY || existing.openAiApiKey,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || existing.anthropicApiKey,
-  }
-  if (!options.forcePrompt && hasProviderKey(envConfig)) {
-    return envConfig
-  }
-
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    if (options.forcePrompt && hasProviderKey(envConfig)) {
-      await writeServerConfig(envConfig)
-      return envConfig
-    }
-    throw new Error("0x0 provider key not configured. Run `0x0 init` or set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+    await writeServerConfig(existing)
+    return existing
   }
 
-  console.log("0x0 needs OPENAI_API_KEY or ANTHROPIC_API_KEY to run model-backed providers.")
-  console.log(`Values entered here are stored in ${CONFIG_PATH}.`)
-  const openAiApiKey = await readSecret("OPENAI_API_KEY (optional): ")
-  const anthropicApiKey = await readSecret("ANTHROPIC_API_KEY (optional): ")
-
-  if (!openAiApiKey && !anthropicApiKey && !hasProviderKey(envConfig)) {
-    throw new Error("At least one provider key is required.")
-  }
-
+  console.log("0x0 uses ACP adapter binaries for providers.")
+  console.log(`Optional command overrides are stored in ${CONFIG_PATH}. Leave blank to use PATH/default installs.`)
+  const codexAcpCommand = await readInput(`Codex ACP command [${existing.codexAcpCommand ?? "codex-acp"}]: `)
+  const claudeAcpCommand = await readInput(`Claude ACP command [${existing.claudeAcpCommand ?? "claude-agent-acp"}]: `)
   const config = {
-    openAiApiKey: openAiApiKey || envConfig.openAiApiKey,
-    anthropicApiKey: anthropicApiKey || envConfig.anthropicApiKey,
+    codexAcpCommand: codexAcpCommand || existing.codexAcpCommand,
+    claudeAcpCommand: claudeAcpCommand || existing.claudeAcpCommand,
   }
   await writeServerConfig(config)
   return config
@@ -160,14 +135,14 @@ async function main() {
   }
 
   if (command === "init") {
-    await ensureProviderKeys({ forcePrompt: true })
-    console.log(`0x0 provider config saved to ${CONFIG_PATH}`)
+    await readProviderConfig({ forcePrompt: true })
+    console.log(`0x0 ACP config saved to ${CONFIG_PATH}`)
     return
   }
 
   if (command === "server") {
     const options = readServerOptions(args)
-    const config = await ensureProviderKeys()
+    const config = await readProviderConfig()
     const status = await startDaemon(config, options)
     console.log(`0x0 server running at ${status.url}${status.pid ? ` (pid ${status.pid})` : ""}`)
     return
@@ -175,7 +150,7 @@ async function main() {
 
   if (command === "serve") {
     const options = readServerOptions(args)
-    const config = await ensureProviderKeys()
+    const config = await readProviderConfig()
     applyProviderEnv(config)
     await startServer(options)
     return
@@ -196,7 +171,7 @@ async function main() {
   if (command === "restart") {
     const options = readServerOptions(args)
     await stopDaemon(options).catch(() => undefined)
-    const config = await ensureProviderKeys()
+    const config = await readProviderConfig()
     const status = await startDaemon(config, options)
     console.log(`0x0 server running at ${status.url}${status.pid ? ` (pid ${status.pid})` : ""}`)
     return
