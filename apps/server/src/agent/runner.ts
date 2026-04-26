@@ -1,12 +1,14 @@
-import { CODE_TOOL_DEFINITIONS, runCodeTool } from "./tools"
-import { runAiSdkAgentTurn } from "./ai-tools"
 import type { ChatMessage } from "@anonymous-dev/0x0-contracts"
 import type { ChatProvider } from "../providers/types"
+import { runAiSdkAgentTurn } from "./ai-tools"
+import { CODE_TOOL_DEFINITIONS, runCodeTool } from "./tools"
 
 type AgentRunnerInput = {
   provider: ChatProvider
   model: string
   prompt: string
+  messages?: ChatMessage[]
+  drainQueuedMessages?: () => ChatMessage[]
   systemPrompt: string
   repoRoot: string
   worktreePath: string
@@ -21,6 +23,16 @@ type ParsedToolCall = {
 }
 
 const MAX_AGENT_STEPS = 10
+
+function conversationPrompt(messages: ChatMessage[] | undefined, prompt: string) {
+  const conversation = messages?.length ? messages : [{ role: "user" as const, content: prompt }]
+  return [
+    "Conversation:",
+    ...conversation.map(message => `${message.role.toUpperCase()}: ${message.content}`),
+    "",
+    "Respond to the latest user message.",
+  ].join("\n")
+}
 
 function toolContractPrompt() {
   return [
@@ -55,7 +67,7 @@ function parseToolCalls(text: string): ParsedToolCall[] {
     if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { tool_calls?: unknown }).tool_calls)) {
       return []
     }
-    return (parsed as { tool_calls: unknown[] }).tool_calls.flatMap((call) => {
+    return (parsed as { tool_calls: unknown[] }).tool_calls.flatMap(call => {
       if (!call || typeof call !== "object") {
         return []
       }
@@ -63,11 +75,13 @@ function parseToolCalls(text: string): ParsedToolCall[] {
       if (typeof record.name !== "string") {
         return []
       }
-      return [{
-        id: typeof record.id === "string" ? record.id : undefined,
-        name: record.name,
-        input: record.input ?? {},
-      }]
+      return [
+        {
+          id: typeof record.id === "string" ? record.id : undefined,
+          name: record.name,
+          input: record.input ?? {},
+        },
+      ]
     })
   } catch {
     return []
@@ -85,7 +99,7 @@ function toolResultMessage(results: Array<{ call: ParsedToolCall; ok: boolean; o
         output: result.output,
       })),
       null,
-      2,
+      2
     ),
     "",
     "Continue. If more tools are needed, emit the next JSON tool_calls object. Otherwise summarize the completed work.",
@@ -93,10 +107,10 @@ function toolResultMessage(results: Array<{ call: ParsedToolCall; ok: boolean; o
 }
 
 export async function runAgentTurn(input: AgentRunnerInput) {
-  if (input.provider.aiModel) {
+  if (input.provider.aiModel && !input.drainQueuedMessages) {
     return runAiSdkAgentTurn({
       model: input.provider.aiModel(input.model),
-      prompt: input.prompt,
+      prompt: conversationPrompt(input.messages, input.prompt),
       systemPrompt: input.systemPrompt,
       repoRoot: input.repoRoot,
       worktreePath: input.worktreePath,
@@ -108,7 +122,7 @@ export async function runAgentTurn(input: AgentRunnerInput) {
   const messages: ChatMessage[] = [
     {
       role: "user",
-      content: [toolContractPrompt(), "", "User request:", input.prompt].join("\n"),
+      content: [toolContractPrompt(), "", conversationPrompt(input.messages, input.prompt)].join("\n"),
     },
   ]
   let finalText = ""
@@ -125,11 +139,12 @@ export async function runAgentTurn(input: AgentRunnerInput) {
         systemPrompt: input.systemPrompt,
         messages,
       },
-      input.signal,
+      input.signal
     )
     const toolCalls = parseToolCalls(response.text)
+    const queuedMessages = input.drainQueuedMessages?.() ?? []
 
-    if (!toolCalls.length) {
+    if (!toolCalls.length && !queuedMessages.length) {
       finalText = response.text
       if (finalText) {
         input.onDelta?.(finalText)
@@ -138,6 +153,11 @@ export async function runAgentTurn(input: AgentRunnerInput) {
     }
 
     messages.push({ role: "assistant", content: response.text })
+    if (!toolCalls.length) {
+      messages.push(...queuedMessages)
+      continue
+    }
+
     const results = []
     for (const call of toolCalls) {
       if (input.signal?.aborted) {
@@ -150,11 +170,12 @@ export async function runAgentTurn(input: AgentRunnerInput) {
         },
         call.name,
         call.input,
-        input.signal,
+        input.signal
       )
       results.push({ call, ...result })
     }
     messages.push({ role: "user", content: toolResultMessage(results) })
+    messages.push(...queuedMessages)
   }
 
   if (!finalText) {

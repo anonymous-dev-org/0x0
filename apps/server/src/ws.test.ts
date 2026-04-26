@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test"
-import type { ChatProvider } from "./providers/types"
-import { createWebSocketSession } from "./ws"
 import type { ChatRequest, ChatResponse, ChatStreamEvent, Session } from "@anonymous-dev/0x0-contracts"
+import type { ChatProvider } from "./providers/types"
 import type { SessionRecord, SessionSnapshot } from "./worktree"
+import { createWebSocketSession } from "./ws"
 
-function fakeProvider(id: "codex" | "claude", configured = true): ChatProvider {
+function fakeProvider(id: "codex" | "claude", configured = true, delayMs = 0): ChatProvider {
   return {
     id,
     info: {
@@ -15,6 +15,9 @@ function fakeProvider(id: "codex" | "claude", configured = true): ChatProvider {
       models: ["test-model"],
     },
     async *stream(input: ChatRequest): AsyncGenerator<ChatStreamEvent> {
+      if (delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
       yield { type: "start", provider: id, model: input.model }
       yield { type: "text_delta", text: input.messages[0]?.content.includes("Complete") ? "let" : "hi" }
       yield { type: "done", provider: id, model: input.model, text: "done" }
@@ -55,10 +58,19 @@ function fakeManager() {
         provider: input.provider,
         model: input.model,
         createdAt: "2026-04-25T00:00:00.000Z",
+        messages: [],
         worktreePath: "",
         ...refs(id),
       }
       sessions.set(id, session)
+      return session
+    },
+    async updateSessionMessages(sessionId: string, messages: Session["messages"]) {
+      const session = sessions.get(sessionId)
+      if (!session) {
+        throw new Error("Unknown session")
+      }
+      session.messages = messages
       return session
     },
     async checkpoint(sessionId: string) {
@@ -140,7 +152,7 @@ describe("websocket session", () => {
         claude: fakeProvider("claude"),
       },
       fakeManager(),
-      (message) => sent.push(message),
+      message => sent.push(message)
     )
 
     session.open()
@@ -151,13 +163,13 @@ describe("websocket session", () => {
         repoRoot: "/repo",
         provider: "codex",
         model: "test-model",
-      }),
+      })
     )
-    await waitFor(() => sent.some((message) => (message as { type?: string }).type === "session.created"))
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "session.created"))
 
     const created = sent.find(
       (message): message is { type: "session.created"; session: { id: string } } =>
-        (message as { type?: string }).type === "session.created",
+        (message as { type?: string }).type === "session.created"
     )
     expect(created).toBeDefined()
 
@@ -167,12 +179,10 @@ describe("websocket session", () => {
         id: "turn-1",
         sessionId: created?.session.id,
         prompt: "hello",
-      }),
+      })
     )
 
-    await waitFor(() =>
-      sent.some((message) => (message as { type?: string }).type === "assistant.delta"),
-    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "assistant.delta"))
 
     expect(sent).toContainEqual({
       type: "assistant.delta",
@@ -188,6 +198,86 @@ describe("websocket session", () => {
       baseRef: `0x0/session/${created?.session.id}/baseline`,
       agentRef: `0x0/session/${created?.session.id}/head`,
     })
+    expect(sent).toContainEqual({
+      type: "assistant.done",
+      id: "turn-1",
+      sessionId: created?.session.id,
+      summary: "done",
+      messages: [
+        { role: "user", content: "hello" },
+        { role: "assistant", content: "hi" },
+      ],
+    })
+  })
+
+  it("queues chat turns while a session turn is active", async () => {
+    const sent: unknown[] = []
+    const session = createWebSocketSession(
+      {
+        codex: fakeProvider("codex", true, 20),
+        claude: fakeProvider("claude"),
+      },
+      fakeManager(),
+      message => sent.push(message)
+    )
+
+    session.message(
+      JSON.stringify({
+        type: "session.create",
+        id: "create-1",
+        repoRoot: "/repo",
+        provider: "codex",
+        model: "test-model",
+      })
+    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "session.created"))
+
+    const created = sent.find(
+      (message): message is { type: "session.created"; session: { id: string } } =>
+        (message as { type?: string }).type === "session.created"
+    )
+    expect(created).toBeDefined()
+
+    session.message(
+      JSON.stringify({
+        type: "chat.turn",
+        id: "turn-1",
+        sessionId: created?.session.id,
+        prompt: "first",
+      })
+    )
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "run.status"))
+    session.message(
+      JSON.stringify({
+        type: "chat.turn",
+        id: "turn-2",
+        sessionId: created?.session.id,
+        prompt: "second",
+      })
+    )
+
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "user.queued"))
+    expect(sent).toContainEqual({
+      type: "user.queued",
+      id: "turn-2",
+      sessionId: created?.session.id,
+      messages: [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+      ],
+    })
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "assistant.done"))
+    expect(sent).toContainEqual({
+      type: "assistant.done",
+      id: "turn-1",
+      sessionId: created?.session.id,
+      summary: "done",
+      messages: [
+        { role: "user", content: "first" },
+        { role: "user", content: "second" },
+        { role: "assistant", content: "hi" },
+      ],
+    })
   })
 
   it("returns inline edit replacements", async () => {
@@ -198,7 +288,7 @@ describe("websocket session", () => {
         claude: fakeProvider("claude"),
       },
       fakeManager(),
-      (message) => sent.push(message),
+      message => sent.push(message)
     )
 
     session.message(
@@ -210,10 +300,10 @@ describe("websocket session", () => {
         range: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 5 },
         prompt: "make it better",
         text: "const",
-      }),
+      })
     )
 
-    await waitFor(() => sent.some((message) => (message as { type?: string }).type === "inline.result"))
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "inline.result"))
 
     expect(sent).toContainEqual({
       type: "inline.result",
@@ -230,7 +320,7 @@ describe("websocket session", () => {
         claude: fakeProvider("claude"),
       },
       fakeManager(),
-      (message) => sent.push(message),
+      message => sent.push(message)
     )
 
     session.open()
@@ -244,10 +334,10 @@ describe("websocket session", () => {
           messages: [{ role: "user", content: "hello" }],
           stream: true,
         },
-      }),
+      })
     )
 
-    await waitFor(() => sent.some((message) => (message as { type?: string }).type === "chat_event"))
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "chat_event"))
 
     expect(sent[0]).toEqual({ type: "ready", protocolVersion: 1 })
     expect(sent).toContainEqual({
@@ -265,7 +355,7 @@ describe("websocket session", () => {
         claude: fakeProvider("claude"),
       },
       fakeManager(),
-      (message) => sent.push(message),
+      message => sent.push(message)
     )
 
     session.message(
@@ -279,10 +369,10 @@ describe("websocket session", () => {
           filepath: "example.ts",
           stream: true,
         },
-      }),
+      })
     )
 
-    await waitFor(() => sent.some((message) => (message as { type?: string }).type === "chat_event"))
+    await waitFor(() => sent.some(message => (message as { type?: string }).type === "chat_event"))
 
     expect(sent).toContainEqual({
       type: "chat_event",

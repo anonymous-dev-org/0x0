@@ -13,7 +13,7 @@ describe("contracts", () => {
         provider: "codex",
         model: "gpt-5.3-codex",
         messages: [{ role: "user", content: "hello" }],
-      }).stream,
+      }).stream
     ).toBe(true)
 
     expect(
@@ -27,12 +27,34 @@ describe("contracts", () => {
             configured: true,
           },
         ],
-      }).providers,
+      }).providers
     ).toHaveLength(1)
   })
 
   test("parses websocket envelopes", () => {
     expect(WebSocketClientMessageSchema.parse({ type: "ping", id: "1" }).type).toBe("ping")
     expect(WebSocketServerMessageSchema.parse({ type: "pong", id: "1" }).type).toBe("pong")
+    expect(
+      WebSocketServerMessageSchema.parse({
+        type: "session.created",
+        id: "1",
+        session: {
+          id: "session-1",
+          repoRoot: "/repo",
+          provider: "codex",
+          model: "test-model",
+          createdAt: "2026-04-25T00:00:00.000Z",
+          messages: [{ role: "user", content: "hello" }],
+        },
+      }).type
+    ).toBe("session.created")
+    expect(
+      WebSocketServerMessageSchema.parse({
+        type: "user.queued",
+        id: "2",
+        sessionId: "session-1",
+        messages: [{ role: "user", content: "queued" }],
+      }).type
+    ).toBe("user.queued")
   })
 })

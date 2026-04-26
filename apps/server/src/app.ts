@@ -7,14 +7,14 @@ import {
   InlineEditRequestSchema,
   InlineEditResponseSchema,
   ProvidersResponseSchema,
-  SessionsResponseSchema,
   type Session,
+  SessionsResponseSchema,
 } from "@anonymous-dev/0x0-contracts"
 import { Hono } from "hono"
+import { toCompletionChatRequest, toInlineEditChatRequest } from "./one-shot"
 import { createProviderRegistry, type ProviderRegistry } from "./providers"
 import { createSseResponse } from "./sse"
-import { toCompletionChatRequest, toInlineEditChatRequest } from "./one-shot"
-import { WorktreeManager, type SessionRecord } from "./worktree"
+import { type SessionRecord, WorktreeManager } from "./worktree"
 
 type HttpSessionManager = {
   listSessions(): SessionRecord[]
@@ -35,6 +35,7 @@ function publicSession(session: SessionRecord): Session {
     provider: session.provider,
     model: session.model,
     createdAt: session.createdAt,
+    messages: session.messages,
   }
 }
 
@@ -43,7 +44,7 @@ export function createApp(
     openAiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   }),
-  sessions: HttpSessionManager = new WorktreeManager(),
+  sessions: HttpSessionManager = new WorktreeManager()
 ) {
   const app = new Hono<AppBindings>()
 
@@ -57,26 +58,26 @@ export function createApp(
       {
         error: error instanceof Error ? error.message : String(error),
       },
-      500,
+      500
     )
   })
 
-  app.get("/health", (c) => c.json(HealthResponseSchema.parse({ ok: true })))
+  app.get("/health", c => c.json(HealthResponseSchema.parse({ ok: true })))
 
-  app.get("/providers", (c) => {
-    const providers = Object.values(c.get("providers")).map((provider) => provider.info)
+  app.get("/providers", c => {
+    const providers = Object.values(c.get("providers")).map(provider => provider.info)
     return c.json(ProvidersResponseSchema.parse({ providers }))
   })
 
-  app.get("/sessions", (c) => {
+  app.get("/sessions", c => {
     return c.json(
       SessionsResponseSchema.parse({
         sessions: sessions.listSessions().map(publicSession),
-      }),
+      })
     )
   })
 
-  app.get("/sessions/:id", (c) => {
+  app.get("/sessions/:id", c => {
     const session = sessions.getSession(c.req.param("id"))
     if (!session) {
       return c.json({ error: "Session not found." }, 404)
@@ -84,7 +85,7 @@ export function createApp(
     return c.json(publicSession(session))
   })
 
-  app.delete("/sessions/:id", async (c) => {
+  app.delete("/sessions/:id", async c => {
     const session = sessions.getSession(c.req.param("id"))
     if (!session) {
       return c.json({ error: "Session not found." }, 404)
@@ -93,7 +94,7 @@ export function createApp(
     return c.json(publicSession(session))
   })
 
-  app.post("/chat", async (c) => {
+  app.post("/chat", async c => {
     const input = ChatRequestSchema.parse(await c.req.json())
     const provider = c.get("providers")[input.provider]
 
@@ -102,7 +103,7 @@ export function createApp(
         {
           error: `${provider.info.label} is not configured on the server.`,
         },
-        400,
+        400
       )
     }
 
@@ -114,7 +115,7 @@ export function createApp(
     return c.json(ChatResponseSchema.parse(response))
   })
 
-  app.post("/completions", async (c) => {
+  app.post("/completions", async c => {
     const input = CompletionRequestSchema.parse(await c.req.json())
     const request = toCompletionChatRequest(c.get("providers"), {
       ...input,
@@ -127,7 +128,7 @@ export function createApp(
         {
           error: `${provider.info.label} is not configured on the server.`,
         },
-        400,
+        400
       )
     }
 
@@ -135,7 +136,7 @@ export function createApp(
     return c.json(CompletionResponseSchema.parse(response))
   })
 
-  app.post("/inline-edit", async (c) => {
+  app.post("/inline-edit", async c => {
     const input = InlineEditRequestSchema.parse(await c.req.json())
     const request = toInlineEditChatRequest(c.get("providers"), input)
     const provider = c.get("providers")[request.provider]
@@ -145,7 +146,7 @@ export function createApp(
         {
           error: `${provider.info.label} is not configured on the server.`,
         },
-        400,
+        400
       )
     }
 

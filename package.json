@@ -9,12 +9,20 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "format": "bun run format:lua",
+    "format:check": "bun run format:lua:check",
+    "format:lua": "stylua apps/chat-nvim apps/completion-nvim",
+    "format:lua:check": "stylua --check apps/chat-nvim apps/completion-nvim",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "@johnnymorganz/stylua-bin": "^2.4.0",
     "@types/bun": "^1.3.12",
     "turbo": "^2.5.0",
     "typescript": "^6.0.3"
-  }
+  },
+  "trustedDependencies": [
+    "@johnnymorganz/stylua-bin"
+  ]
 }

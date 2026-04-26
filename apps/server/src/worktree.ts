@@ -1,8 +1,8 @@
-import { parseNameStatus } from "./agent/tools"
-import type { ChangedFile, Session } from "@anonymous-dev/0x0-contracts"
 import { copyFile, mkdir, rm, stat } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import type { ChangedFile, Session } from "@anonymous-dev/0x0-contracts"
+import { parseNameStatus } from "./agent/tools"
 
 type CommandResult = {
   code: number
@@ -44,7 +44,7 @@ export function publicRefName(ref: string) {
 async function runGit(
   args: string[],
   cwd: string,
-  options: { env?: Record<string, string> } = {},
+  options: { env?: Record<string, string> } = {}
 ): Promise<CommandResult> {
   const proc = Bun.spawn(["git", ...args], {
     cwd,
@@ -130,7 +130,9 @@ export class WorktreeManager {
       return
     }
 
-    const raw = await Bun.file(this.registryPath).json().catch(() => undefined)
+    const raw = await Bun.file(this.registryPath)
+      .json()
+      .catch(() => undefined)
     const records = Array.isArray((raw as { sessions?: unknown })?.sessions)
       ? (raw as { sessions: unknown[] }).sessions
       : []
@@ -141,7 +143,10 @@ export class WorktreeManager {
         continue
       }
       if (await this.isUsableSession(record)) {
-        this.sessions.set(record.id, record)
+        this.sessions.set(record.id, {
+          ...record,
+          messages: record.messages ?? [],
+        })
       }
     }
   }
@@ -176,11 +181,19 @@ export class WorktreeManager {
       provider: input.provider,
       model: input.model,
       createdAt: new Date().toISOString(),
+      messages: [],
       worktreePath,
       baseRef: refs.baseRef,
       agentRef: refs.agentRef,
     }
     this.sessions.set(id, session)
+    await this.saveSessions()
+    return session
+  }
+
+  async updateSessionMessages(sessionId: string, messages: Session["messages"]) {
+    const session = this.requireSession(sessionId)
+    session.messages = messages
     await this.saveSessions()
     return session
   }
@@ -203,7 +216,7 @@ export class WorktreeManager {
           `0x0 checkpoint ${session.id}`,
           "--no-verify",
         ],
-        session.worktreePath,
+        session.worktreePath
       )
       assertGit(commit, "Commit agent checkpoint")
     }
@@ -217,8 +230,14 @@ export class WorktreeManager {
     const session = this.requireSession(sessionId)
     const pending = await this.status(sessionId)
     const hasPendingProposal = pending.files.length > 0
-    const previousBase = assertGit(await runGit(["rev-parse", session.baseRef], session.repoRoot), "Resolve previous baseline")
-    const previousAgent = assertGit(await runGit(["rev-parse", session.agentRef], session.repoRoot), "Resolve previous agent head")
+    const previousBase = assertGit(
+      await runGit(["rev-parse", session.baseRef], session.repoRoot),
+      "Resolve previous baseline"
+    )
+    const previousAgent = assertGit(
+      await runGit(["rev-parse", session.agentRef], session.repoRoot),
+      "Resolve previous agent head"
+    )
 
     const repoHead = assertGit(await runGit(["rev-parse", "HEAD"], session.repoRoot), "Resolve repo HEAD")
     assertGit(await runGit(["reset", "--hard", repoHead], session.worktreePath), "Reset agent worktree")
@@ -241,7 +260,7 @@ export class WorktreeManager {
           `0x0 baseline ${session.id}`,
           "--no-verify",
         ],
-        session.worktreePath,
+        session.worktreePath
       )
       assertGit(commit, "Commit synced baseline")
     }
@@ -250,7 +269,10 @@ export class WorktreeManager {
     assertGit(await runGit(["update-ref", session.baseRef, baseline], session.repoRoot), "Update baseline ref")
     if (hasPendingProposal) {
       await this.replayAgentProposal(session, previousBase, previousAgent)
-      const agentHead = assertGit(await runGit(["rev-parse", "HEAD"], session.worktreePath), "Resolve replayed agent HEAD")
+      const agentHead = assertGit(
+        await runGit(["rev-parse", "HEAD"], session.worktreePath),
+        "Resolve replayed agent HEAD"
+      )
       assertGit(await runGit(["update-ref", session.agentRef, agentHead], session.repoRoot), "Update agent ref")
     } else {
       assertGit(await runGit(["update-ref", session.agentRef, baseline], session.repoRoot), "Update agent ref")
@@ -260,20 +282,14 @@ export class WorktreeManager {
 
   async status(sessionId: string): Promise<SessionSnapshot> {
     const session = this.requireSession(sessionId)
-    const diff = await runGit(
-      ["diff", "--name-status", session.baseRef, session.agentRef],
-      session.repoRoot,
-    )
+    const diff = await runGit(["diff", "--name-status", session.baseRef, session.agentRef], session.repoRoot)
     assertGit(diff, "Read agent diff")
     return { session, files: parseNameStatus(diff.stdout) }
   }
 
   async acceptAll(sessionId: string): Promise<SessionSnapshot> {
     const session = this.requireSession(sessionId)
-    const patch = await runGit(
-      ["diff", "--binary", session.baseRef, session.agentRef],
-      session.repoRoot,
-    )
+    const patch = await runGit(["diff", "--binary", session.baseRef, session.agentRef], session.repoRoot)
     assertGit(patch, "Create accept patch")
     await applyPatchToRepo(session.repoRoot, patch.stdout)
     await this.resetProposal(sessionId)
@@ -285,7 +301,7 @@ export class WorktreeManager {
     const session = this.requireSession(sessionId)
     const patch = await runGit(
       ["diff", "--binary", session.baseRef, session.agentRef, "--", filePath],
-      session.repoRoot,
+      session.repoRoot
     )
     assertGit(patch, "Create file accept patch")
     await applyPatchToRepo(session.repoRoot, patch.stdout)
@@ -305,12 +321,15 @@ export class WorktreeManager {
       assertGit(
         await runGit(
           ["restore", "--source", session.baseRef, "--staged", "--worktree", "--", filePath],
-          session.worktreePath,
+          session.worktreePath
         ),
-        "Restore file from baseline",
+        "Restore file from baseline"
       )
     } else {
-      assertGit(await runGit(["rm", "--force", "--ignore-unmatch", "--", filePath], session.worktreePath), "Remove added file")
+      assertGit(
+        await runGit(["rm", "--force", "--ignore-unmatch", "--", filePath], session.worktreePath),
+        "Remove added file"
+      )
     }
     return this.checkpoint(sessionId)
   }
@@ -318,7 +337,10 @@ export class WorktreeManager {
   async deleteSession(sessionId: string) {
     const session = this.requireSession(sessionId)
     await this.resetProposal(sessionId)
-    assertGit(await runGit(["worktree", "remove", "--force", session.worktreePath], session.repoRoot), "Remove agent worktree")
+    assertGit(
+      await runGit(["worktree", "remove", "--force", session.worktreePath], session.repoRoot),
+      "Remove agent worktree"
+    )
     assertGit(await runGit(["update-ref", "-d", session.baseRef], session.repoRoot), "Delete baseline ref")
     assertGit(await runGit(["update-ref", "-d", session.agentRef], session.repoRoot), "Delete agent ref")
     this.sessions.delete(sessionId)
@@ -333,16 +355,8 @@ export class WorktreeManager {
     assertGit(await runGit(["reset", "--hard", head], session.worktreePath), "Reset agent worktree")
   }
 
-  private async copyPathBetweenRefs(
-    session: SessionRecord,
-    targetRef: string,
-    sourceRef: string,
-    filePath: string,
-  ) {
-    const indexPath = path.join(
-      os.tmpdir(),
-      `0x0-index-${session.id}-${crypto.randomUUID()}`,
-    )
+  private async copyPathBetweenRefs(session: SessionRecord, targetRef: string, sourceRef: string, filePath: string) {
+    const indexPath = path.join(os.tmpdir(), `0x0-index-${session.id}-${crypto.randomUUID()}`)
     const env = { GIT_INDEX_FILE: indexPath }
 
     try {
@@ -350,16 +364,19 @@ export class WorktreeManager {
       if (await this.refHasPath(session.repoRoot, sourceRef, filePath)) {
         assertGit(
           await runGit(["restore", "--source", sourceRef, "--staged", "--", filePath], session.repoRoot, { env }),
-          "Update baseline path",
+          "Update baseline path"
         )
       } else {
         assertGit(
           await runGit(["rm", "--cached", "--ignore-unmatch", "--", filePath], session.repoRoot, { env }),
-          "Remove baseline path",
+          "Remove baseline path"
         )
       }
       const newTree = assertGit(await runGit(["write-tree"], session.repoRoot, { env }), "Write baseline tree")
-      const oldTree = assertGit(await runGit(["rev-parse", `${targetRef}^{tree}`], session.repoRoot), "Read old baseline tree")
+      const oldTree = assertGit(
+        await runGit(["rev-parse", `${targetRef}^{tree}`], session.repoRoot),
+        "Read old baseline tree"
+      )
       if (newTree === oldTree) {
         return
       }
@@ -378,9 +395,9 @@ export class WorktreeManager {
             `0x0 accept ${filePath}`,
           ],
           session.repoRoot,
-          { env },
+          { env }
         ),
-        "Commit accepted file baseline",
+        "Commit accepted file baseline"
       )
       assertGit(await runGit(["update-ref", targetRef, newCommit], session.repoRoot), "Update baseline ref")
     } finally {
@@ -411,7 +428,7 @@ export class WorktreeManager {
         "theirs",
         previousAgent,
       ],
-      session.worktreePath,
+      session.worktreePath
     )
     if (merge.code === 0) {
       return
@@ -419,16 +436,8 @@ export class WorktreeManager {
 
     await this.resolveAgentConflicts(session, previousAgent)
     const commit = await runGit(
-      [
-        "-c",
-        "user.name=0x0 Agent",
-        "-c",
-        "user.email=0x0-agent@localhost",
-        "commit",
-        "--no-edit",
-        "--no-verify",
-      ],
-      session.worktreePath,
+      ["-c", "user.name=0x0 Agent", "-c", "user.email=0x0-agent@localhost", "commit", "--no-edit", "--no-verify"],
+      session.worktreePath
     )
     assertGit(commit, "Commit replayed agent proposal")
   }
@@ -436,20 +445,23 @@ export class WorktreeManager {
   private async resolveAgentConflicts(session: SessionRecord, previousAgent: string) {
     const changed = assertGit(
       await runGit(["diff", "--name-only", "--diff-filter=U", "-z"], session.worktreePath),
-      "Read unresolved agent paths",
+      "Read unresolved agent paths"
     )
     const paths = changed.split("\0").filter(Boolean)
     for (const filePath of paths) {
       assertSafePath(filePath)
       if (await this.refHasPath(session.repoRoot, previousAgent, filePath)) {
         assertGit(
-          await runGit(["restore", "--source", previousAgent, "--staged", "--worktree", "--", filePath], session.worktreePath),
-          "Resolve conflicted file from agent proposal",
+          await runGit(
+            ["restore", "--source", previousAgent, "--staged", "--worktree", "--", filePath],
+            session.worktreePath
+          ),
+          "Resolve conflicted file from agent proposal"
         )
       } else {
         assertGit(
           await runGit(["rm", "--force", "--ignore-unmatch", "--", filePath], session.worktreePath),
-          "Resolve conflicted file deletion from agent proposal",
+          "Resolve conflicted file deletion from agent proposal"
         )
       }
     }
@@ -467,16 +479,13 @@ export class WorktreeManager {
   private async userChangedPaths(repoRoot: string) {
     const worktreeOutput = assertGit(
       await runGit(["ls-files", "--modified", "--deleted", "--others", "--exclude-standard", "-z"], repoRoot),
-      "Read user checkout changes",
+      "Read user checkout changes"
     )
     const stagedOutput = assertGit(
       await runGit(["diff", "--cached", "--name-only", "-z"], repoRoot),
-      "Read staged user changes",
+      "Read staged user changes"
     )
-    return [...new Set(`${worktreeOutput}\0${stagedOutput}`
-      .split("\0")
-      .filter(Boolean)
-      .sort())]
+    return [...new Set(`${worktreeOutput}\0${stagedOutput}`.split("\0").filter(Boolean).sort())]
   }
 
   private async copyUserPathToWorktree(session: SessionRecord, filePath: string) {
@@ -493,10 +502,7 @@ export class WorktreeManager {
 
   private async saveSessions() {
     await ensureDir(this.stateRoot)
-    await Bun.write(
-      this.registryPath,
-      JSON.stringify({ sessions: this.listSessions() }, null, 2),
-    )
+    await Bun.write(this.registryPath, JSON.stringify({ sessions: this.listSessions() }, null, 2))
   }
 
   private isSessionRecord(value: unknown): value is SessionRecord {
@@ -504,21 +510,26 @@ export class WorktreeManager {
       return false
     }
     const record = value as Partial<SessionRecord>
-    return typeof record.id === "string" &&
+    return (
+      typeof record.id === "string" &&
       typeof record.repoRoot === "string" &&
       (record.provider === "codex" || record.provider === "claude") &&
       typeof record.model === "string" &&
       typeof record.createdAt === "string" &&
+      (record.messages === undefined || Array.isArray(record.messages)) &&
       typeof record.worktreePath === "string" &&
       typeof record.baseRef === "string" &&
       typeof record.agentRef === "string"
+    )
   }
 
   private async isUsableSession(session: SessionRecord) {
     if (!(await pathExists(session.repoRoot)) || !(await pathExists(session.worktreePath))) {
       return false
     }
-    return (await runGit(["rev-parse", "--verify", session.baseRef], session.repoRoot)).code === 0 &&
+    return (
+      (await runGit(["rev-parse", "--verify", session.baseRef], session.repoRoot)).code === 0 &&
       (await runGit(["rev-parse", "--verify", session.agentRef], session.repoRoot)).code === 0
+    )
   }
 }

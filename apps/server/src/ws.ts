@@ -1,29 +1,34 @@
 import {
-  WebSocketClientMessageSchema,
-  WebSocketServerMessageSchema,
   type ChatRequest,
   type ChatStreamEvent,
   type ProviderId,
   type WebSocketClientMessage,
+  WebSocketClientMessageSchema,
   type WebSocketServerMessage,
+  WebSocketServerMessageSchema,
 } from "@anonymous-dev/0x0-contracts"
 import type { ServerWebSocket, WebSocketHandler } from "bun"
 import { AGENT_SYSTEM_PROMPT } from "./agent/prompts"
 import { runAgentTurn } from "./agent/runner"
 import { getDefaultProviderId, toCompletionChatRequest, toInlineEditChatRequest } from "./one-shot"
 import type { ProviderRegistry } from "./providers"
-import { publicRefName, WorktreeManager, type SessionRecord, type SessionSnapshot } from "./worktree"
+import { publicRefName, type SessionRecord, type SessionSnapshot, WorktreeManager } from "./worktree"
 
 type SendMessage = (message: WebSocketServerMessage) => void
+
+type ActiveRun = {
+  controller: AbortController
+  messages: SessionRecord["messages"]
+  queued: SessionRecord["messages"]
+}
+
+type ActiveEntry = AbortController | ActiveRun
 
 type SessionManager = {
   listSessions(): SessionRecord[]
   getSession(sessionId: string): SessionRecord | undefined
-  createSession(input: {
-    repoRoot: string
-    provider: ProviderId
-    model: string
-  }): Promise<SessionRecord>
+  createSession(input: { repoRoot: string; provider: ProviderId; model: string }): Promise<SessionRecord>
+  updateSessionMessages(sessionId: string, messages: SessionRecord["messages"]): Promise<SessionRecord>
   sync(sessionId: string): Promise<SessionSnapshot>
   checkpoint(sessionId: string): Promise<SessionSnapshot>
   status(sessionId: string): Promise<SessionSnapshot>
@@ -37,12 +42,8 @@ function toText(message: string | Buffer) {
   return typeof message === "string" ? message : new TextDecoder().decode(message)
 }
 
-export function createWebSocketSession(
-  registry: ProviderRegistry,
-  manager: SessionManager,
-  send: SendMessage,
-) {
-  const active = new Map<string, AbortController>()
+export function createWebSocketSession(registry: ProviderRegistry, manager: SessionManager, send: SendMessage) {
+  const active = new Map<string, ActiveEntry>()
 
   const sendChecked = (message: WebSocketServerMessage) => {
     send(WebSocketServerMessageSchema.parse(message))
@@ -53,11 +54,15 @@ export function createWebSocketSession(
   }
 
   const cancel = (id: string, notify = true) => {
-    const controller = active.get(id)
-    if (!controller) {
+    const entry = active.get(id)
+    if (!entry) {
       return
     }
-    controller.abort()
+    if ("controller" in entry) {
+      entry.controller.abort()
+    } else {
+      entry.abort()
+    }
     active.delete(id)
     if (notify) {
       sendChecked({ type: "cancelled", id })
@@ -65,9 +70,13 @@ export function createWebSocketSession(
   }
 
   const cancelSession = (id: string, sessionId: string) => {
-    const controller = active.get(sessionId)
-    if (controller) {
-      controller.abort()
+    const entry = active.get(sessionId)
+    if (entry) {
+      if ("controller" in entry) {
+        entry.controller.abort()
+      } else {
+        entry.abort()
+      }
       active.delete(sessionId)
     }
     sendChecked({ type: "cancelled", id })
@@ -115,14 +124,30 @@ export function createWebSocketSession(
     void sendChanges(message.id, session.id)
   }
 
-  const streamSessionTurn = async (
-    message: Extract<WebSocketClientMessage, { type: "chat.turn" }>,
-  ) => {
+  const streamSessionTurn = async (message: Extract<WebSocketClientMessage, { type: "chat.turn" }>) => {
     const session = getSession(message.id, message.sessionId)
     if (!session) {
       return
     }
-    cancel(session.id, false)
+
+    const userMessage = { role: "user" as const, content: message.prompt }
+    const running = active.get(session.id)
+    if (running) {
+      if (!("queued" in running)) {
+        sendChecked({ type: "error", id: message.id, error: `Session is already running: ${session.id}` })
+        return
+      }
+      running.messages = [...running.messages, userMessage]
+      running.queued.push(userMessage)
+      const updatedSession = await manager.updateSessionMessages(session.id, running.messages)
+      sendChecked({
+        type: "user.queued",
+        id: message.id,
+        sessionId: session.id,
+        messages: updatedSession.messages,
+      })
+      return
+    }
 
     const provider = registry[session.provider]
     if (!provider.info.configured) {
@@ -135,14 +160,22 @@ export function createWebSocketSession(
     }
 
     const controller = new AbortController()
-    active.set(session.id, controller)
+    const messages = [...session.messages, userMessage]
+    const activeRun: ActiveRun = {
+      controller,
+      messages,
+      queued: [],
+    }
+    active.set(session.id, activeRun)
+    await manager.updateSessionMessages(session.id, messages)
+    let assistantText = ""
 
     const request: ChatRequest = {
       provider: session.provider,
       model: session.model,
       stream: true,
       systemPrompt: AGENT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: message.prompt }],
+      messages,
     }
 
     try {
@@ -150,16 +183,23 @@ export function createWebSocketSession(
       await manager.sync(session.id)
       sendChecked({ type: "run.status", id: message.id, sessionId: session.id, status: "running" })
       const hasWorktree = Boolean(session.worktreePath)
+      let summary: string | undefined
       if (hasWorktree) {
-        const summary = await runAgentTurn({
+        summary = await runAgentTurn({
           provider,
           model: session.model,
           prompt: message.prompt,
+          messages,
           systemPrompt: request.systemPrompt ?? AGENT_SYSTEM_PROMPT,
           repoRoot: session.repoRoot,
           worktreePath: session.worktreePath,
           signal: controller.signal,
+          drainQueuedMessages() {
+            const queued = activeRun.queued.splice(0)
+            return queued
+          },
           onDelta(text) {
+            assistantText += text
             sendChecked({
               type: "assistant.delta",
               id: message.id,
@@ -168,15 +208,10 @@ export function createWebSocketSession(
             })
           },
         })
-        sendChecked({
-          type: "assistant.done",
-          id: message.id,
-          sessionId: session.id,
-          summary,
-        })
       } else {
         for await (const event of provider.stream(request, controller.signal)) {
           if (event.type === "text_delta") {
+            assistantText += event.text
             sendChecked({
               type: "assistant.delta",
               id: message.id,
@@ -185,15 +220,22 @@ export function createWebSocketSession(
             })
           }
           if (event.type === "done") {
-            sendChecked({
-              type: "assistant.done",
-              id: message.id,
-              sessionId: session.id,
-              summary: event.text,
-            })
+            summary = event.text
           }
         }
       }
+      let updatedMessages = activeRun.messages
+      if (assistantText.trim()) {
+        updatedMessages = [...activeRun.messages, { role: "assistant", content: assistantText }]
+        await manager.updateSessionMessages(session.id, updatedMessages)
+      }
+      sendChecked({
+        type: "assistant.done",
+        id: message.id,
+        sessionId: session.id,
+        summary,
+        messages: updatedMessages,
+      })
       sendChecked({
         type: "run.status",
         id: message.id,
@@ -212,7 +254,7 @@ export function createWebSocketSession(
         })
       }
     } finally {
-      if (active.get(session.id) === controller) {
+      if (active.get(session.id) === activeRun) {
         active.delete(session.id)
       }
     }
@@ -256,9 +298,7 @@ export function createWebSocketSession(
     await streamChat(message.id, message.request)
   }
 
-  const startCompletion = async (
-    message: Extract<WebSocketClientMessage, { type: "completion" }>,
-  ) => {
+  const startCompletion = async (message: Extract<WebSocketClientMessage, { type: "completion" }>) => {
     cancel(message.id)
     await streamChat(message.id, toCompletionChatRequest(registry, message.request))
   }
@@ -322,12 +362,12 @@ export function createWebSocketSession(
 
     switch (message.type) {
       case "session.create":
-        void createSession(message).catch((error) =>
+        void createSession(message).catch(error =>
           sendChecked({
             type: "error",
             id: message.id,
             error: error instanceof Error ? error.message : String(error),
-          }),
+          })
         )
         break
       case "session.open":
@@ -344,64 +384,68 @@ export function createWebSocketSession(
         break
       case "changes.status":
         if (getSession(message.id, message.sessionId)) {
-          void sendChanges(message.id, message.sessionId).catch((error) =>
+          void sendChanges(message.id, message.sessionId).catch(error =>
             sendChecked({
               type: "error",
               id: message.id,
               error: error instanceof Error ? error.message : String(error),
-            }),
+            })
           )
         }
         break
       case "changes.accept_file":
         if (getSession(message.id, message.sessionId)) {
-          void manager.acceptFile(message.sessionId, message.path)
-            .then((snapshot) => sendChanges(message.id, message.sessionId, snapshot))
-            .catch((error) =>
+          void manager
+            .acceptFile(message.sessionId, message.path)
+            .then(snapshot => sendChanges(message.id, message.sessionId, snapshot))
+            .catch(error =>
               sendChecked({
                 type: "error",
                 id: message.id,
                 error: error instanceof Error ? error.message : String(error),
-              }),
+              })
             )
         }
         break
       case "changes.discard_file":
         if (getSession(message.id, message.sessionId)) {
-          void manager.discardFile(message.sessionId, message.path)
-            .then((snapshot) => sendChanges(message.id, message.sessionId, snapshot))
-            .catch((error) =>
+          void manager
+            .discardFile(message.sessionId, message.path)
+            .then(snapshot => sendChanges(message.id, message.sessionId, snapshot))
+            .catch(error =>
               sendChecked({
                 type: "error",
                 id: message.id,
                 error: error instanceof Error ? error.message : String(error),
-              }),
+              })
             )
         }
         break
       case "changes.accept_all":
         if (getSession(message.id, message.sessionId)) {
-          void manager.acceptAll(message.sessionId)
-            .then((snapshot) => sendChanges(message.id, message.sessionId, snapshot))
-            .catch((error) =>
+          void manager
+            .acceptAll(message.sessionId)
+            .then(snapshot => sendChanges(message.id, message.sessionId, snapshot))
+            .catch(error =>
               sendChecked({
                 type: "error",
                 id: message.id,
                 error: error instanceof Error ? error.message : String(error),
-              }),
+              })
             )
         }
         break
       case "changes.discard_all":
         if (getSession(message.id, message.sessionId)) {
-          void manager.discardAll(message.sessionId)
-            .then((snapshot) => sendChanges(message.id, message.sessionId, snapshot))
-            .catch((error) =>
+          void manager
+            .discardAll(message.sessionId)
+            .then(snapshot => sendChanges(message.id, message.sessionId, snapshot))
+            .catch(error =>
               sendChecked({
                 type: "error",
                 id: message.id,
                 error: error instanceof Error ? error.message : String(error),
-              }),
+              })
             )
         }
         break
@@ -421,8 +465,12 @@ export function createWebSocketSession(
   }
 
   const close = () => {
-    for (const controller of active.values()) {
-      controller.abort()
+    for (const entry of active.values()) {
+      if ("controller" in entry) {
+        entry.controller.abort()
+      } else {
+        entry.abort()
+      }
     }
     active.clear()
   }
@@ -438,7 +486,7 @@ export function createWebSocketSession(
 
 export function createWebSocketHandler(
   registry: ProviderRegistry,
-  manager: SessionManager = new WorktreeManager(),
+  manager: SessionManager = new WorktreeManager()
 ): WebSocketHandler<unknown> {
   const sessions = new WeakMap<ServerWebSocket<unknown>, ReturnType<typeof createWebSocketSession>>()
 
@@ -452,7 +500,7 @@ export function createWebSocketHandler(
 
   return {
     open(ws: ServerWebSocket<unknown>) {
-      const session = createWebSocketSession(registry, manager, (message) => safeSend(ws, message))
+      const session = createWebSocketSession(registry, manager, message => safeSend(ws, message))
       sessions.set(ws, session)
       session.open()
     },

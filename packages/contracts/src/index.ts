@@ -64,6 +64,7 @@ export const SessionSchema = z.object({
   provider: ProviderIdSchema,
   model: z.string().min(1),
   createdAt: z.string().min(1),
+  messages: z.array(ChatMessageSchema).default([]),
 })
 export type Session = z.infer<typeof SessionSchema>
 
@@ -245,6 +246,13 @@ export const WebSocketServerMessageSchema = z.discriminatedUnion("type", [
     id: WebSocketRequestIdSchema,
     sessionId: z.string().min(1),
     summary: z.string().optional(),
+    messages: z.array(ChatMessageSchema).optional(),
+  }),
+  z.object({
+    type: z.literal("user.queued"),
+    id: WebSocketRequestIdSchema,
+    sessionId: z.string().min(1),
+    messages: z.array(ChatMessageSchema),
   }),
   z.object({
     type: z.literal("inline.result"),
