@@ -211,11 +211,12 @@ export class AcpProvider implements ChatProvider {
     sessionId: string
     cwd: string
     prompt: string
+    effort?: string
     signal?: AbortSignal
     onDelta?: (text: string) => void
     onStatus?: (status: string) => void
   }) {
-    const acpSessionId = await this.getOrCreateLogicalSession(input.sessionId, input.cwd)
+    const acpSessionId = await this.getOrCreateLogicalSession(input.sessionId, input.cwd, input.effort)
     return this.promptSession({
       sessionId: acpSessionId,
       prompt: [{ type: "text", text: input.prompt }],
@@ -238,12 +239,12 @@ export class AcpProvider implements ChatProvider {
     this.process = undefined
   }
 
-  private async getOrCreateLogicalSession(logicalSessionId: string, cwd: string) {
+  private async getOrCreateLogicalSession(logicalSessionId: string, cwd: string, effort?: string) {
     const existing = this.logicalSessions.get(logicalSessionId)
     if (existing) {
       return existing
     }
-    const session = await this.createAcpSession(cwd, { mode: this.defaultMode })
+    const session = await this.createAcpSession(cwd, { mode: this.defaultMode, effort })
     this.logicalSessions.set(logicalSessionId, session.sessionId)
     return session.sessionId
   }

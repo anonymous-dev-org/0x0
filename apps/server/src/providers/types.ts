@@ -20,6 +20,7 @@ export interface ChatProvider {
     sessionId: string
     cwd: string
     prompt: string
+    effort?: string
     signal?: AbortSignal
     onDelta?: (text: string) => void
     onStatus?: (status: string) => void

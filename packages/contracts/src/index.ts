@@ -148,10 +148,11 @@ export const WebSocketClientMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("session.create"),
     id: WebSocketRequestIdSchema,
-    repoRoot: z.string().min(1),
-    model: z.string().min(1).optional(),
-    provider: ProviderIdSchema.optional(),
-  }),
+  repoRoot: z.string().min(1),
+  model: z.string().min(1).optional(),
+  provider: ProviderIdSchema.optional(),
+  effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]).optional(),
+}),
   z.object({
     type: z.literal("session.open"),
     id: WebSocketRequestIdSchema,

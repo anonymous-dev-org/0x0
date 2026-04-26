@@ -24,6 +24,7 @@ type ActiveRun = {
 type QueuedTurn = {
   id: string
   prompt: string
+  effort?: string
   userMessage: SessionRecord["messages"][number]
 }
 
@@ -49,6 +50,7 @@ function toText(message: string | Buffer) {
 
 export function createWebSocketSession(registry: ProviderRegistry, manager: SessionManager, send: SendMessage) {
   const active = new Map<string, ActiveEntry>()
+  const sessionEffort = new Map<string, string>()
 
   const sendChecked = (message: WebSocketServerMessage) => {
     send(WebSocketServerMessageSchema.parse(message))
@@ -126,6 +128,9 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
       provider: providerId,
       model: message.model ?? provider.info.defaultModel,
     })
+    if (message.effort) {
+      sessionEffort.set(session.id, message.effort)
+    }
     sendChecked({ type: "session.created", id: message.id, session })
   }
 
@@ -151,7 +156,7 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
         sendChecked({ type: "error", id: message.id, error: `Session is already running: ${session.id}` })
         return
       }
-      running.queued.push({ id: message.id, prompt: message.prompt, userMessage })
+      running.queued.push({ id: message.id, prompt: message.prompt, effort: sessionEffort.get(session.id), userMessage })
       const visibleMessages = [...running.messages, ...running.queued.map(turn => turn.userMessage)]
       sendChecked({
         type: "user.queued",
@@ -176,7 +181,7 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
     const activeRun: ActiveRun = {
       controller,
       messages: session.messages,
-      queued: [{ id: message.id, prompt: message.prompt, userMessage }],
+      queued: [{ id: message.id, prompt: message.prompt, effort: sessionEffort.get(session.id), userMessage }],
     }
     active.set(session.id, activeRun)
 
@@ -234,6 +239,7 @@ export function createWebSocketSession(registry: ProviderRegistry, manager: Sess
         sessionId: session.id,
         cwd: session.worktreePath,
         prompt: turn.prompt,
+        effort: turn.effort,
         signal: activeRun.controller.signal,
         onStatus(status) {
           if (status === "thinking") {
