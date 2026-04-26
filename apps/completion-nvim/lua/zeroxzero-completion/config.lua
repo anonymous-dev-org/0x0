@@ -3,10 +3,8 @@
 local M = {}
 
 ---@class zeroxzero_completion.Config
----@field server_url string
----@field provider? string
 ---@field model? string
----@field effort? string
+---@field acp zeroxzero_completion.AcpConfig
 ---@field debounce_ms integer
 ---@field max_tokens integer
 ---@field temperature number
@@ -27,12 +25,15 @@ local M = {}
 ---@field enabled boolean
 ---@field max_entries integer
 
+---@class zeroxzero_completion.AcpConfig
+---@field provider string
+---@field command string
+---@field args string[]
+---@field auth_method? string
+
 ---@type zeroxzero_completion.Config
 M.defaults = {
-  server_url = "http://localhost:4096",
-  provider = nil,
   model = nil,
-  effort = nil,
   debounce_ms = 150,
   max_tokens = 128,
   temperature = 0,
@@ -48,6 +49,12 @@ M.defaults = {
   cache = {
     enabled = true,
     max_entries = 100,
+  },
+  acp = {
+    provider = "codex-acp",
+    command = "codex-acp",
+    args = {},
+    auth_method = "chatgpt",
   },
 }
 

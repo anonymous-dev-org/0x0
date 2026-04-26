@@ -1,9 +1,9 @@
 --- 0x0-completion: Inline ghost text code completions.
---- Uses the 0x0 server's local WebSocket endpoint with fast LLM models.
+--- Spawns an ACP provider directly over stdio.
 
 local config = require("zeroxzero-completion.config")
 local context = require("zeroxzero-completion.context")
-local client = require("zeroxzero-completion.client")
+local client = require("zeroxzero-completion.acp")
 local ghost = require("zeroxzero-completion.ghost")
 local debounce = require("zeroxzero-completion.debounce")
 local cache = require("zeroxzero-completion.cache")
@@ -130,16 +130,14 @@ function M._request_completion()
 
   _streaming_text = ""
 
-  _abort_fn = client.stream_completion(cfg.server_url, {
+  _abort_fn = client.stream_completion(cfg.acp, {
     prefix = ctx.prefix,
     suffix = ctx.suffix,
     language = ctx.language,
     filepath = ctx.filepath,
     max_tokens = cfg.max_tokens,
     temperature = cfg.temperature,
-    provider = cfg.provider,
     model = cfg.model,
-    effort = cfg.effort,
   }, function(chunk)
     -- On each text chunk
     _streaming_text = _streaming_text .. chunk
@@ -231,49 +229,21 @@ local function notify_setting(name, value)
   vim.notify("0x0-completion: " .. name .. " set to " .. tostring(value), vim.log.levels.INFO)
 end
 
-local function providers_url()
-  return (config.current.server_url or ""):gsub("/$", "") .. "/providers"
-end
-
-local function fetch_providers(callback)
-  local function handle_output(code, stdout, stderr)
-    vim.schedule(function()
-      if code ~= 0 then
-        vim.notify("0x0-completion: could not load providers: " .. (stderr or "curl failed"), vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-
-      local ok, decoded = pcall(vim.json.decode, stdout or "")
-      if not ok or type(decoded) ~= "table" or type(decoded.providers) ~= "table" then
-        vim.notify("0x0-completion: could not parse provider list", vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-
-      callback(decoded.providers)
-    end)
-  end
-
-  if vim.system then
-    vim.system({ "curl", "-fsS", providers_url() }, { text = true }, function(result)
-      handle_output(result.code, result.stdout, result.stderr)
-    end)
-    return
-  end
-
-  local output = vim.fn.system({ "curl", "-fsS", providers_url() })
-  handle_output(vim.v.shell_error, output, output)
-end
-
-local function choose_effort()
-  local efforts = { "minimal", "low", "medium", "high", "xhigh" }
-  vim.ui.select(efforts, { prompt = "0x0 completion effort" }, function(effort)
-    if not effort then
+local function choose_model()
+  vim.ui.input({
+    prompt = "0x0 completion model",
+    default = tostring(config.current.model or ""),
+  }, function(value)
+    if value == nil then
       return
     end
-    config.current.effort = effort
-    notify_setting("effort", effort)
+    if value == "" then
+      config.current.model = nil
+      notify_setting("model", "default")
+      return
+    end
+    config.current.model = value
+    notify_setting("model", value)
   end)
 end
 
@@ -306,47 +276,6 @@ local function choose_max_tokens()
   end)
 end
 
-local function choose_provider()
-  fetch_providers(function(providers)
-    if not providers or #providers == 0 then
-      return
-    end
-
-    vim.ui.select(providers, {
-      prompt = "0x0 completion provider",
-      format_item = function(provider)
-        local suffix = provider.configured == false and " unavailable" or ""
-        return string.format("%s (%s)%s", provider.label or provider.id, provider.id, suffix)
-      end,
-    }, function(provider)
-      if not provider then
-        return
-      end
-      if provider.configured == false then
-        vim.notify("0x0-completion: " .. (provider.label or provider.id) .. " is unavailable", vim.log.levels.WARN)
-        return
-      end
-
-      vim.ui.select(provider.models or {}, {
-        prompt = "0x0 completion model",
-        format_item = function(model)
-          if model == provider.defaultModel then
-            return model .. " (default)"
-          end
-          return model
-        end,
-      }, function(model)
-        if not model then
-          return
-        end
-        config.current.provider = provider.id
-        config.current.model = model
-        notify_setting("model", provider.id .. " / " .. model)
-      end)
-    end)
-  end)
-end
-
 function M.settings()
   local actions = {
     {
@@ -354,14 +283,17 @@ function M.settings()
       run = M.toggle,
     },
     {
-      label = "Provider / model: " .. tostring(config.current.provider or "server default") .. " / " .. tostring(
-        config.current.model or "default"
-      ),
-      run = choose_provider,
+      label = "ACP provider: " .. tostring(config.current.acp.command),
+      run = function()
+        vim.notify(
+          "0x0-completion: configure acp.command via setup() (current: " .. tostring(config.current.acp.command) .. ")",
+          vim.log.levels.INFO
+        )
+      end,
     },
     {
-      label = "Effort: " .. tostring(config.current.effort or "server default"),
-      run = choose_effort,
+      label = "Model: " .. tostring(config.current.model or "provider default"),
+      run = choose_model,
     },
     {
       label = "Max tokens: " .. tostring(config.current.max_tokens),
