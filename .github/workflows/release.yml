@@ -192,26 +192,18 @@ jobs:
             homepage "https://github.com/anonymous-dev-org/0x0"
             version "${VERSION}"
 
-            on_macos do
-              if Hardware::CPU.arm?
-                url "${REPO}/0x0-darwin-arm64.zip"
-                sha256 "${SERVER_DARWIN_ARM64}"
-              end
-              if Hardware::CPU.intel?
-                url "${REPO}/0x0-darwin-x64.zip"
-                sha256 "${SERVER_DARWIN_X64}"
-              end
-            end
-
-            on_linux do
-              if Hardware::CPU.arm? and Hardware::CPU.is_64_bit?
-                url "${REPO}/0x0-linux-arm64.tar.gz"
-                sha256 "${SERVER_LINUX_ARM64}"
-              end
-              if Hardware::CPU.intel? and Hardware::CPU.is_64_bit?
-                url "${REPO}/0x0-linux-x64.tar.gz"
-                sha256 "${SERVER_LINUX_X64}"
-              end
+            if OS.mac? && Hardware::CPU.arm?
+              url "${REPO}/0x0-darwin-arm64.zip"
+              sha256 "${SERVER_DARWIN_ARM64}"
+            elsif OS.mac? && Hardware::CPU.intel?
+              url "${REPO}/0x0-darwin-x64.zip"
+              sha256 "${SERVER_DARWIN_X64}"
+            elsif OS.linux? && Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+              url "${REPO}/0x0-linux-arm64.tar.gz"
+              sha256 "${SERVER_LINUX_ARM64}"
+            elsif OS.linux? && Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
+              url "${REPO}/0x0-linux-x64.tar.gz"
+              sha256 "${SERVER_LINUX_X64}"
             end
 
             def install

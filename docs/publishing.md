@@ -36,7 +36,9 @@ brew install 0x0
 0x0 server
 ```
 
-The tap may keep the backing formula as `zeroxzero-server`, but `0x0` is the public Homebrew alias and installed executable.
+`0x0 server` is idempotent and starts the local server in the background. Use `0x0 init` once to store `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`; the command also prompts on first server start if neither key is configured.
+
+The installed executable and release archive binary are both named `0x0`.
 
 Chat plugin:
 

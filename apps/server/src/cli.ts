@@ -1,4 +1,7 @@
 import packageJson from "../package.json"
+import { readFile } from "node:fs/promises"
+import { CONFIG_PATH, hasProviderKey, LOG_PATH, readServerConfig, writeServerConfig, applyProviderEnv } from "./config"
+import { startDaemon, statusServer, stopDaemon, logPathExists } from "./daemon"
 import { startServer } from "./server"
 
 type RawModeInput = typeof process.stdin & {
@@ -9,12 +12,24 @@ function printHelp() {
   console.log(`0x0 ${packageJson.version}
 
 Usage:
+  0x0 init
   0x0 server [--port <port>] [--host <host>]
+  0x0 serve [--port <port>] [--host <host>]
+  0x0 status [--port <port>] [--host <host>]
+  0x0 stop [--port <port>] [--host <host>]
+  0x0 restart [--port <port>] [--host <host>]
+  0x0 logs
   0x0 --version
   0x0 --help
 
 Commands:
-  server    Start the local 0x0 server
+  init      Store provider keys in ${CONFIG_PATH}
+  server    Start the local 0x0 server in the background
+  serve     Run the local 0x0 server in the foreground
+  status    Print server status
+  stop      Stop the background server
+  restart   Restart the background server
+  logs      Print the background server log
 
 Options:
   --port    Port to listen on. Defaults to PORT or 4096.
@@ -74,29 +89,59 @@ async function readSecret(prompt: string) {
   })
 }
 
-async function ensureProviderKeys() {
-  if (process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY) {
-    return
+async function ensureProviderKeys(options: { forcePrompt?: boolean } = {}) {
+  const existing = await readServerConfig()
+  if (!options.forcePrompt && hasProviderKey(existing)) {
+    return existing
+  }
+
+  const envConfig = {
+    openAiApiKey: process.env.OPENAI_API_KEY || existing.openAiApiKey,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || existing.anthropicApiKey,
+  }
+  if (!options.forcePrompt && hasProviderKey(envConfig)) {
+    return envConfig
   }
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.warn("0x0 provider key not configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
-    return
+    if (options.forcePrompt && hasProviderKey(envConfig)) {
+      await writeServerConfig(envConfig)
+      return envConfig
+    }
+    throw new Error("0x0 provider key not configured. Run `0x0 init` or set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
   }
 
   console.log("0x0 needs OPENAI_API_KEY or ANTHROPIC_API_KEY to run model-backed providers.")
-  console.log("Values entered here apply to this server process only.")
+  console.log(`Values entered here are stored in ${CONFIG_PATH}.`)
   const openAiApiKey = await readSecret("OPENAI_API_KEY (optional): ")
   const anthropicApiKey = await readSecret("ANTHROPIC_API_KEY (optional): ")
 
-  if (openAiApiKey) {
-    process.env.OPENAI_API_KEY = openAiApiKey
+  if (!openAiApiKey && !anthropicApiKey && !hasProviderKey(envConfig)) {
+    throw new Error("At least one provider key is required.")
   }
-  if (anthropicApiKey) {
-    process.env.ANTHROPIC_API_KEY = anthropicApiKey
+
+  const config = {
+    openAiApiKey: openAiApiKey || envConfig.openAiApiKey,
+    anthropicApiKey: anthropicApiKey || envConfig.anthropicApiKey,
   }
-  if (!openAiApiKey && !anthropicApiKey) {
-    console.warn("No provider key configured. Provider requests will fail until a key is set.")
+  await writeServerConfig(config)
+  return config
+}
+
+function readServerOptions(args: string[]) {
+  const portValue = readOption(args, "--port")
+  let port: number | undefined
+  if (portValue) {
+    const parsedPort = Number(portValue)
+    if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
+      throw new Error(`Invalid --port value: ${portValue}`)
+    }
+    port = parsedPort
+  }
+
+  return {
+    port,
+    hostname: readOption(args, "--host"),
   }
 }
 
@@ -114,22 +159,55 @@ async function main() {
     return
   }
 
-  if (command === "server") {
-    await ensureProviderKeys()
+  if (command === "init") {
+    await ensureProviderKeys({ forcePrompt: true })
+    console.log(`0x0 provider config saved to ${CONFIG_PATH}`)
+    return
+  }
 
-    const portValue = readOption(args, "--port")
-    let port: number | undefined
-    if (portValue) {
-      const parsedPort = Number(portValue)
-      if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
-        throw new Error(`Invalid --port value: ${portValue}`)
-      }
-      port = parsedPort
+  if (command === "server") {
+    const options = readServerOptions(args)
+    const config = await ensureProviderKeys()
+    const status = await startDaemon(config, options)
+    console.log(`0x0 server running at ${status.url}${status.pid ? ` (pid ${status.pid})` : ""}`)
+    return
+  }
+
+  if (command === "serve") {
+    const options = readServerOptions(args)
+    const config = await ensureProviderKeys()
+    applyProviderEnv(config)
+    await startServer(options)
+    return
+  }
+
+  if (command === "status") {
+    const status = await statusServer(readServerOptions(args))
+    console.log(status.running ? `running ${status.url}${status.pid ? ` pid=${status.pid}` : ""}` : `stopped ${status.url}`)
+    return
+  }
+
+  if (command === "stop") {
+    const stopped = await stopDaemon(readServerOptions(args))
+    console.log(stopped ? "0x0 server stopped" : "0x0 server is not running")
+    return
+  }
+
+  if (command === "restart") {
+    const options = readServerOptions(args)
+    await stopDaemon(options).catch(() => undefined)
+    const config = await ensureProviderKeys()
+    const status = await startDaemon(config, options)
+    console.log(`0x0 server running at ${status.url}${status.pid ? ` (pid ${status.pid})` : ""}`)
+    return
+  }
+
+  if (command === "logs") {
+    if (!logPathExists()) {
+      console.log(`No 0x0 server log found at ${LOG_PATH}`)
+      return
     }
-    await startServer({
-      port,
-      hostname: readOption(args, "--host"),
-    })
+    console.log(await readFile(LOG_PATH, "utf8"))
     return
   }
 

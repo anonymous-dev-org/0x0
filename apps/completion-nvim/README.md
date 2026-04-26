@@ -25,8 +25,9 @@ Neovim inline ghost-text completion client for the local 0x0 server.
 
 ## Server
 
-Start the 0x0 server before using the plugin:
+Initialize provider keys once, then start the local background server:
 
 ```sh
+0x0 init
 0x0 server
 ```
