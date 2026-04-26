@@ -5,31 +5,38 @@ local M = {}
 ---@field command string
 ---@field args? string[]
 ---@field env? table<string, string>
+---@field models? string[]
 
 ---@class zeroxzero.Config
 ---@field provider string
+---@field width number
 ---@field providers table<string, zeroxzero.ProviderConfig>
 
 ---@type zeroxzero.Config
 M.defaults = {
   provider = "claude-acp",
+  width = 0.4,
   providers = {
     ["claude-acp"] = {
       name = "Claude ACP",
       command = "claude-code-acp",
+      models = { "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5" },
     },
     ["claude-agent-acp"] = {
       name = "Claude Agent ACP",
       command = "claude-agent-acp",
+      models = { "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5" },
     },
     ["codex-acp"] = {
       name = "Codex ACP",
       command = "codex-acp",
+      models = { "gpt-5-codex", "gpt-5", "o3" },
     },
     ["gemini-acp"] = {
       name = "Gemini ACP",
       command = "gemini",
       args = { "--acp" },
+      models = { "gemini-2.5-pro", "gemini-2.5-flash" },
     },
   },
 }

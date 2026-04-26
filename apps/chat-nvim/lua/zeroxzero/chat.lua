@@ -15,6 +15,7 @@ local BUFFER_NAME = "[0x0 Chat]"
 ---@field client table|nil
 ---@field session_id string|nil
 ---@field provider_name string|nil
+---@field model string|nil
 ---@field assistant_line integer|nil  -- 0-indexed line currently being streamed
 ---@field in_flight boolean
 ---@field pending_permission table|nil
@@ -25,6 +26,7 @@ local state = {
   client = nil,
   session_id = nil,
   provider_name = nil,
+  model = nil,
   assistant_line = nil,
   in_flight = false,
   pending_permission = nil,
@@ -90,10 +92,10 @@ local function ensure_window()
     state.winid = win
     return win
   end
-  vim.cmd("botright split")
+  vim.cmd("botright vsplit")
   win = api.nvim_get_current_win()
   api.nvim_win_set_buf(win, ensure_buffer())
-  api.nvim_win_set_height(win, math.max(12, math.floor(vim.o.lines * 0.35)))
+  api.nvim_win_set_width(win, math.max(60, math.floor(vim.o.columns * (config.current.width or 0.4))))
   vim.wo[win].wrap = true
   vim.wo[win].linebreak = true
   state.winid = win
@@ -200,7 +202,6 @@ local function reset_session()
   if state.client then state.client:stop() end
   state.client = nil
   state.session_id = nil
-  state.provider_name = nil
   state.assistant_line = nil
   state.in_flight = false
   state.tool_calls = {}
@@ -270,6 +271,10 @@ local function ensure_session(on_session)
         end,
       })
 
+      if state.model then
+        client:set_model(result.sessionId, state.model, function() end)
+      end
+
       on_session(client, result.sessionId)
     end)
   end)
@@ -330,6 +335,28 @@ end
 function M.stop()
   reset_session()
   state.assistant_line = nil
+end
+
+---@return { provider: string, model: string|nil }
+function M.current_settings()
+  return {
+    provider = state.provider_name or config.current.provider,
+    model = state.model,
+  }
+end
+
+---@param name string
+function M.set_provider(name)
+  reset_session()
+  state.provider_name = name
+end
+
+---@param model string|nil
+function M.set_model(model)
+  state.model = model
+  if state.client and state.session_id then
+    state.client:set_model(state.session_id, model, function() end)
+  end
 end
 
 return M

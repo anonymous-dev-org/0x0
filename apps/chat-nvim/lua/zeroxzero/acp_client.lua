@@ -186,6 +186,17 @@ function Client:cancel(session_id)
   self:notify("session/cancel", { sessionId = session_id })
 end
 
+---@param session_id string
+---@param model_id string|nil
+---@param callback fun(result: table|nil, err: table|nil)
+function Client:set_model(session_id, model_id, callback)
+  if not session_id or not model_id or model_id == "" then
+    callback(nil, nil)
+    return
+  end
+  self:request("session/set_model", { sessionId = session_id, modelId = model_id }, callback)
+end
+
 function Client:is_ready()
   return self.state == "ready"
 end

@@ -26,6 +26,10 @@ function M.setup(opts)
     require("zeroxzero.chat").stop()
     vim.notify("acp: stopped", vim.log.levels.INFO)
   end, { desc = "Stop the ACP provider and drop the session" })
+
+  vim.api.nvim_create_user_command("ZeroChatSettings", function()
+    require("zeroxzero.settings").open()
+  end, { desc = "Pick the chat provider / model" })
 end
 
 return M
