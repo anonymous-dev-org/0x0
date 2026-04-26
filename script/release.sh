@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Release script for 0x0 monorepo.
-# Bumps version, tags, and pushes — CI handles the rest.
+# Bumps the server package version and commits it.
+# The Release workflow publishes v<version> from apps/server/package.json after the commit lands on main.
 #
 # Usage:
 #   ./script/release.sh <patch|minor|major>
@@ -54,7 +55,7 @@ if [[ "$BRANCH" != "main" ]]; then
   [[ $REPLY =~ ^[Yy]$ ]] || exit 1
 fi
 
-# Check if tag already exists
+# Check if the release tag already exists
 if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
   echo "Error: tag v$NEW_VERSION already exists."
   exit 1
@@ -73,19 +74,20 @@ node -e "
 mv "$TMP" package.json
 cd "$REPO_ROOT"
 
-# --- Commit and tag ---
+# --- Commit ---
 
 git add apps/server/package.json
 git commit -m "chore: bump version to $NEW_VERSION"
-git tag "v$NEW_VERSION"
 
 echo ""
-echo "Created commit and tag v$NEW_VERSION"
+echo "Created version bump commit for v$NEW_VERSION"
 echo ""
 echo "To publish:"
-echo "  git push origin main && git push origin v$NEW_VERSION"
+echo "  git push origin main"
 echo ""
-echo "CI will then:"
-echo "  1. Build 0x0 for all platforms"
-echo "  2. Create a GitHub release with all artifacts"
-echo "  3. Update the Homebrew tap with new checksums"
+echo "The Release workflow will then:"
+echo "  1. Read apps/server/package.json"
+echo "  2. Create tag v$NEW_VERSION"
+echo "  3. Build 0x0 for all platforms"
+echo "  4. Create a GitHub release with all artifacts"
+echo "  5. Update the Homebrew tap with new checksums"
