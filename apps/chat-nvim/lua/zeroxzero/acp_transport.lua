@@ -86,7 +86,9 @@ function M.create(config, callbacks)
     end)
 
     if not ok or not handle then
-      stdin:close(); stdout:close(); stderr:close()
+      stdin:close()
+      stdout:close()
+      stderr:close()
       callbacks.on_state("error")
       vim.schedule(function()
         vim.notify(
@@ -154,12 +156,22 @@ function M.create(config, callbacks)
     if self.process and not self.process:is_closing() then
       local p = self.process
       self.process = nil
-      pcall(function() p:kill(15) end)
-      pcall(function() p:kill(9) end)
+      pcall(function()
+        p:kill(15)
+      end)
+      pcall(function()
+        p:kill(9)
+      end)
       p:close()
     end
-    if self.stdin then self.stdin:close(); self.stdin = nil end
-    if self.stdout then self.stdout:close(); self.stdout = nil end
+    if self.stdin then
+      self.stdin:close()
+      self.stdin = nil
+    end
+    if self.stdout then
+      self.stdout:close()
+      self.stdout = nil
+    end
     callbacks.on_state("disconnected")
   end
 

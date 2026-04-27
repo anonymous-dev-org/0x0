@@ -16,6 +16,8 @@ local BUFFER_NAME = "[0x0 Chat]"
 ---@field session_id string|nil
 ---@field provider_name string|nil
 ---@field model string|nil
+---@field mode string|nil
+---@field config_options table<string, table>
 ---@field assistant_line integer|nil  -- 0-indexed line currently being streamed
 ---@field in_flight boolean
 ---@field pending_permission table|nil
@@ -27,6 +29,8 @@ local state = {
   session_id = nil,
   provider_name = nil,
   model = nil,
+  mode = nil,
+  config_options = {},
   assistant_line = nil,
   in_flight = false,
   pending_permission = nil,
@@ -47,11 +51,15 @@ local function buf_valid()
 end
 
 local function set_modifiable(value)
-  if buf_valid() then vim.bo[state.bufnr].modifiable = value end
+  if buf_valid() then
+    vim.bo[state.bufnr].modifiable = value
+  end
 end
 
 local function append_lines(lines)
-  if not buf_valid() then return end
+  if not buf_valid() then
+    return
+  end
   set_modifiable(true)
   local last = api.nvim_buf_line_count(state.bufnr)
   api.nvim_buf_set_lines(state.bufnr, last, last, false, lines)
@@ -59,15 +67,21 @@ local function append_lines(lines)
 end
 
 local function find_window_for_buffer()
-  if not buf_valid() then return nil end
+  if not buf_valid() then
+    return nil
+  end
   for _, win in ipairs(api.nvim_list_wins()) do
-    if api.nvim_win_get_buf(win) == state.bufnr then return win end
+    if api.nvim_win_get_buf(win) == state.bufnr then
+      return win
+    end
   end
   return nil
 end
 
 local function ensure_buffer()
-  if buf_valid() then return state.bufnr end
+  if buf_valid() then
+    return state.bufnr
+  end
 
   local bufnr = api.nvim_create_buf(false, true)
   api.nvim_buf_set_name(bufnr, BUFFER_NAME)
@@ -80,8 +94,12 @@ local function ensure_buffer()
   api.nvim_buf_set_lines(bufnr, 0, -1, false, { USER_HEADING, "" })
   set_modifiable(true)
 
-  vim.keymap.set("n", "<CR>", function() M.submit() end, { buffer = bufnr, desc = "Submit chat prompt" })
-  vim.keymap.set("n", "<localleader>c", function() M.cancel() end, { buffer = bufnr, desc = "Cancel chat run" })
+  vim.keymap.set("n", "<CR>", function()
+    M.submit()
+  end, { buffer = bufnr, desc = "Submit chat prompt" })
+  vim.keymap.set("n", "<localleader>c", function()
+    M.cancel()
+  end, { buffer = bufnr, desc = "Cancel chat run" })
 
   return bufnr
 end
@@ -104,11 +122,23 @@ end
 
 local function assistant_heading()
   local label = state.provider_name or "assistant"
+  local details = {}
+  if state.mode then
+    details[#details + 1] = "mode: " .. state.mode
+  end
+  if state.model then
+    details[#details + 1] = "model: " .. state.model
+  end
+  if #details > 0 then
+    label = label .. " | " .. table.concat(details, " | ")
+  end
   return ("%s (%s)"):format(ASSISTANT_HEADING_PREFIX, label)
 end
 
 local function read_pending_prompt()
-  if not buf_valid() then return "" end
+  if not buf_valid() then
+    return ""
+  end
   local lines = api.nvim_buf_get_lines(state.bufnr, 0, -1, false)
   local user_line = nil
   for i = #lines, 1, -1 do
@@ -117,7 +147,9 @@ local function read_pending_prompt()
       break
     end
   end
-  if not user_line then return "" end
+  if not user_line then
+    return ""
+  end
   local prompt_lines = {}
   for i = user_line + 1, #lines do
     prompt_lines[#prompt_lines + 1] = lines[i]
@@ -134,17 +166,27 @@ end
 
 ---@param update table
 local function render_tool_call(update)
-  if not buf_valid() then return end
+  if not buf_valid() then
+    return
+  end
   local id = update.toolCallId
-  if not id then return end
+  if not id then
+    return
+  end
 
   local existing = state.tool_calls[id]
   if existing then
     existing.status = update.status or existing.status
-    if update.title and update.title ~= "" then existing.title = update.title end
-    if update.kind then existing.kind = update.kind end
+    if update.title and update.title ~= "" then
+      existing.title = update.title
+    end
+    if update.kind then
+      existing.kind = update.kind
+    end
     local pos = api.nvim_buf_get_extmark_by_id(state.bufnr, NS, existing.mark, {})
-    if not pos[1] then return end
+    if not pos[1] then
+      return
+    end
     set_modifiable(true)
     api.nvim_buf_set_lines(state.bufnr, pos[1], pos[1] + 1, false, { format_tool_line(existing) })
     set_modifiable(false)
@@ -168,7 +210,9 @@ end
 
 ---@param text string
 local function append_chunk(text)
-  if not buf_valid() then return end
+  if not buf_valid() then
+    return
+  end
   set_modifiable(true)
   if not state.assistant_line then
     local last = api.nvim_buf_line_count(state.bufnr)
@@ -199,56 +243,209 @@ local function reset_session()
     state.client:cancel(state.session_id)
     state.client:unsubscribe(state.session_id)
   end
-  if state.client then state.client:stop() end
+  if state.client then
+    state.client:stop()
+  end
   state.client = nil
   state.session_id = nil
   state.assistant_line = nil
   state.in_flight = false
   state.tool_calls = {}
+  state.config_options = {}
 end
 
----@param on_ready fun(client: table)
+local function set_config_options(options)
+  state.config_options = {}
+  if type(options) ~= "table" then
+    return
+  end
+
+  for _, option in ipairs(options) do
+    local category = type(option.category) == "string" and option.category or ""
+    if category == "mode" or category == "model" then
+      state.config_options[category] = option
+      if category == "mode" then
+        state.mode = option.currentValue or state.mode
+      elseif category == "model" then
+        state.model = option.currentValue or state.model
+      end
+    end
+  end
+end
+
+local function set_session_options(result)
+  if type(result) ~= "table" then
+    set_config_options(nil)
+    return
+  end
+
+  set_config_options(result.configOptions)
+end
+
+local function option_has_value(option, value)
+  if not option or not option.options then
+    return false
+  end
+  for _, item in ipairs(option.options) do
+    if item.value == value then
+      return true
+    end
+  end
+  return false
+end
+
+local function set_config_value(category, value)
+  if category == "mode" then
+    state.mode = value
+  elseif category == "model" then
+    state.model = value
+  end
+
+  local option = state.config_options[category]
+  if option then
+    option.currentValue = value
+  end
+end
+
+local function apply_config_option(category, value, callback)
+  if not state.client or not state.session_id then
+    callback(false)
+    return
+  end
+
+  local session_id = state.session_id
+  local option = state.config_options[category]
+  if option and option_has_value(option, value) then
+    state.client:set_config_option(session_id, category, value, function(result, err)
+      if state.session_id ~= session_id then
+        return
+      end
+      if err then
+        vim.notify(("acp: set %s failed: %s"):format(category, err.message or vim.inspect(err)), vim.log.levels.ERROR)
+        callback(false)
+        return
+      end
+      if result and result.configOptions then
+        set_config_options(result.configOptions)
+      end
+      set_config_value(category, value)
+      callback(true)
+    end)
+    return
+  end
+
+  if category == "model" and not state.config_options.model then
+    state.client:set_model(session_id, value, function(result, err)
+      if state.session_id ~= session_id then
+        return
+      end
+      if err then
+        vim.notify("acp: set model failed: " .. (err.message or vim.inspect(err)), vim.log.levels.ERROR)
+        callback(false)
+        return
+      end
+      if result and result.configOptions then
+        set_config_options(result.configOptions)
+      end
+      state.model = value
+      callback(true)
+    end)
+    return
+  end
+
+  vim.notify("acp: " .. category .. " is not available for this provider/session", vim.log.levels.WARN)
+  callback(false)
+end
+
+local function apply_initial_session_config(client, session_id, desired, done)
+  local function set_model()
+    if desired.model then
+      apply_config_option("model", desired.model, function()
+        done(client, session_id)
+      end)
+    else
+      done(client, session_id)
+    end
+  end
+
+  if desired.mode and option_has_value(state.config_options.mode, desired.mode) then
+    apply_config_option("mode", desired.mode, set_model)
+  else
+    set_model()
+  end
+end
+
+---@param on_ready fun(client: table|nil, err: table|nil)
 local function ensure_client(on_ready)
   local provider_name = state.provider_name or config.current.provider
   if state.client and state.provider_name == provider_name and state.client:is_ready() then
-    on_ready(state.client)
+    on_ready(state.client, nil)
     return
   end
 
-  local provider, err = config.resolve_provider(provider_name)
+  local provider, perr = config.resolve_provider(provider_name)
   if not provider then
-    vim.notify(err, vim.log.levels.ERROR)
+    vim.notify(perr, vim.log.levels.ERROR)
+    on_ready(nil, { message = perr })
     return
   end
 
-  if state.client then state.client:stop() end
+  if state.client then
+    state.client:stop()
+  end
   state.provider_name = provider_name
   state.client = acp_client.new(provider)
-  state.client:start(function(c) on_ready(c) end)
+  state.client:start(function(c, err)
+    on_ready(c, err)
+  end)
 end
 
----@param on_session fun(client: table, session_id: string)
+---@param on_session fun(client: table|nil, session_id: string|nil, err: table|nil)
 local function ensure_session(on_session)
-  ensure_client(function(client)
-    if state.session_id then
-      on_session(client, state.session_id)
+  ensure_client(function(client, cerr)
+    if cerr or not client then
+      on_session(nil, nil, cerr or { message = "client unavailable" })
       return
     end
+    if state.session_id then
+      on_session(client, state.session_id, nil)
+      return
+    end
+    local desired = {
+      mode = state.mode,
+      model = state.model,
+    }
     client:new_session(vim.fn.getcwd(), function(result, err)
+      if state.client ~= client then
+        on_session(nil, nil, { message = "client replaced" })
+        return
+      end
       if err or not result or not result.sessionId then
         vim.notify("acp: session/new failed: " .. vim.inspect(err), vim.log.levels.ERROR)
+        on_session(nil, nil, err or { message = "session/new failed" })
         return
       end
       state.session_id = result.sessionId
+      set_session_options(result)
 
       client:subscribe(result.sessionId, {
         on_update = function(update)
           local kind = update.sessionUpdate
           if kind == "agent_message_chunk" or kind == "agent_thought_chunk" then
             local text = update.content and update.content.text or ""
-            if text ~= "" then vim.schedule(function() append_chunk(text) end) end
+            if text ~= "" then
+              vim.schedule(function()
+                append_chunk(text)
+              end)
+            end
           elseif kind == "tool_call" or kind == "tool_call_update" then
-            vim.schedule(function() render_tool_call(update) end)
+            vim.schedule(function()
+              render_tool_call(update)
+            end)
+          elseif kind == "config_option_update" then
+            vim.schedule(function()
+              set_config_options(update.configOptions)
+            end)
           end
         end,
         on_request_permission = function(request, respond)
@@ -271,11 +468,9 @@ local function ensure_session(on_session)
         end,
       })
 
-      if state.model then
-        client:set_model(result.sessionId, state.model, function() end)
-      end
-
-      on_session(client, result.sessionId)
+      apply_initial_session_config(client, result.sessionId, desired, function(c, sid)
+        on_session(c, sid, nil)
+      end)
     end)
   end)
 end
@@ -311,7 +506,15 @@ function M.submit()
   append_lines({ "", assistant_heading(), "" })
   state.assistant_line = api.nvim_buf_line_count(state.bufnr) - 1
 
-  ensure_session(function(client, session_id)
+  ensure_session(function(client, session_id, sess_err)
+    if sess_err or not client or not session_id then
+      vim.schedule(function()
+        local msg = sess_err and (sess_err.message or vim.inspect(sess_err)) or "failed to start session"
+        append_lines({ "", "_error: " .. msg .. "_" })
+        open_for_next_prompt()
+      end)
+      return
+    end
     client:prompt(session_id, { { type = "text", text = prompt } }, function(result, err)
       vim.schedule(function()
         if err then
@@ -342,6 +545,8 @@ function M.current_settings()
   return {
     provider = state.provider_name or config.current.provider,
     model = state.model,
+    mode = state.mode,
+    config_options = state.config_options,
   }
 end
 
@@ -349,14 +554,54 @@ end
 function M.set_provider(name)
   reset_session()
   state.provider_name = name
+  state.model = nil
+  state.mode = nil
 end
 
 ---@param model string|nil
 function M.set_model(model)
   state.model = model
   if state.client and state.session_id then
-    state.client:set_model(state.session_id, model, function() end)
+    apply_config_option("model", model, function() end)
   end
+end
+
+---@param mode string|nil
+function M.set_mode(mode)
+  state.mode = mode
+  if state.client and state.session_id then
+    apply_config_option("mode", mode, function() end)
+  end
+end
+
+function M.discover_options(callback)
+  ensure_session(function()
+    if callback then
+      callback(M.current_settings())
+    end
+  end)
+end
+
+function M.option_items(category)
+  local items = {}
+  local option = state.config_options[category]
+  if option and option.options then
+    for _, item in ipairs(option.options) do
+      items[#items + 1] = {
+        value = item.value,
+        name = item.name or item.value,
+        description = item.description,
+        current = item.value == option.currentValue,
+      }
+    end
+    return items
+  end
+
+  return items
+end
+
+function M.has_config_option(category)
+  return state.config_options[category] ~= nil
 end
 
 return M

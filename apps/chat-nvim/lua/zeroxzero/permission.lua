@@ -13,13 +13,17 @@ local OPTIONS_HINT = "[a] allow once  [A] allow always  [r] reject once  [R] rej
 local function describe_tool(tool_call)
   local kind = tool_call.kind or "tool"
   local title = tool_call.title
-  if not title or title == "" then title = tool_call.toolCallId or "?" end
+  if not title or title == "" then
+    title = tool_call.toolCallId or "?"
+  end
   return ("`%s` %s"):format(kind, title)
 end
 
 local function find_option(options, kind)
   for _, option in ipairs(options or {}) do
-    if option.kind == kind then return option.optionId, option.name end
+    if option.kind == kind then
+      return option.optionId, option.name
+    end
   end
 end
 
@@ -34,10 +38,12 @@ end
 
 ---@param bufnr integer
 ---@param request table
----@param respond fun(option_id: string)
+---@param respond fun(option_id: string|nil)
 ---@return zeroxzero.permission.Pending|nil
 function M.render(bufnr, request, respond)
-  if not api.nvim_buf_is_valid(bufnr) then return nil end
+  if not api.nvim_buf_is_valid(bufnr) then
+    return nil
+  end
 
   local description = describe_tool(request.toolCall or {})
   local options = request.options or {}
@@ -55,16 +61,17 @@ function M.render(bufnr, request, respond)
 
   local function resolve(decision_kind)
     pending.unmap()
-    if not api.nvim_buf_is_valid(bufnr) then return end
+    if not api.nvim_buf_is_valid(bufnr) then
+      return
+    end
 
     local option_id, option_name = find_option(options, decision_kind)
     if not option_id then
+      option_id, option_name = find_option(options, "reject_once")
       vim.notify(
-        ("acp: agent did not offer '%s'; rejecting once"):format(decision_kind),
+        ("acp: agent did not offer '%s'; %s"):format(decision_kind, option_id and "rejecting once" or "cancelling"),
         vim.log.levels.WARN
       )
-      option_id, option_name = find_option(options, "reject_once")
-      option_name = option_name or "reject once"
     end
 
     with_modifiable(bufnr, function()
@@ -77,7 +84,9 @@ function M.render(bufnr, request, respond)
 
   local opts = { buffer = bufnr, nowait = true, silent = true, desc = "ACP permission decision" }
   for key, kind in pairs(KEY_TO_KIND) do
-    vim.keymap.set("n", key, function() resolve(kind) end, opts)
+    vim.keymap.set("n", key, function()
+      resolve(kind)
+    end, opts)
   end
 
   pending.unmap = function()

@@ -21,12 +21,20 @@ function M.new(provider)
   }, Client)
 
   self.transport = transport_mod.create(provider, {
-    on_state = function(state) self:_on_state(state) end,
-    on_message = function(msg) self:_on_message(msg) end,
+    on_state = function(state)
+      self:_on_state(state)
+    end,
+    on_message = function(msg)
+      self:_on_message(msg)
+    end,
     on_exit = function(code, stderr_lines)
       if code ~= 0 then
         vim.notify(
-          ("acp[%s]: exited with code %d\n%s"):format(provider.name or provider.command, code, table.concat(stderr_lines, "\n")),
+          ("acp[%s]: exited with code %d\n%s"):format(
+            provider.name or provider.command,
+            code,
+            table.concat(stderr_lines, "\n")
+          ),
           vim.log.levels.ERROR
         )
       end
@@ -39,10 +47,20 @@ end
 function Client:_on_state(state)
   self.state = state
   if state == "disconnected" or state == "error" then
+    local err = { code = -32000, message = "transport " .. state }
     local pending = self.callbacks
     self.callbacks = {}
     for _, cb in pairs(pending) do
-      vim.schedule(function() pcall(cb, nil, { code = -32000, message = "transport " .. state }) end)
+      vim.schedule(function()
+        pcall(cb, nil, err)
+      end)
+    end
+    local listeners = self.ready_listeners
+    self.ready_listeners = {}
+    for _, listener in ipairs(listeners) do
+      vim.schedule(function()
+        pcall(listener, nil, err)
+      end)
     end
   end
 end
@@ -86,7 +104,9 @@ function Client:_on_message(message)
   if message.method and message.result == nil and message.error == nil then
     local handler = self.notification_handlers[message.method]
     if handler then
-      vim.schedule(function() handler(message.params or {}, message.id) end)
+      vim.schedule(function()
+        handler(message.params or {}, message.id)
+      end)
     else
       vim.schedule(function()
         vim.notify("acp: unhandled notification " .. message.method, vim.log.levels.DEBUG)
@@ -99,7 +119,9 @@ function Client:_on_message(message)
     local cb = self.callbacks[message.id]
     if cb then
       self.callbacks[message.id] = nil
-      vim.schedule(function() cb(message.result, message.error) end)
+      vim.schedule(function()
+        cb(message.result, message.error)
+      end)
     end
     return
   end
@@ -111,11 +133,15 @@ end
 
 ---@param on_ready fun(self: table)|nil
 function Client:start(on_ready)
-  if on_ready then self.ready_listeners[#self.ready_listeners + 1] = on_ready end
+  if on_ready then
+    self.ready_listeners[#self.ready_listeners + 1] = on_ready
+  end
 
   self:on_notification("session/update", function(params)
     local sub = self.subscribers[params.sessionId]
-    if sub and sub.on_update then sub.on_update(params.update or {}) end
+    if sub and sub.on_update then
+      sub.on_update(params.update or {})
+    end
   end)
 
   self:on_notification("session/request_permission", function(params, message_id)
@@ -125,6 +151,10 @@ function Client:start(on_ready)
       return
     end
     sub.on_request_permission(params, function(option_id)
+      if not option_id or option_id == "" then
+        self:respond(message_id, { outcome = { outcome = "cancelled" } })
+        return
+      end
       self:respond(message_id, { outcome = { outcome = "selected", optionId = option_id } })
     end)
   end)
@@ -141,18 +171,19 @@ function Client:start(on_ready)
     },
   }, function(result, err)
     if err or not result then
-      self.state = "error"
       vim.notify("acp: initialize failed: " .. vim.inspect(err), vim.log.levels.ERROR)
+      self:_on_state("error")
       return
     end
     self.protocol_version = result.protocolVersion or self.protocol_version
     self.agent_info = result.agentInfo
     self.agent_capabilities = result.agentCapabilities
     self.state = "ready"
-    for _, listener in ipairs(self.ready_listeners) do
+    local listeners = self.ready_listeners
+    self.ready_listeners = {}
+    for _, listener in ipairs(listeners) do
       pcall(listener, self)
     end
-    self.ready_listeners = {}
   end)
 end
 
@@ -182,7 +213,9 @@ end
 
 ---@param session_id string
 function Client:cancel(session_id)
-  if not session_id then return end
+  if not session_id then
+    return
+  end
   self:notify("session/cancel", { sessionId = session_id })
 end
 
@@ -195,6 +228,18 @@ function Client:set_model(session_id, model_id, callback)
     return
   end
   self:request("session/set_model", { sessionId = session_id, modelId = model_id }, callback)
+end
+
+---@param session_id string
+---@param config_id string|nil
+---@param value string|nil
+---@param callback fun(result: table|nil, err: table|nil)
+function Client:set_config_option(session_id, config_id, value, callback)
+  if not session_id or not config_id or config_id == "" or not value or value == "" then
+    callback(nil, nil)
+    return
+  end
+  self:request("session/set_config_option", { sessionId = session_id, configId = config_id, value = value }, callback)
 end
 
 function Client:is_ready()
