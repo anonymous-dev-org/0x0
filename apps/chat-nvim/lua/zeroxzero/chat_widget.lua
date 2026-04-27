@@ -131,8 +131,7 @@ function ChatWidget:open()
 
   local need_transcript_win = not win_valid(self.transcript_win)
     or api.nvim_win_get_buf(self.transcript_win) ~= transcript
-  local need_input_win = not win_valid(self.input_win)
-    or api.nvim_win_get_buf(self.input_win) ~= input
+  local need_input_win = not win_valid(self.input_win) or api.nvim_win_get_buf(self.input_win) ~= input
 
   if need_transcript_win then
     vim.cmd("botright vsplit")
