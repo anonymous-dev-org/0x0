@@ -88,6 +88,23 @@ function Chat:_render()
   end)
 end
 
+function Chat:_add_review_activity()
+  if not self.worktree or not self.worktree:is_valid() then
+    return
+  end
+  local files = self.worktree:changed_files()
+  if #files == 0 then
+    return
+  end
+  local text = ("Pending review: %d changed file%s"):format(#files, #files == 1 and "" or "s")
+  local last = self.history.messages[#self.history.messages]
+  if last and last.type == "activity" and last.text == text then
+    return
+  end
+  self.history:add_activity(text, "pending")
+  self:_render()
+end
+
 ---@return integer
 function Chat:_queued_count()
   return #self.queued_prompts
@@ -517,6 +534,7 @@ function Chat:_submit_prompt(prompt, user_id, retried_session)
           self.response_started = false
           self.cancel_requested = false
           if self.worktree and self:_queued_count() == 0 then
+            self:_add_review_activity()
             self:_show_worktree(false)
           end
           self:_notify_or_continue()

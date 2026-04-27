@@ -358,6 +358,11 @@ local function format_permission_line(perm)
   return base .. PERMISSION_HINT_INLINE
 end
 
+local function format_activity_line(activity)
+  local icon = STATUS_ICONS[activity.status] or STATUS_ICONS.completed
+  return ("%s %s"):format(icon, activity.text or "")
+end
+
 ---@param bufnr integer
 ---@param lines string[]
 ---@return integer start_line
@@ -409,6 +414,8 @@ end
 ---@return string|nil hl_group
 local function line_hl_for(msg)
   if msg.type == "tool_call" then
+    return STATUS_HL[msg.status]
+  elseif msg.type == "activity" then
     return STATUS_HL[msg.status]
   elseif msg.type == "permission" then
     if msg.decision then
@@ -505,6 +512,11 @@ function ChatWidget:render()
       local start_line = append_lines(bufnr, { "", format_permission_line(msg) })
       self.tool_extmarks[msg.tool_call_id] = place_status_extmark(bufnr, start_line + 1, msg)
       self.last_kind = "permission"
+    elseif msg.type == "activity" then
+      local lines = self.last_kind == "activity" and { format_activity_line(msg) } or { "", format_activity_line(msg) }
+      local start_line = append_lines(bufnr, lines)
+      place_status_extmark(bufnr, start_line + #lines - 1, msg)
+      self.last_kind = "activity"
     end
   end
 

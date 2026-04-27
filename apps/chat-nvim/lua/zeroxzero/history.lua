@@ -22,11 +22,17 @@
 ---@field options table[]
 ---@field decision? string
 
+---@class zeroxzero.history.Activity
+---@field type "activity"
+---@field text string
+---@field status? "pending"|"in_progress"|"completed"|"failed"
+
 ---@alias zeroxzero.history.Message
 ---| zeroxzero.history.UserMessage
 ---| zeroxzero.history.AgentMessage
 ---| zeroxzero.history.ToolCall
 ---| zeroxzero.history.Permission
+---| zeroxzero.history.Activity
 
 ---@class zeroxzero.History
 ---@field messages zeroxzero.history.Message[]
@@ -70,6 +76,12 @@ end
 ---@param text string
 function History:add_agent_chunk(kind, text)
   table.insert(self.messages, { type = kind, text = text })
+end
+
+---@param text string
+---@param status? "pending"|"in_progress"|"completed"|"failed"
+function History:add_activity(text, status)
+  self:add({ type = "activity", text = text, status = status or "completed" })
 end
 
 ---@param tool_call_id string
