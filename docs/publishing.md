@@ -7,6 +7,8 @@
 - `anonymous-dev-org/0x0-completion.nvim`: Neovim ghost-text completion plugin.
 - `anonymous-dev-org/homebrew-tap`: Homebrew formulae for released server binaries.
 
+This document also carries a tiny fixture edit for local diff rendering checks.
+
 ## App Layout
 
 - `apps/server`: local 0x0 server.
