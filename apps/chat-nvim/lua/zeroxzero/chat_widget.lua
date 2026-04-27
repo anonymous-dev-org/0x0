@@ -34,8 +34,7 @@ local ACTIVITY_LABELS = {
   responding = "Model responding",
 }
 
-local PERMISSION_HINT_INLINE =
-  "  — [a] allow once  [A] allow always  [r] reject once  [R] reject always"
+local PERMISSION_HINT_INLINE = "  — [a] allow once  [A] allow always  [r] reject once  [R] reject always"
 local KEY_TO_KIND = {
   a = "allow_once",
   A = "allow_always",

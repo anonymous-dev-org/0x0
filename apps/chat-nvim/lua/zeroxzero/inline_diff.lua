@@ -127,12 +127,17 @@ local function place_marks(bufnr, file)
       -- Hint at first line of hunk.
       local hint_line = math.max(0, math.min(hunk.new_start - 1, line_count - 1))
       pcall(api.nvim_buf_set_extmark, bufnr, ns, hint_line, 0, {
-        virt_text = { { (" [%d/%d] %sa accept · %sr reject"):format(
-          hi,
-          #file.hunks,
-          vim.g.maplocalleader or "\\",
-          vim.g.maplocalleader or "\\"
-        ), "ZeroChatDiffHint" } },
+        virt_text = {
+          {
+            (" [%d/%d] %sa accept · %sr reject"):format(
+              hi,
+              #file.hunks,
+              vim.g.maplocalleader or "\\",
+              vim.g.maplocalleader or "\\"
+            ),
+            "ZeroChatDiffHint",
+          },
+        },
         virt_text_pos = "eol",
         hl_mode = "combine",
       })

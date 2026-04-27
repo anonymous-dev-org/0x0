@@ -711,47 +711,43 @@ function Chat:_submit_prompt(prompt, user_id, retried_session)
       return
     end
     self:_set_turn_activity("waiting", "Waiting for model")
-    client:prompt(
-      session_id,
-      ReferenceMentions.to_prompt_blocks(prompt, self:_session_cwd()),
-      function(result, err)
-        vim.schedule(function()
-          if self.client ~= client or self.session_id ~= session_id then
-            return
-          end
-          local was_cancelled = self.cancel_requested or is_cancel_result(result)
-          if err and is_session_missing(err) and not retried_session then
-            self.client = nil
-            self.session_id = nil
-            self:_set_turn_activity("waiting", "Restarting session")
-            self.widget:render()
-            self:_submit_prompt(prompt, user_id, true)
-            return
-          end
-          if err and not (was_cancelled and is_transport_disconnected(err)) then
-            local m = error_message(err)
-            self.history:add_agent_chunk("agent", "\n_error: " .. m .. "_")
-          elseif
-            result
-            and result.stopReason
-            and result.stopReason ~= "end_turn"
-            and result.stopReason ~= "cancelled"
-          then
-            self.history:add_agent_chunk("agent", "\n_stopped: " .. tostring(result.stopReason) .. "_")
-          end
-          if err and is_transport_disconnected(err) then
-            self.client = nil
-            self.session_id = nil
-          end
-          self:_set_activity(nil)
+    client:prompt(session_id, ReferenceMentions.to_prompt_blocks(prompt, self:_session_cwd()), function(result, err)
+      vim.schedule(function()
+        if self.client ~= client or self.session_id ~= session_id then
+          return
+        end
+        local was_cancelled = self.cancel_requested or is_cancel_result(result)
+        if err and is_session_missing(err) and not retried_session then
+          self.client = nil
+          self.session_id = nil
+          self:_set_turn_activity("waiting", "Restarting session")
           self.widget:render()
-          self.in_flight = false
-          self.response_started = false
-          self.cancel_requested = false
-          self:_notify_or_continue()
-        end)
-      end
-    )
+          self:_submit_prompt(prompt, user_id, true)
+          return
+        end
+        if err and not (was_cancelled and is_transport_disconnected(err)) then
+          local m = error_message(err)
+          self.history:add_agent_chunk("agent", "\n_error: " .. m .. "_")
+        elseif
+          result
+          and result.stopReason
+          and result.stopReason ~= "end_turn"
+          and result.stopReason ~= "cancelled"
+        then
+          self.history:add_agent_chunk("agent", "\n_stopped: " .. tostring(result.stopReason) .. "_")
+        end
+        if err and is_transport_disconnected(err) then
+          self.client = nil
+          self.session_id = nil
+        end
+        self:_set_activity(nil)
+        self.widget:render()
+        self.in_flight = false
+        self.response_started = false
+        self.cancel_requested = false
+        self:_notify_or_continue()
+      end)
+    end)
   end)
 end
 

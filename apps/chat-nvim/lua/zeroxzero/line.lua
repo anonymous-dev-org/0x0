@@ -17,12 +17,16 @@ end
 ---@param line number
 ---@param offset number | nil
 function M:set_highlights(ns_id, bufnr, line, offset)
-  if not vim.api.nvim_buf_is_valid(bufnr) then return end
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
   local col_start = offset or 0
   for _, section in ipairs(self.sections) do
     local text = section[1]
     local highlight = section[2]
-    if type(highlight) == "function" then highlight = highlight() end
+    if type(highlight) == "function" then
+      highlight = highlight()
+    end
     if highlight then
       vim.highlight.range(bufnr, ns_id, highlight, { line, col_start }, { line, col_start + #text })
     end
@@ -39,7 +43,9 @@ function M:__tostring()
 end
 
 function M:__eq(other)
-  if not other or type(other) ~= "table" or not other.sections then return false end
+  if not other or type(other) ~= "table" or not other.sections then
+    return false
+  end
   return vim.deep_equal(self.sections, other.sections)
 end
 
