@@ -222,11 +222,6 @@ function M.toggle()
   if not config.current.enabled then
     M.dismiss()
   end
-  vim.notify("0x0-completion: " .. (config.current.enabled and "enabled" or "disabled"), vim.log.levels.INFO)
-end
-
-local function notify_setting(name, value)
-  vim.notify("0x0-completion: " .. name .. " set to " .. tostring(value), vim.log.levels.INFO)
 end
 
 local function choose_model()
@@ -239,11 +234,9 @@ local function choose_model()
     end
     if value == "" then
       config.current.model = nil
-      notify_setting("model", "default")
       return
     end
     config.current.model = value
-    notify_setting("model", value)
   end)
 end
 
@@ -256,9 +249,7 @@ local function choose_temperature()
     if not temperature then
       return
     end
-    temperature = math.max(0, math.min(2, temperature))
-    config.current.temperature = temperature
-    notify_setting("temperature", temperature)
+    config.current.temperature = math.max(0, math.min(2, temperature))
   end)
 end
 
@@ -272,7 +263,6 @@ local function choose_max_tokens()
       return
     end
     config.current.max_tokens = math.max(1, math.floor(max_tokens))
-    notify_setting("max tokens", config.current.max_tokens)
   end)
 end
 
@@ -284,12 +274,7 @@ function M.settings()
     },
     {
       label = "ACP provider: " .. tostring(config.current.acp.command),
-      run = function()
-        vim.notify(
-          "0x0-completion: configure acp.command via setup() (current: " .. tostring(config.current.acp.command) .. ")",
-          vim.log.levels.INFO
-        )
-      end,
+      run = function() end,
     },
     {
       label = "Model: " .. tostring(config.current.model or "provider default"),
@@ -322,31 +307,34 @@ function M._setup_keymaps()
   local cfg = config.current
   local km = cfg.keymaps
 
+  local function fall_through(key)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "n", false)
+  end
+
   if km.accept and km.accept ~= "" then
     vim.keymap.set("i", km.accept, function()
       if not M.accept() then
-        -- Fall through to default Tab behavior
-        return vim.api.nvim_replace_termcodes(km.accept, true, false, true)
+        fall_through(km.accept)
       end
-    end, { expr = true, silent = true, desc = "0x0: Accept completion" })
+    end, { silent = true, desc = "0x0: Accept completion" })
   end
 
   if km.accept_line and km.accept_line ~= "" then
     vim.keymap.set("i", km.accept_line, function()
       if not M.accept_line() then
-        return vim.api.nvim_replace_termcodes(km.accept_line, true, false, true)
+        fall_through(km.accept_line)
       end
-    end, { expr = true, silent = true, desc = "0x0: Accept first line" })
+    end, { silent = true, desc = "0x0: Accept first line" })
   end
 
   if km.dismiss and km.dismiss ~= "" then
     vim.keymap.set("i", km.dismiss, function()
       if ghost.is_visible() then
         M.dismiss()
-        return ""
+        return
       end
-      return vim.api.nvim_replace_termcodes(km.dismiss, true, false, true)
-    end, { expr = true, silent = true, desc = "0x0: Dismiss completion" })
+      fall_through(km.dismiss)
+    end, { silent = true, desc = "0x0: Dismiss completion" })
   end
 end
 

@@ -7,12 +7,6 @@ local uv = vim.uv or vim.loop
 
 local client = nil
 
-local function notify_error(message)
-  vim.schedule(function()
-    vim.notify("0x0-completion ACP: " .. message, vim.log.levels.ERROR)
-  end)
-end
-
 local function completion_prompt(request)
   return table.concat({
     "You are an inline code completion engine.",
@@ -141,7 +135,6 @@ function AcpClient:start()
 
   stdout:read_start(function(err, data)
     if err then
-      notify_error(err)
       return
     end
     if data then
@@ -149,13 +142,7 @@ function AcpClient:start()
     end
   end)
 
-  stderr:read_start(function(_, data)
-    if data and vim.trim(data) ~= "" then
-      vim.schedule(function()
-        vim.notify("0x0-completion ACP: " .. vim.trim(data), vim.log.levels.DEBUG)
-      end)
-    end
-  end)
+  stderr:read_start(function() end)
 
   self:initialize()
 end
@@ -176,7 +163,6 @@ function AcpClient:initialize()
     },
   }, function(_, err)
     if err then
-      notify_error(err.message or vim.inspect(err))
       return
     end
 

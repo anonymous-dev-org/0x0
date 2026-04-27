@@ -53,7 +53,7 @@ M.defaults = {
   acp = {
     provider = "codex-acp",
     command = "codex-acp",
-    args = {},
+    args = { "-c", "notify=[]" },
     auth_method = "chatgpt",
   },
 }
