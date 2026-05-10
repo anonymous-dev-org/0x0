@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# 0x0-git:start
+# AI commit message generation — https://github.com/anonymous-dev-org/0x0
+__0x0_git_hook() {
+  ZEROXZERO_GIT="/opt/homebrew/bin/0x0-git"
+  if [ ! -x "$ZEROXZERO_GIT" ]; then
+    command -v 0x0-git >/dev/null 2>&1 && ZEROXZERO_GIT="0x0-git" || return 0
+  fi
+  COMMIT_MSG_FILE="$1"
+  COMMIT_SOURCE="$2"
+  # Skip if message already provided (-m), merge, squash, or amend
+  if [ -z "$COMMIT_SOURCE" ]; then
+    MSG=$("$ZEROXZERO_GIT" commit-msg 2>/dev/null) || true
+    if [ -n "$MSG" ]; then
+      printf '%s\n' "$MSG" > "$COMMIT_MSG_FILE"
+    fi
+  fi
+}
+__0x0_git_hook "$@"
+# 0x0-git:end
