@@ -230,7 +230,18 @@ local function bind_keymaps(bufnr)
 end
 
 local function unbind_keymaps(bufnr)
-  for _, key in ipairs({ "<localleader>a", "<localleader>r", "<localleader>A", "<localleader>R", "]h", "[h", "]H", "[H", "<localleader>m", "<localleader>f" }) do
+  for _, key in ipairs({
+    "<localleader>a",
+    "<localleader>r",
+    "<localleader>A",
+    "<localleader>R",
+    "]h",
+    "[h",
+    "]H",
+    "[H",
+    "<localleader>m",
+    "<localleader>f",
+  }) do
     pcall(vim.keymap.del, "n", key, { buffer = bufnr })
   end
 end
