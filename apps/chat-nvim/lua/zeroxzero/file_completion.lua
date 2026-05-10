@@ -31,13 +31,16 @@ local function list_files()
   end
 
   local files = {}
-  local output = vim.fn.systemlist({ "rg", "--files", "--hidden", "-g", "!**/.git/**" })
-  if vim.v.shell_error == 0 then
+  local output = {}
+  if vim.fn.executable("rg") == 1 then
+    output = vim.fn.systemlist({ "rg", "--files", "--hidden", "-g", "!**/.git/**" })
+  end
+  if vim.v.shell_error == 0 and #output > 0 then
     files = output
-  else
+  elseif vim.fn.executable("find") == 1 then
     output = vim.fn.systemlist({ "find", ".", "-type", "f", "-not", "-path", "*/.git/*" })
     for _, path in ipairs(output) do
-      table.insert(files, path:gsub("^%./", ""))
+      table.insert(files, (path:gsub("^%./", "")))
     end
   end
 
