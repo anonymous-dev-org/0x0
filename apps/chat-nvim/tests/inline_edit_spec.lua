@@ -14,7 +14,7 @@ describe("inline_edit", function()
     })
     vim.api.nvim_set_current_buf(bufnr)
     vim.api.nvim_win_set_cursor(0, { 3, 0 })
-    vim.bo[bufnr].filetype = ""  -- no parser → forces line fallback
+    vim.bo[bufnr].filetype = "" -- no parser → forces line fallback
   end)
 
   after_each(function()

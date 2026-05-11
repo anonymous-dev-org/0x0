@@ -23,9 +23,8 @@ describe("reference_mentions @diagnostics", function()
   end)
 
   it("deduplicates repeated @diagnostics mentions", function()
-    local mentions =
-      ReferenceMentions.parse("@diagnostics @diagnostics @diagnostics:errors", vim.fn.getcwd())
-    assert.are.equal(2, #mentions)  -- "all" + "errors" are distinct, repeats fold
+    local mentions = ReferenceMentions.parse("@diagnostics @diagnostics @diagnostics:errors", vim.fn.getcwd())
+    assert.are.equal(2, #mentions) -- "all" + "errors" are distinct, repeats fold
   end)
 
   it("expands @diagnostics to a fenced markdown block in to_prompt_blocks", function()
@@ -44,8 +43,7 @@ describe("reference_mentions @diagnostics", function()
   end)
 
   it("parses @hover @def @symbol as lsp mentions", function()
-    local mentions =
-      ReferenceMentions.parse("check @hover and @def and @symbol", vim.fn.getcwd())
+    local mentions = ReferenceMentions.parse("check @hover and @def and @symbol", vim.fn.getcwd())
     assert.are.equal(3, #mentions)
     for _, m in ipairs(mentions) do
       assert.are.equal("lsp", m.type)
@@ -70,19 +68,13 @@ describe("reference_mentions @diagnostics", function()
     -- bob@example.com → no mention.
     -- README.md@v2 → no mention (mid-word @).
     -- @diagnostics at start, after a period+space → recognized.
-    local mentions = ReferenceMentions.parse(
-      "email bob@example.com about README.md@v2. @diagnostics",
-      vim.fn.getcwd()
-    )
+    local mentions = ReferenceMentions.parse("email bob@example.com about README.md@v2. @diagnostics", vim.fn.getcwd())
     assert.are.equal(1, #mentions)
     assert.are.equal("diagnostics", mentions[1].type)
   end)
 
   it("matches @-tokens after opening punctuation", function()
-    local mentions = ReferenceMentions.parse(
-      "see (@diagnostics) and [@hover] and {@def}",
-      vim.fn.getcwd()
-    )
+    local mentions = ReferenceMentions.parse("see (@diagnostics) and [@hover] and {@def}", vim.fn.getcwd())
     assert.are.equal(3, #mentions)
   end)
 end)

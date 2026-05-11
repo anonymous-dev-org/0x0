@@ -77,10 +77,10 @@ M.defaults = {
   },
   code_actions = {},
   detached_runs_max = 4,
-  test_command = nil,  -- auto-detected per project; override per-setup if needed
-  test_command_timeout_ms = 5000,  -- @test-output kill-on-timeout (T2.1, T2.7)
+  test_command = nil, -- auto-detected per project; override per-setup if needed
+  test_command_timeout_ms = 5000, -- @test-output kill-on-timeout (T2.1, T2.7)
   context = {
-    summarize_threshold = 8 * 1024,  -- bare @path of files larger than this emits a summary
+    summarize_threshold = 8 * 1024, -- bare @path of files larger than this emits a summary
   },
   tool_output_max_lines = 200,
   providers = {

@@ -56,14 +56,14 @@ function M.run(root, timeout_ms)
     return "", nil, nil, "no test command detected"
   end
   local config = require("zeroxzero.config")
-  local timeout = timeout_ms or config.current.test_command_timeout_ms or 5000  -- T2.1: 5s default
+  local timeout = timeout_ms or config.current.test_command_timeout_ms or 5000 -- T2.1: 5s default
   local handle = vim.system({ "sh", "-c", cmd }, {
     cwd = root,
     text = true,
   })
   local ok, result = pcall(handle.wait, handle, timeout)
   if not ok or not result then
-    pcall(handle.kill, handle, 15)  -- T2.7: SIGTERM on timeout
+    pcall(handle.kill, handle, 15) -- T2.7: SIGTERM on timeout
     return cmd, nil, nil, ("test command timed out after %dms"):format(timeout)
   end
   -- vim.system's :wait returns code=nil when the timeout fires; kill explicitly.

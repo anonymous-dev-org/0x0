@@ -17,8 +17,7 @@ local SEVERITY_LABEL = {
 ---@param bufnr integer
 ---@return boolean
 local function has_lsp(bufnr)
-  local clients = vim.lsp.get_clients and vim.lsp.get_clients({ bufnr = bufnr })
-    or vim.lsp.buf_get_clients(bufnr)
+  local clients = vim.lsp.get_clients and vim.lsp.get_clients({ bufnr = bufnr }) or vim.lsp.buf_get_clients(bufnr)
   return clients and next(clients) ~= nil
 end
 
@@ -80,8 +79,7 @@ function M.definition_at(bufnr, row, col)
     return nil
   end
   local params = make_position_params(bufnr, row - 1, col)
-  local results =
-    vim.lsp.buf_request_sync(bufnr, "textDocument/definition", params, DEFAULT_TIMEOUT_MS)
+  local results = vim.lsp.buf_request_sync(bufnr, "textDocument/definition", params, DEFAULT_TIMEOUT_MS)
   if not results then
     return nil
   end

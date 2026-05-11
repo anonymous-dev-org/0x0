@@ -35,10 +35,7 @@ function M:_handle_permission(request, respond)
       self.permission_queue[#self.permission_queue + 1] = { request = request, respond = respond }
       if self.in_flight then
         local depth = #self.permission_queue
-        self:_set_turn_activity(
-          "waiting",
-          ("Waiting for user input (%d queued)"):format(depth)
-        )
+        self:_set_turn_activity("waiting", ("Waiting for user input (%d queued)"):format(depth))
       end
       return
     end

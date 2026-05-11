@@ -27,8 +27,7 @@ M.DEFAULT_ACTIONS = {
   },
   ["Refactor"] = {
     sink = "edit",
-    template = "Refactor the selected region per: ${user_input}. "
-      .. "Preserve external API; tests must still pass.",
+    template = "Refactor the selected region per: ${user_input}. " .. "Preserve external API; tests must still pass.",
     needs_user_input = true,
   },
   ["Add docstring"] = {
@@ -38,8 +37,7 @@ M.DEFAULT_ACTIONS = {
   },
   ["Find usages"] = {
     sink = "ask",
-    template = "Find call sites of `${scope_name}` in this repo and "
-      .. "summarize how each one uses it.",
+    template = "Find call sites of `${scope_name}` in this repo and " .. "summarize how each one uses it.",
   },
   ["Summarize file"] = {
     sink = "ask",
@@ -82,9 +80,7 @@ function M._dispatch(action, scope, user_input)
   local instruction = interpolate(action.template, vars_from_scope(scope, user_input))
   if action.sink == "edit" then
     require("zeroxzero.inline_edit").start({
-      range = scope.scope_kind == "selection"
-          and { start_line = scope.start_line, end_line = scope.end_line }
-        or nil,
+      range = scope.scope_kind == "selection" and { start_line = scope.start_line, end_line = scope.end_line } or nil,
       instruction = instruction,
     })
   else

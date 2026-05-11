@@ -238,9 +238,7 @@ function M.spawn(opts)
     vim.schedule(function()
       local cp, err = Checkpoint.snapshot(root)
       if not cp then
-        require("zeroxzero.log").warn(
-          "run_registry: checkpoint snapshot failed: " .. tostring(err)
-        )
+        require("zeroxzero.log").warn("run_registry: checkpoint snapshot failed: " .. tostring(err))
         finalize_and_cleanup(run, "failed")
         return
       end

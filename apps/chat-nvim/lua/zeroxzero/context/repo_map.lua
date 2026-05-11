@@ -221,10 +221,7 @@ local function serialize(map)
     lines[#lines + 1] = table.concat(parts, "  ")
   end
   if map.truncated then
-    lines[#lines + 1] = ("(repo map truncated — %d of %d files included)"):format(
-      #map.entries,
-      map.total_candidates
-    )
+    lines[#lines + 1] = ("(repo map truncated — %d of %d files included)"):format(#map.entries, map.total_candidates)
   end
   return table.concat(lines, "\n")
 end

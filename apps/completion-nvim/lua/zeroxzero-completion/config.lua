@@ -58,7 +58,7 @@ M.defaults = {
   },
   telemetry = {
     enabled = false,
-    path = nil,  -- defaults to stdpath('state')/zeroxzero-completion/telemetry.jsonl
+    path = nil, -- defaults to stdpath('state')/zeroxzero-completion/telemetry.jsonl
   },
   suppress_in_strings_and_comments = true,
   acp = {

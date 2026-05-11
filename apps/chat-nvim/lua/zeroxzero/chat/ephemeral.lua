@@ -68,10 +68,7 @@ function M:run_inline_ask(opts)
       -- the intended behavior).
       client:subscribe(session_id, {
         on_update = function(update)
-          if
-            update.sessionUpdate == "agent_message_chunk"
-            or update.sessionUpdate == "agent_thought_chunk"
-          then
+          if update.sessionUpdate == "agent_message_chunk" or update.sessionUpdate == "agent_thought_chunk" then
             local text = update.content and update.content.text or ""
             if text ~= "" then
               vim.schedule(function()

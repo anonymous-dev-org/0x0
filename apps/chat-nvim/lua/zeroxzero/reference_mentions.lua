@@ -307,11 +307,7 @@ local function format_lsp_block(mention, cwd)
     end
     return {
       type = "text",
-      text = ("LSP definition: %s:%d:%d"):format(
-        rel_path(cwd, def.path),
-        def.line,
-        def.character + 1
-      ),
+      text = ("LSP definition: %s:%d:%d"):format(rel_path(cwd, def.path), def.line, def.character + 1),
     }
   elseif mention.lsp_kind == "symbol" then
     local sym = LSP.symbol_at(bufnr, row, col)
@@ -435,12 +431,7 @@ local function format_diagnostics_block(mention)
   if #lines == 0 then
     lines[1] = "(no diagnostics)"
   end
-  local header = ("Diagnostics in %s (%d/%d matching %s):"):format(
-    rel,
-    #all,
-    total,
-    mention.severity_label
-  )
+  local header = ("Diagnostics in %s (%d/%d matching %s):"):format(rel, #all, total, mention.severity_label)
   return {
     type = "text",
     text = table.concat({ header, "```", table.concat(lines, "\n"), "```" }, "\n"),
@@ -462,8 +453,7 @@ function M.to_prompt_blocks(input, cwd)
       table.insert(blocks, RepoMap.format_block(cwd))
     elseif mention.type == "test_output" then
       local TestCommand = require("zeroxzero.context.test_command")
-      local root = require("zeroxzero.checkpoint").git_root(cwd or vim.fn.getcwd())
-        or (cwd or vim.fn.getcwd())
+      local root = require("zeroxzero.checkpoint").git_root(cwd or vim.fn.getcwd()) or (cwd or vim.fn.getcwd())
       local cmd, code, stdout, stderr = TestCommand.run(root)
       local body = stdout or ""
       if stderr and stderr ~= "" then
