@@ -1,5 +1,5 @@
 // Tool definitions exposed to Claude. The MVP set forwards filesystem
-// operations to the client (chat-nvim) via ACP server→client requests,
+// operations to the client (0x0.nvim) via ACP server→client requests,
 // so reconcile.lua keeps governing host disk access.
 
 import type {

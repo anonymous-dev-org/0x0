@@ -1,4 +1,4 @@
-// JSON-RPC 2.0 + ACP wire types. Mirrors the surface chat-nvim's
+// JSON-RPC 2.0 + ACP wire types. Mirrors the surface 0x0.nvim's
 // acp_client.lua exercises.
 
 // ---------- JSON-RPC envelope ----------

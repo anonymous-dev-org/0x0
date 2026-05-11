@@ -21,14 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: chat plugin
-            app: apps/chat-nvim
-            target_repo: anonymous-dev-org/0x0-chat.nvim
-            checkout_path: chat-plugin
-          - name: completion plugin
-            app: apps/completion-nvim
-            target_repo: anonymous-dev-org/0x0-completion.nvim
-            checkout_path: completion-plugin
+          - name: 0x0.nvim
+            app: apps/0x0.nvim
+            target_repo: anonymous-dev-org/0x0.nvim
+            checkout_path: 0x0-plugin
 
     steps:
       - name: Checkout monorepo

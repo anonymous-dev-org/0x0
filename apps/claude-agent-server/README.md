@@ -2,12 +2,12 @@
 
 In-repo ACP server that drives Claude (via `@anthropic-ai/sdk`) and speaks
 the same protocol as `claude-code-acp` / `claude-agent-acp`. Replaces
-the external dependency for the `claude-acp` provider in `chat-nvim`.
+the external dependency for the `claude-acp` provider in `0x0.nvim`.
 
 ## Protocol
 
 Newline-delimited JSON-RPC 2.0 over stdio. Implements the ACP surface
-documented in the chat-nvim `acp_client.lua`:
+documented in the 0x0.nvim `acp_client.lua`:
 
 - Inbound: `initialize`, `session/new`, `session/prompt`,
   `session/cancel` (notification), `session/set_model`,
@@ -32,7 +32,7 @@ bun run build          # tsc → dist/
 bun test               # transport + server unit tests
 ```
 
-## Configuration in chat-nvim
+## Configuration in 0x0.nvim
 
 `config.lua` already detects this binary if installed at
 `stdpath("data")/0x0/claude-agent-server/bin/run`; otherwise it falls
