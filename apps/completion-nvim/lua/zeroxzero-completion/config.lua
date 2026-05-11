@@ -12,6 +12,12 @@ local M = {}
 ---@field filetypes zeroxzero_completion.Filetypes
 ---@field cache zeroxzero_completion.CacheConfig
 ---@field enabled boolean
+---@field suppress_in_strings_and_comments? boolean
+---@field telemetry zeroxzero_completion.TelemetryConfig
+
+---@class zeroxzero_completion.TelemetryConfig
+---@field enabled boolean
+---@field path? string
 
 ---@class zeroxzero_completion.Keymaps
 ---@field accept string
@@ -50,6 +56,11 @@ M.defaults = {
     enabled = true,
     max_entries = 100,
   },
+  telemetry = {
+    enabled = false,
+    path = nil,  -- defaults to stdpath('state')/zeroxzero-completion/telemetry.jsonl
+  },
+  suppress_in_strings_and_comments = true,
   acp = {
     provider = "codex-acp",
     command = "codex-acp",

@@ -20,6 +20,36 @@ function M.init(max_entries)
   _entries = {}
 end
 
+--- Append a single JSONL line to the telemetry file (if enabled).
+---@param outcome "accept"|"dismiss"
+---@param key string
+function M.log_outcome(outcome, key)
+  local ok, config = pcall(require, "zeroxzero-completion.config")
+  if not ok or not config.current.telemetry or not config.current.telemetry.enabled then
+    return
+  end
+  local path = config.current.telemetry.path
+  if not path or path == "" then
+    path = vim.fn.stdpath("state") .. "/zeroxzero-completion/telemetry.jsonl"
+  end
+  local dir = vim.fn.fnamemodify(path, ":h")
+  if vim.fn.isdirectory(dir) == 0 then
+    pcall(vim.fn.mkdir, dir, "p")
+  end
+  local fd = io.open(path, "a")
+  if not fd then
+    return
+  end
+  local key_digest = key
+  if #key_digest > 80 then
+    key_digest = key_digest:sub(1, 80) .. "..."
+  end
+  fd:write(
+    vim.json.encode({ at = os.time(), outcome = outcome, key_digest = key_digest }) .. "\n"
+  )
+  fd:close()
+end
+
 --- Generate a cache key from context.
 ---@param prefix string
 ---@param suffix string

@@ -11,6 +11,19 @@
         "typescript": "^6.0.3",
       },
     },
+    "apps/claude-agent-server": {
+      "name": "@0x0/claude-agent-server",
+      "version": "0.1.0",
+      "bin": {
+        "claude-agent-server": "./bin/run",
+      },
+      "dependencies": {
+        "@anthropic-ai/sdk": "^0.69.0",
+      },
+      "devDependencies": {
+        "typescript": "^6.0.3",
+      },
+    },
     "apps/completion-nvim": {
       "name": "@anonymous-dev/0x0-nvim-completion",
       "version": "0.1.0",
@@ -20,7 +33,13 @@
     "@johnnymorganz/stylua-bin",
   ],
   "packages": {
+    "@0x0/claude-agent-server": ["@0x0/claude-agent-server@workspace:apps/claude-agent-server"],
+
     "@anonymous-dev/0x0-nvim-completion": ["@anonymous-dev/0x0-nvim-completion@workspace:apps/completion-nvim"],
+
+    "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.69.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-L92d2q47BSq+7slUqHBL1d2DwloulZotYGCTDt9AYRtPmYF+iK6rnwq9JaZwPPJgk+LenbcbQ/nj6gfaDFsl9w=="],
+
+    "@babel/runtime": ["@babel/runtime@7.29.2", "", {}, "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g=="],
 
     "@johnnymorganz/stylua-bin": ["@johnnymorganz/stylua-bin@2.4.0", "", { "dependencies": { "axios": "^1.6.0", "node-fetch": "^3.2.10", "proxy-agent": "^6.4.0", "rimraf": "^3.0.2", "unzipper": "^0.10.11" }, "bin": { "stylua": "run.js" } }, "sha512-+gICnpcp7bt+baCH9sbHIx4WHSeVK3yqNuPEHRQzav9+yFj0oQnP7EhuEJAAuKp8D3xqFFiwVcMcC+u1PzoQOQ=="],
 
@@ -150,6 +169,8 @@
 
     "isarray": ["isarray@1.0.0", "", {}, "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ=="],
 
+    "json-schema-to-ts": ["json-schema-to-ts@3.1.1", "", { "dependencies": { "@babel/runtime": "^7.18.3", "ts-algebra": "^2.0.0" } }, "sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g=="],
+
     "listenercount": ["listenercount@1.0.1", "", {}, "sha512-3mk/Zag0+IJxeDrxSgaDPy4zZ3w05PRZeJNnlWhzFz5OkX49J4krc+A8X2d2M69vGMBEX0uyl8M+W+8gH+kBqQ=="],
 
     "lru-cache": ["lru-cache@7.18.3", "", {}, "sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA=="],
@@ -205,6 +226,8 @@
     "string_decoder": ["string_decoder@1.1.1", "", { "dependencies": { "safe-buffer": "~5.1.0" } }, "sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg=="],
 
     "traverse": ["traverse@0.3.9", "", {}, "sha512-iawgk0hLP3SxGKDfnDJf8wTz4p2qImnyihM5Hh/sGvQ3K37dPi/w8sRhdNIxYA1TwFwc5mDhIJq+O0RsvXBKdQ=="],
+
+    "ts-algebra": ["ts-algebra@2.0.0", "", {}, "sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 

@@ -79,6 +79,23 @@ function M._on_text_changed()
     return
   end
 
+  -- Treesitter-gated suppression: skip completion inside comments and string
+  -- literals. Best-effort — only runs when a parser is attached.
+  if cfg.suppress_in_strings_and_comments ~= false then
+    local ok, node = pcall(vim.treesitter.get_node, { bufnr = bufnr, pos = { row - 1, math.max(col - 1, 0) } })
+    if ok and node then
+      local n = node
+      while n do
+        local t = n:type()
+        if t:match("comment") or t == "string" or t:match("string_") or t:match("_string") then
+          M.dismiss()
+          return
+        end
+        n = n:parent()
+      end
+    end
+  end
+
   -- Try cache shift first (instant, no server call)
   if cfg.cache.enabled and _last_cache_key and #before > 0 then
     local typed = before:sub(-1)
@@ -184,6 +201,9 @@ end
 
 --- Dismiss the current completion suggestion.
 function M.dismiss()
+  if ghost.is_visible() and _last_cache_key then
+    cache.log_outcome("dismiss", _last_cache_key)
+  end
   M._cancel()
 end
 
@@ -192,6 +212,9 @@ end
 function M.accept()
   if ghost.is_visible() then
     M._cancel_request_only()
+    if _last_cache_key then
+      cache.log_outcome("accept", _last_cache_key)
+    end
     return ghost.accept()
   end
   return false
