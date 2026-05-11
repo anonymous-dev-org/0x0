@@ -14,7 +14,7 @@ the same files.
 | ACP `cwd`             | `worktree.cwd` (parallel checkout)                             | repo root                                                              |
 | Agent writes land in  | shadow worktree files                                          | user's real files                                                      |
 | Root mutation         | only at `accept_all` via `git apply` (`shadow_worktree.lua:202`) | as the agent writes (no separate apply step)                           |
-| Diff baseline         | shadow worktree HEAD                                           | hidden checkpoint ref `refs/zeroxzero/checkpoints/<turn-id>`           |
+| Diff baseline         | shadow worktree HEAD                                           | hidden checkpoint ref `refs/0x0/checkpoints/<turn-id>`           |
 | Review surface        | diffview tab                                                   | inline `virt_lines` on live buffers                                    |
 
 ## 3. Module diff

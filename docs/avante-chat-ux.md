@@ -1,7 +1,7 @@
 # Avante.nvim chat panel UX — extraction & gap analysis
 
 Source: `avante.nvim/lua/avante/` (vendored under repo root). All references below
-use that prefix unless stated. Comparison target: `apps/chat-nvim/lua/zeroxzero/`
+use that prefix unless stated. Comparison target: `apps/0x0.nvim/lua/zxz/`
 (the in-house 0x0 chat panel).
 
 This doc catalogs **what** the avante sidebar does, **how** it does it (with

@@ -34,7 +34,7 @@ Still pending from that plan: G9 (parallel agents), G10 (MCP unification
 | Diff review (post-hoc) | Run objects with `start_ref`/`end_ref`; `:ZeroChatRunReview` opens diffview; `:ZeroChatRunAccept/Reject` |
 | Observability | Run history per thread; tool-call timeline; live run header (tool count, files, elapsed); reconcile-conflict markers |
 | Headless mode | `:ZeroChatRun <prompt>` without opening the sidebar; completion notify |
-| Completion | `apps/completion-nvim` ghost-text via ACP; accept/dismiss keys; basic cache |
+| Completion | `apps/0x0.nvim/lua/zxz/complete` ghost-text via ACP; accept/dismiss keys; basic cache |
 
 ACP already provides the unified transport across all four providers —
 the historic "unify Claude/Codex" goal is met.
@@ -84,11 +84,11 @@ from automatic preamble: "cursor at `apps/foo.lua:142`, function `bar`,
 in scope: …" prepended invisibly. Optional, off by default.
 
 **Critical files for A:**
-`apps/chat-nvim/lua/zeroxzero/inline_diff.lua` (overlay primitive),
-`apps/chat-nvim/lua/zeroxzero/checkpoint.lua` (snapshot primitive),
-`apps/chat-nvim/lua/zeroxzero/chat/run_review.lua` (per-file accept/reject
+`apps/0x0.nvim/lua/zxz/inline_diff.lua` (overlay primitive),
+`apps/0x0.nvim/lua/zxz/checkpoint.lua` (snapshot primitive),
+`apps/0x0.nvim/lua/zxz/chat/run_review.lua` (per-file accept/reject
 plumbing — reuse for the inline-edit overlay), plus new modules
-`zeroxzero/inline_edit.lua`, `zeroxzero/code_actions.lua`.
+`zxz/edit/inline_edit.lua`, `zxz/edit/code_actions.lua`.
 
 ---
 
@@ -130,9 +130,9 @@ without a range and the buffer is too large, summarize/index rather than
 attaching raw. Compose with B3.
 
 **Critical files for B:**
-new module `zeroxzero/context/lsp.lua` (diagnostics, hover, definition);
-new module `zeroxzero/context/repo_map.lua` (treesitter-backed digest);
-extend `zeroxzero/reference_mentions.lua` to recognize new mention kinds
+new module `zxz/context/lsp.lua` (diagnostics, hover, definition);
+new module `zxz/context/repo_map.lua` (treesitter-backed digest);
+extend `zxz/context/reference_mentions.lua` to recognize new mention kinds
 (`@diagnostic`, `@symbol`, `@test-output`).
 
 ---
@@ -167,9 +167,9 @@ finishes." Out of scope until C1–C4 are stable.
 **C6. Resource caps.** Per-project max concurrent runs (default 1
 preserves current behavior). Avoid runaway provider subprocesses.
 
-**Critical files for C:** new module `zeroxzero/run_registry.lua`;
+**Critical files for C:** new module `zxz/core/run_registry.lua`;
 extend `chat.lua` tabpage registry to flat run registry; possible new
-`zeroxzero/dashboard.lua`. The biggest open question is C1 (isolation
+`zxz/core/run_registry.lua`. The biggest open question is C1 (isolation
 strategy) — see Open Questions.
 
 ---
@@ -201,17 +201,17 @@ runs. Cursor's `.cursorrules` / Aider's conventions equivalent. Lives in
 the server, not the client.
 
 **D5. Capability negotiation.** Expose 0x0-specific capabilities in the
-initialize response so chat-nvim can light up server-aware UI without
+initialize response so 0x0.nvim can light up server-aware UI without
 guessing.
 
 **Critical files for D:** new `apps/claude-agent-server/` TypeScript
 package (package.json, src/index.ts, src/acp.ts, src/tools.ts);
-`apps/chat-nvim/lua/zeroxzero/config.lua` to point the provider at the
-new local binary; no protocol changes in chat-nvim itself.
+`apps/0x0.nvim/lua/zxz/config.lua` to point the provider at the
+new local binary; no protocol changes in 0x0.nvim itself.
 
 ---
 
-### Dimension E — `completion-nvim` upgrades (orthogonal but cheap wins)
+### Dimension E — `0x0.nvim (complete/)` upgrades (orthogonal but cheap wins)
 
 **E1. Multi-line completions.** Today the ghost-text model assumes a
 single continuous line.
@@ -254,7 +254,7 @@ D (claude-agent-server)
   ├── D4 memory               ─── unlocked by D1
   └── D5 capabilities         ─── unlocked by D1
 
-E (completion-nvim)
+E (0x0.nvim (complete/))
   ├── E1–E4 independent of A/B/C/D
 ```
 
@@ -275,7 +275,7 @@ Three reasonable next planning targets, ranked by leverage-per-week:
    Cursor/Zed. Every gap A1–A5 is small (≤200 LOC each), independent,
    buffer-local, reuses existing primitives. Highest payoff per LOC.
 2. **D1 (claude-agent-server only, no D2–D5 yet).** Self-contained
-   sub-project. Doesn't change chat-nvim. Establishes the foundation for
+   sub-project. Doesn't change 0x0.nvim. Establishes the foundation for
    future control-plane work (D2–D5, B3 server-side). Estimable: ~1
    week of focused TS work.
 3. **B (Deep code context).** Higher leverage on existing flow's
@@ -328,7 +328,7 @@ satisfy:
    process across all tabpages, or one per session like today? Affects
    D4 (memory) significantly.
 6. **Tool ownership boundary in D2.** Which tools live server-side
-   (claude-agent-server) vs. host-side (chat-nvim's fs-bridge)? Default:
+   (claude-agent-server) vs. host-side (0x0.nvim's fs-bridge)? Default:
    anything that touches the user's filesystem stays host-side so
    `reconcile.lua` keeps governing it.
 7. **Context budget management.** A5 + B1–B3 can balloon prompts. Need

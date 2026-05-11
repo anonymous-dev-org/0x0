@@ -12,21 +12,21 @@ This document also carries a tiny fixture edit for local diff rendering checks.
 ## App Layout
 
 - `apps/server`: local 0x0 server.
-- `apps/chat-nvim`: chat, inline edit, and review Neovim plugin.
-- `apps/completion-nvim`: inline ghost-text completion Neovim plugin.
+- `apps/0x0.nvim`: chat, inline edit, and review Neovim plugin.
+- `apps/0x0.nvim/lua/zxz/complete`: inline ghost-text completion Neovim plugin.
 
 ## Plugin Repository Sync
 
 The `Sync Plugin Repos` workflow copies plugin source from this monorepo into the public plugin repositories:
 
-- `apps/chat-nvim` -> `anonymous-dev-org/0x0-chat.nvim`
-- `apps/completion-nvim` -> `anonymous-dev-org/0x0-completion.nvim`
+- `apps/0x0.nvim` -> `anonymous-dev-org/0x0-chat.nvim`
+- `apps/0x0.nvim/lua/zxz/complete` -> `anonymous-dev-org/0x0-completion.nvim`
 
 The workflow runs after pushes to `main` that touch either plugin, and can also be run manually.
 
 It requires a repository secret named `PLUGIN_SYNC_TOKEN`. The token must be able to push to both plugin repositories.
 
-Keep the Lua module name as `zeroxzero` for compatibility unless a breaking release intentionally changes it.
+Keep the Lua module name as `zxz` for compatibility unless a breaking release intentionally changes it.
 
 ## User Install Shape
 

@@ -11,9 +11,9 @@
     "dev": "turbo run dev",
     "format": "bun run format:lua",
     "format:check": "bun run format:lua:check",
-    "format:lua": "stylua apps/chat-nvim apps/completion-nvim",
-    "format:lua:check": "stylua --check apps/chat-nvim apps/completion-nvim",
-    "test:chat-nvim": "make -C apps/chat-nvim test",
+    "format:lua": "stylua apps/0x0.nvim",
+    "format:lua:check": "stylua --check apps/0x0.nvim",
+    "test:0x0-nvim": "make -C apps/0x0.nvim test",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
