@@ -1,10 +1,18 @@
 # 0x0.nvim — Roadmap
 
-The plugin's direction is **solidify the chat → tool-call → diff loop**,
+The plugin's direction is **solidify the chat → tool-call → review loop**,
 not add new surfaces. Each phase is shippable on its own; later phases
 build on earlier ones but are not blocking. Out-of-scope work (debug
 adapter, remote dev, collaboration, prediction training) is intentional —
 those belong in other plugins.
+
+The north-star reference is Zed's Agent Panel final experience: the agent
+works in the real project, every AI edit becomes a reviewable item, context
+mentions are explicit, and the same keep/reject vocabulary works inline, in
+the review tab, and at the whole-run level. The important implementation idea
+to copy is not Zed's Rust/GPUI shape; it is the **action-log mental model**:
+review UI is a projection of unresolved AI edits, not an independent static
+diff buffer.
 
 ## Phase 0 — Rename + reorg + fold completion (shipped)
 
@@ -34,7 +42,178 @@ which surface owns the cursor.
 - Ghost-text accept feeds the same verb table so the keymap story is
   consistent.
 
-## Phase 2 — Streaming-into-buffer
+## Phase 2 — Durable review ledger (shipped core)
+
+Zed keeps AI edits in an action log; accepting a hunk removes that hunk from
+the review set, and rejecting it restores from the baseline. 0x0.nvim should
+have the same semantic guarantee. This phase makes review actions real instead
+of cosmetic.
+
+- Add a review ledger on top of the active checkpoint: `{path, hunks,
+  status}` with stable hunk signatures and extmark anchors when buffers are
+  open.
+- Make accept durable:
+  - per-hunk accept removes only that hunk from unresolved review state;
+  - per-file accept removes that file's unresolved hunks;
+  - accept-all stamps/clears the checkpoint only after all unresolved hunks
+    are accepted.
+- Make reject precise:
+  - per-hunk reject restores only the selected hunk from the checkpoint;
+  - per-file reject restores that file from the checkpoint;
+  - reject-all restores every unresolved change from the checkpoint.
+- Refresh all review projections after each action: inline overlays,
+  `zxz-review`, changed-file counts, and chat status.
+- Add an undo affordance for the last reject where practical, mirroring Zed's
+  "last reject undo" behavior.
+
+Implemented in this slice:
+
+- `edit/ledger.lua` is now the single checkpoint-backed accept/reject write
+  path.
+- Per-hunk/per-file accept rewrites the checkpoint baseline, so accepted work
+  cannot be discarded later.
+- Per-hunk/per-file reject rewrites only the worktree and keeps unrelated user
+  edits outside the target hunk.
+- Inline overlays and `zxz-review` refresh from the updated checkpoint diff
+  after each action.
+- `ZxzUndoReject`, review-buffer `u`, and inline `<localleader>u` restore the
+  last rejected change.
+
+Acceptance criteria:
+
+- A hunk accepted from `zxz-review` cannot later be discarded by
+  `ZxzChatDiscardAll`.
+- A rejected hunk disappears from `zxz-review` and from the inline overlay
+  without requiring the user to reopen the review.
+- User edits outside the target hunk survive reject.
+- Tests cover durable accept/reject for modified files and hunk-accept
+  hardening for added/deleted files.
+
+## Phase 3 — Hunk-first review surface (shipped core)
+
+Single scrollable buffer that stitches excerpts from every file an agent
+edited in a run. This builds on Phase 2's ledger, so the surface always
+reflects authoritative unresolved edit state.
+
+- `edit/review.lua` opens `ft=zxz-review` scratch buffer.
+- Data model: `{path, anchor_start, anchor_end, hunks[]}`; anchors as
+  extmarks so they survive concurrent edits.
+- Rendering: per-file header via `virt_lines`, 3 lines of context,
+  elided regions concealed, gitsigns-style sign column.
+- Hunk rows are first-class. `a`/`r` act on the hunk under cursor; file and
+  run actions are secondary (`A`/`R` or explicit commands).
+- `<CR>` opens or focuses the source file in another window while keeping the
+  review buffer alive.
+- `run_actions` auto-opens review on multi-file runs (config flag).
+
+Implemented in this slice:
+
+- `zxz-review` renders file sections with first-class hunk rows instead of a
+  file-first raw diff dump.
+- `a`/`r` act on the hunk under cursor for active checkpoint reviews.
+- `A`/`R` remain file-scope actions; `ga`/`gr` remain all/run-scope actions.
+- `]h`/`[h` navigate hunk rows, not files.
+- `<CR>` opens/focuses the source file in a split and jumps to the changed line
+  while keeping the review buffer alive.
+- Review tests cover hunk accept, hunk reject, source focus, and live shrinkage.
+
+Acceptance criteria:
+
+- Review navigation moves hunk-to-hunk, not only file-to-file.
+- The same verbs work from inline overlays and from `zxz-review`.
+- The review buffer shrinks as hunks are accepted/rejected.
+
+## Technical Debt / Current Shortcomings
+
+These are known issues in the current implementation and should be retired
+before broadening the feature surface too much.
+
+1. **Ledger still has a checkpoint projection layer.**
+   Phase 4 now records pending/accepted/rejected status on edit events and
+   event hunks, and `zxz-review` renders pending event hunks first. The
+   checkpoint/worktree mutation path still projects those statuses through
+   `edit/ledger.lua`, though, and old/non-event edits fall back to checkpoint
+   diffs. The next step is hardening mixed event + non-event review state so
+   those paths cannot disagree.
+
+2. **Fallback edit-event provenance is still heuristic.**
+   Pending event hunks render directly from their event diffs, so host-mediated
+   writes no longer depend on latest-event-by-path annotation. The fallback
+   `EditEvents.annotate_chunks` path still groups events by path and hunk
+   index for cumulative checkpoint diffs. That remains unreliable when multiple
+   writes touch the same file, when hunks merge/split between event diffs and
+   the final checkpoint diff, or when user edits shift the final diff.
+
+3. **Multiple pending events for one file are order-sensitive.**
+   `pending_chunks` renders each pending event diff directly, but accept/reject
+   still projects through the checkpoint/worktree baseline. If two pending
+   events touch the same file, accepting a later event before resolving the
+   earlier event can fail as stale. The review projection needs per-path event
+   ordering or a merged unresolved view.
+
+4. **Tool-call attribution depends on a best-effort active id.**
+   ACP `fs/write_text_file` handling does not guarantee a tool-call id in the
+   params, so `fs_bridge.lua` and `run_registry.lua` fall back to
+   `active_tool_call_id`. That can misattribute writes if providers emit writes
+   out of order, overlap tool calls, or write after a tool has already completed.
+   We need a protocol-level id when available, or a stricter correlation model.
+
+5. **Edit-event creation is on the ACP write response path.**
+   After a successful disk write, event creation performs temp-file IO,
+   `git diff --no-index`, and `git hash-object` before responding to the
+   provider. If any of that throws or becomes slow on large files, the provider
+   can see a delayed or missing write response even though the file was already
+   modified. Event recording should be best-effort, bounded, and isolated from
+   the ACK path.
+
+6. **Edit-event storage has no lifecycle or size budget.**
+   Live events are kept in a process-global `events_by_run` table with no
+   eviction, and persisted runs store full per-write diffs. Large runs or many
+   long-lived Neovim sessions can bloat memory/state. Add event GC, size caps,
+   and summary-only fallbacks for large/binary edits.
+
+7. **Hunk accept/reject still lacks stable ids.**
+   Phase 4 now verifies the rendered hunk block against the checkpoint/worktree
+   before applying an action, so stale line numbers fail closed instead of
+   patching the wrong region. The remaining gap versus Zed is stable hunk ids
+   with provenance, so actions can survive richer rerenders and history views.
+
+8. **Review-buffer hunk reject now has dirty-buffer protection.**
+   `Ledger.reject_hunk` and `Ledger.reject_file` refuse to write through an
+   open modified source buffer. Keep this guard as the shared choke point for
+   any future review surface.
+
+9. **Restore paths are worktree-only now.**
+   `Checkpoint.restore_file`, saved-run review restore, and run accept/reject
+   restore paths now use blob reads plus disk writes/deletes instead of
+   `git checkout`, preserving the user's real git index. Continue auditing new
+   restore paths against this rule.
+
+10. **Saved-run review is still file-scoped.**
+   `zxz-review` renders run diffs as hunk rows, but `a`/`r` fall back to
+   file-level accept/reject for saved runs because there is no run ledger. The
+   UI should either mark run review as file-scoped or implement run hunk actions
+   against start/end snapshots.
+
+11. **Review rerendering is coarse and loses interaction context.**
+   Accept/reject rebuilds the whole review buffer and does not preserve the
+   nearest next hunk, viewport, or folds. This works for tests but will feel
+   jumpy on large agent edits. Preserve cursor/viewport and prefer incremental
+   row updates where possible.
+
+12. **Undo reject is process-global and single-slot.**
+   `ZxzUndoReject` stores one in-memory snapshot for the last reject across all
+   sessions/checkpoints. It is useful, but not scoped to a chat/run and not
+   durable across reload. Scope undo records by checkpoint/run, and clear them
+   when their checkpoint is deleted.
+
+13. **Large diffs and binary/rename cases are under-specified.**
+   The parser is line-based unified diff parsing. It does not meaningfully
+   represent binary files, renames, mode-only changes, or very large hunks.
+   Review should detect and render those as file-level actions with clear
+   labels instead of pretending every diff is hunk-editable text.
+
+## Phase 4 — Streaming-into-buffer
 
 Inline diffs should paint as deltas arrive, not after the tool call
 returns.
@@ -47,20 +226,59 @@ returns.
   `complete/ghost`.
 - Config flag to disable on slow terminals.
 
-## Phase 3 — Multi-buffer review surface
+Implemented in the Phase 4 seed slice:
 
-Single scrollable buffer that stitches excerpts from every file an agent
-edited in a run.
+- Host-mediated `fs_write` now schedules a debounced per-path overlay refresh
+  while the agent is still running.
+- `inline_diff.refresh_path_streaming` coalesces rapid writes and preserves the
+  visible cursor/viewport while repainting marks.
+- `inline_diff.streaming_refresh` and `inline_diff.streaming_refresh_delay_ms`
+  provide the escape hatch for slow terminals.
+- Checkpoint tree generation now hashes the actual worktree content instead of
+  trusting copied index stat data, so rapid same-size AI edits are detected.
 
-- `edit/review.lua` opens `ft=zxz-review` scratch buffer.
-- Data model: `{path, anchor_start, anchor_end, hunks[]}`; anchors as
-  extmarks so they survive concurrent edits.
-- Rendering: per-file header via `virt_lines`, 3 lines of context,
-  elided regions concealed, gitsigns-style sign column.
-- Verbs from Phase 1 work here. `<CR>` jumps to source.
-- `run_actions` auto-opens review on multi-file runs (config flag).
+Implemented in the structured edit-event slice:
 
-## Phase 4 — Rules + prompts library
+- Host-mediated writes now produce structured edit events with run id, tool
+  call id, path, blob shas, diff text, per-hunk ids, timestamp, and diff stats.
+- Edit events are persisted on the run record and linked back to the tool call
+  that produced them.
+- Chat tool-call rendering shows the files edited by that tool call.
+- `zxz-review` hunk rows are annotated with the originating tool call when the
+  event stream can identify it.
+- Detached runs record the same edit-event shape through `run_registry`.
+
+Implemented in the event-backed review-ledger slice:
+
+- Edit events and event hunks now carry pending/accepted/rejected status.
+- Ledger accept/reject actions update event hunk, path, or run status after
+  successful checkpoint/worktree projection.
+- `zxz-review` prefers pending event chunks and falls back to checkpoint diffs
+  for old/non-event changes.
+- Pending event hunks disappear from review once accepted or rejected.
+
+## Phase 5 — Structured context provenance + trim controls
+
+Zed treats mentions as structured context objects (file, symbol, rule,
+diagnostics, git diff, thread, fetch, selection, terminal, image), then loads
+and formats them at submit time. 0x0.nvim should keep the same separation:
+mentions are structured records; the transcript only renders them.
+
+- Store context metadata with each user message:
+  `{raw, type, label, source, resolved, error}`.
+- Render compact provenance under the user message and a collapsible detail
+  view for resolved context.
+- `:ZxzContextTrim` opens a toggle buffer for the next turn.
+- Track failed context resolution visibly instead of silently omitting it.
+
+Acceptance criteria:
+
+- Chat history can show what context was requested even after reload.
+- Failed context loads are visible and do not silently degrade prompts.
+- The prompt builder consumes structured context records, not re-parsed
+  transcript strings.
+
+## Phase 6 — Rules + prompts library
 
 Disk-backed, no DB.
 
@@ -70,13 +288,26 @@ Disk-backed, no DB.
   the chat input.
 - Completion reads rules too — short rules flow into the FIM prompt.
 
-## Phase 5 — Context provenance + trim controls
+## Next slice
 
-Make the agent feel less magic.
+**Finish Phase 4: robust event projection and budgets.**
 
-- Chat shows a collapsible card per turn: `rules: 3, prompts: 1,
-  auto: repo_map+lsp+recent`.
-- `:ZxzContextTrim` opens a toggle buffer for the next turn.
+The review surface is now event-backed for host-mediated writes. The next gap
+versus Zed's final experience is robustness: event recording should be isolated
+from provider ACKs, attribution should be strict, and large or mixed edits
+should degrade predictably.
+
+Concrete scope:
+
+1. Isolate edit-event recording from the ACP write ACK path with bounded,
+   best-effort persistence.
+2. Replace `active_tool_call_id` fallback attribution with stricter
+   protocol-level correlation where available.
+3. Add size caps, binary/rename guards, and summary-only fallbacks before
+   storing or rendering hunk-level events.
+4. Make mixed event + non-event same-file reviews merge safely instead of
+   choosing either event chunks or checkpoint chunks wholesale.
+5. Make saved-run hunk actions event-backed instead of file-scoped.
 
 ## Deferred / not on the roadmap
 

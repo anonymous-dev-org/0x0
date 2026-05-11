@@ -269,16 +269,23 @@ E (0x0.nvim (complete/))
 
 ## Recommendation for the next planning round
 
-Three reasonable next planning targets, ranked by leverage-per-week:
+Four reasonable next planning targets, ranked by leverage-per-week:
 
-1. **A (Inline AI primitives).** The single largest user-facing gap vs.
+1. **Durable review ledger.** Source reads of Zed's Agent Panel point to
+   the action-log model as the core of the AI-first edit experience:
+   review panes, inline hunk controls, changed-file counts, and
+   keep/reject all project the same unresolved edit state. 0x0.nvim now
+   has the native `zxz-review` surface, but the next slice must make
+   accept/reject durable at hunk/file/run granularity so the UI cannot
+   drift from checkpoint semantics.
+2. **A (Inline AI primitives).** The single largest user-facing gap vs.
    Cursor/Zed. Every gap A1–A5 is small (≤200 LOC each), independent,
    buffer-local, reuses existing primitives. Highest payoff per LOC.
-2. **D1 (claude-agent-server only, no D2–D5 yet).** Self-contained
+3. **D1 (claude-agent-server only, no D2–D5 yet).** Self-contained
    sub-project. Doesn't change 0x0.nvim. Establishes the foundation for
    future control-plane work (D2–D5, B3 server-side). Estimable: ~1
    week of focused TS work.
-3. **B (Deep code context).** Higher leverage on existing flow's
+4. **B (Deep code context).** Higher leverage on existing flow's
    quality. Better tackled after A is live because A creates the
    surfaces where context most matters.
 
@@ -307,6 +314,10 @@ satisfy:
 5. `feedback_solidify_over_features.md` rule respected: each new gap
    builds on or polishes existing chat→tool→diff plumbing rather than
    introducing parallel panels.
+6. Zed-derived review invariant respected: every review surface is a
+   projection of one unresolved-edit ledger. Accepting a hunk removes it
+   from that ledger; rejecting a hunk restores exactly that hunk from the
+   checkpoint; later discard-all must not discard already accepted hunks.
 
 ---
 
