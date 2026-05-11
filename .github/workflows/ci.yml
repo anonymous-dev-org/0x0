@@ -22,8 +22,8 @@ jobs:
       - name: Check Lua formatting
         run: bun run format:lua:check
 
-  test-chat-nvim:
-    name: chat-nvim — Tests
+  test-0x0-nvim:
+    name: 0x0.nvim — Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,5 +35,5 @@ jobs:
           version: stable
 
       - name: Run plenary tests
-        working-directory: apps/chat-nvim
+        working-directory: apps/0x0.nvim
         run: make test
