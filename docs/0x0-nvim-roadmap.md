@@ -144,33 +144,31 @@ before broadening the feature surface too much.
    writes touch the same file, when hunks merge/split between event diffs and
    the final checkpoint diff, or when user edits shift the final diff.
 
-3. **Multiple pending events for one file are order-sensitive.**
-   `pending_chunks` renders each pending event diff directly, but accept/reject
-   still projects through the checkpoint/worktree baseline. If two pending
-   events touch the same file, accepting a later event before resolving the
-   earlier event can fail as stale. The review projection needs per-path event
-   ordering or a merged unresolved view.
+3. **Multiple pending events for one file are ordered, not merged.**
+   Later pending events for a file now render as blocked file-level rows until
+   earlier event hunks are resolved, which avoids stale projection actions. The
+   richer Zed-like target is still a merged per-file unresolved view that can
+   present independent same-file hunks without forcing strict event order.
 
-4. **Tool-call attribution depends on a best-effort active id.**
+4. **Tool-call attribution still depends on a constrained active id.**
    ACP `fs/write_text_file` handling does not guarantee a tool-call id in the
    params, so `fs_bridge.lua` and `run_registry.lua` fall back to
-   `active_tool_call_id`. That can misattribute writes if providers emit writes
-   out of order, overlap tool calls, or write after a tool has already completed.
-   We need a protocol-level id when available, or a stricter correlation model.
+   `active_tool_call_id` only when that tool is still non-terminal. That avoids
+   stamping late writes onto completed tools, but overlapping live tool calls can
+   still be ambiguous. We need a protocol-level id when available, or a stricter
+   correlation model.
 
-5. **Edit-event creation is on the ACP write response path.**
-   After a successful disk write, event creation performs temp-file IO,
-   `git diff --no-index`, and `git hash-object` before responding to the
-   provider. If any of that throws or becomes slow on large files, the provider
-   can see a delayed or missing write response even though the file was already
-   modified. Event recording should be best-effort, bounded, and isolated from
-   the ACK path.
+5. **Async edit-event recording is best-effort only.**
+   Chat and detached write handlers now ACK after the reconcile write succeeds,
+   then record edit events asynchronously. That protects provider tool calls
+   from review-bookkeeping failures, but failed event recording is currently
+   only logged. Add retry/diagnostic visibility if dropped events become common.
 
-6. **Edit-event storage has no lifecycle or size budget.**
+6. **Edit-event storage still has no lifecycle.**
    Live events are kept in a process-global `events_by_run` table with no
-   eviction, and persisted runs store full per-write diffs. Large runs or many
-   long-lived Neovim sessions can bloat memory/state. Add event GC, size caps,
-   and summary-only fallbacks for large/binary edits.
+   eviction. Persisted runs now cap hunk-level event storage and fall back to
+   summary-only events for large/binary diffs, but many long-lived Neovim
+   sessions can still bloat memory/state. Add event GC and stale-run eviction.
 
 7. **Hunk accept/reject still lacks stable ids.**
    Phase 4 now verifies the rendered hunk block against the checkpoint/worktree
@@ -207,11 +205,12 @@ before broadening the feature surface too much.
    durable across reload. Scope undo records by checkpoint/run, and clear them
    when their checkpoint is deleted.
 
-13. **Large diffs and binary/rename cases are under-specified.**
-   The parser is line-based unified diff parsing. It does not meaningfully
-   represent binary files, renames, mode-only changes, or very large hunks.
-   Review should detect and render those as file-level actions with clear
-   labels instead of pretending every diff is hunk-editable text.
+13. **Rename and mode-only cases are under-specified.**
+   Large and binary host-write events now fall back to summary-only file
+   actions, but the parser is still line-based unified diff parsing. It does
+   not meaningfully represent renames, mode-only changes, or complex Git diff
+   metadata. Review should render those as file-level actions with clear labels
+   instead of pretending every diff is hunk-editable text.
 
 ## Phase 4 — Streaming-into-buffer
 
@@ -257,6 +256,24 @@ Implemented in the event-backed review-ledger slice:
   for old/non-event changes.
 - Pending event hunks disappear from review once accepted or rejected.
 
+Implemented in the robust event-budget slice:
+
+- Chat and detached host writes now respond to ACP after the reconcile write
+  succeeds, before edit-event diff/hash/persistence work runs.
+- Event recording is bounded and best-effort; failures are logged instead of
+  failing the provider write response.
+- Large, binary, or over-budget diffs are stored as summary-only file events
+  instead of hunk-level review events.
+- Summary-only events render as file-level review rows with the guard reason.
+- Pending event chunks and checkpoint fallback chunks now merge, so non-event
+  files do not disappear when event-backed hunks exist.
+- Later same-file event chunks are rendered as blocked file-level rows until
+  earlier event hunks are resolved.
+- Active-tool fallback attribution is constrained to non-terminal tool calls;
+  late writes are recorded as unattributed instead.
+- `edit_events.max_content_bytes` and `edit_events.max_diff_bytes` configure
+  the hunk-level event budget.
+
 ## Phase 5 — Structured context provenance + trim controls
 
 Zed treats mentions as structured context objects (file, symbol, rule,
@@ -290,24 +307,23 @@ Disk-backed, no DB.
 
 ## Next slice
 
-**Finish Phase 4: robust event projection and budgets.**
+**Finish Phase 4: saved-run hunk actions and protocol attribution.**
 
-The review surface is now event-backed for host-mediated writes. The next gap
-versus Zed's final experience is robustness: event recording should be isolated
-from provider ACKs, attribution should be strict, and large or mixed edits
-should degrade predictably.
+The review surface is now event-backed for normal host-mediated writes, bounded
+for large/binary edits, and conservative for same-file event ordering. The next
+gap versus Zed's final experience is history correctness: saved-run reviews
+should support real hunk actions, and write attribution should use protocol ids
+instead of active-tool inference where possible.
 
 Concrete scope:
 
-1. Isolate edit-event recording from the ACP write ACK path with bounded,
-   best-effort persistence.
+1. Make saved-run hunk actions event-backed instead of file-scoped.
 2. Replace `active_tool_call_id` fallback attribution with stricter
    protocol-level correlation where available.
-3. Add size caps, binary/rename guards, and summary-only fallbacks before
-   storing or rendering hunk-level events.
-4. Make mixed event + non-event same-file reviews merge safely instead of
-   choosing either event chunks or checkpoint chunks wholesale.
-5. Make saved-run hunk actions event-backed instead of file-scoped.
+3. Promote blocked same-file event rows into a merged unresolved projection
+   where independent hunks can be resolved out of order safely.
+4. Add event lifecycle/GC for long-lived sessions.
+5. Add diagnostics for dropped best-effort edit events.
 
 ## Deferred / not on the roadmap
 
