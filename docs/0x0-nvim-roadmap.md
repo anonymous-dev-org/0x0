@@ -144,31 +144,32 @@ before broadening the feature surface too much.
    writes touch the same file, when hunks merge/split between event diffs and
    the final checkpoint diff, or when user edits shift the final diff.
 
-3. **Multiple pending events for one file are ordered, not merged.**
-   Later pending events for a file now render as blocked file-level rows until
-   earlier event hunks are resolved, which avoids stale projection actions. The
-   richer Zed-like target is still a merged per-file unresolved view that can
-   present independent same-file hunks without forcing strict event order.
+3. **Same-file event projection is conservative by design.**
+   Independent line-neutral same-file event hunks now merge into one unresolved
+   file view and can be resolved out of order. Overlapping hunks, inserts,
+   deletes, and summary-only events still become blocked file-level rows because
+   their line mapping can become ambiguous after partial resolution.
 
-4. **Tool-call attribution still depends on a constrained active id.**
-   ACP `fs/write_text_file` handling does not guarantee a tool-call id in the
-   params, so `fs_bridge.lua` and `run_registry.lua` fall back to
-   `active_tool_call_id` only when that tool is still non-terminal. That avoids
-   stamping late writes onto completed tools, but overlapping live tool calls can
-   still be ambiguous. We need a protocol-level id when available, or a stricter
-   correlation model.
+4. **Tool-call attribution still has protocol coverage limits.**
+   `fs_bridge.lua` and `run_registry.lua` now share a protocol-first
+   attribution resolver. Explicit write params such as `toolCallId`,
+   `tool_call_id`, and nested `toolCall.toolCallId` win over fallback. Active
+   fallback is only used when exactly one non-terminal tool is attachable;
+   overlapping live tools are marked `ambiguous_active`. The remaining gap is
+   provider-specific protocol fields we have not observed yet.
 
 5. **Async edit-event recording is best-effort only.**
    Chat and detached write handlers now ACK after the reconcile write succeeds,
    then record edit events asynchronously. That protects provider tool calls
-   from review-bookkeeping failures, but failed event recording is currently
-   only logged. Add retry/diagnostic visibility if dropped events become common.
+   from review-bookkeeping failures. Failed event recording now creates a
+   run-level diagnostic and an informational review row, but there is still no
+   retry queue. Add retry only if real provider traffic shows transient drops.
 
-6. **Edit-event storage still has no lifecycle.**
-   Live events are kept in a process-global `events_by_run` table with no
-   eviction. Persisted runs now cap hunk-level event storage and fall back to
-   summary-only events for large/binary diffs, but many long-lived Neovim
-   sessions can still bloat memory/state. Add event GC and stale-run eviction.
+6. **Edit-event storage lifecycle is intentionally simple.**
+   Live events and diagnostics now share a process-global lifecycle with
+   age-based and retained-run GC. Persisted runs still own durable history;
+   in-memory GC only controls live review projection state. Revisit if we need
+   cross-session unresolved event caches beyond the run store.
 
 7. **Hunk accept/reject still lacks stable ids.**
    Phase 4 now verifies the rendered hunk block against the checkpoint/worktree
@@ -187,17 +188,17 @@ before broadening the feature surface too much.
    `git checkout`, preserving the user's real git index. Continue auditing new
    restore paths against this rule.
 
-10. **Saved-run review is still file-scoped.**
-   `zxz-review` renders run diffs as hunk rows, but `a`/`r` fall back to
-   file-level accept/reject for saved runs because there is no run ledger. The
-   UI should either mark run review as file-scoped or implement run hunk actions
-   against start/end snapshots.
+10. **Saved-run non-event hunks still have no durable ledger.**
+   Event-backed saved-run hunks now support real `a`/`r` actions and update
+   event status. Old/non-event saved-run hunks can still be applied one hunk at
+   a time, but without event ids they do not have durable resolved status beyond
+   the current projection. Prefer event-backed runs for durable history.
 
-11. **Review rerendering is coarse and loses interaction context.**
-   Accept/reject rebuilds the whole review buffer and does not preserve the
-   nearest next hunk, viewport, or folds. This works for tests but will feel
-   jumpy on large agent edits. Preserve cursor/viewport and prefer incremental
-   row updates where possible.
+11. **Review rerendering is still whole-buffer.**
+   Accept/reject rebuilds the whole review buffer, but now restores the window
+   view and moves the cursor to the nearest remaining unresolved hunk. This is
+   good enough for normal review loops. The remaining polish is incremental row
+   updates/fold preservation if large reviews still feel jumpy.
 
 12. **Undo reject is process-global and single-slot.**
    `ZxzUndoReject` stores one in-memory snapshot for the last reject across all
@@ -211,6 +212,24 @@ before broadening the feature surface too much.
    not meaningfully represent renames, mode-only changes, or complex Git diff
    metadata. Review should render those as file-level actions with clear labels
    instead of pretending every diff is hunk-editable text.
+
+Retired in the technical-debt hardening pass:
+
+- Host-mediated file access is now repo-confined. ACP file paths are
+  canonicalized and rejected when absolute paths or `..` traversal would escape
+  the active repo root.
+- Saved-run accept/reject now validates the worktree before restoring run
+  snapshots. Whole-run actions refuse unsafe paths, modified source buffers,
+  and files whose current contents no longer match the run start/end state.
+- Transcript code jumps now preserve review/picker/help layouts by targeting
+  only normal named code buffers, opening a split when no suitable source
+  window exists.
+- Hunk-scoped ask/edit now carries parsed diff hunk context, including old-side
+  deleted lines, so deletion-heavy hunks do not degrade to adjacent surviving
+  code only.
+- Tool transcript row invalidation now uses an edit-event signature, not just
+  row count, so same-row changes to stats, paths, summary reasons, or hunk
+  headers rerender correctly.
 
 ## Phase 4 — Streaming-into-buffer
 
@@ -271,8 +290,43 @@ Implemented in the robust event-budget slice:
   earlier event hunks are resolved.
 - Active-tool fallback attribution is constrained to non-terminal tool calls;
   late writes are recorded as unattributed instead.
+- Protocol tool ids on host write params are preferred over active-tool
+  inference, and ambiguous overlapping tool writes are recorded explicitly.
+- Saved-run review hunk actions apply only the selected hunk against the
+  current worktree and update event hunk status when provenance is available.
 - `edit_events.max_content_bytes` and `edit_events.max_diff_bytes` configure
   the hunk-level event budget.
+
+Implemented in the event lifecycle + diagnostics slice:
+
+- `edit_events.max_retained_runs` and `edit_events.max_age_seconds` bound the
+  live process-global edit-event and diagnostic stores.
+- Recording a live edit event or diagnostic triggers GC so long-lived Neovim
+  sessions do not retain every run indefinitely.
+- Chat and detached write paths record run-level diagnostics when asynchronous
+  edit-event bookkeeping fails after a successful write.
+- Dropped-event diagnostics render as informational `zxz-review` rows, while
+  the normal checkpoint fallback diff remains reviewable.
+
+Implemented in the merged same-file projection slice:
+
+- Same-file pending event hunks are merged into one `zxz-review` file section
+  when their old/new ranges are line-neutral and non-overlapping.
+- Independent same-file hunks keep their original event and tool-call
+  provenance, so hunk-level accept/reject still updates the right event status.
+- Overlapping same-file hunks remain blocked as file-level rows with an
+  explicit `overlapping_event_hunks` reason.
+- Inserts, deletes, and summary-only events stay conservative because resolving
+  them can shift later hunk coordinates.
+
+Implemented in the review interaction polish slice:
+
+- Review accept/reject rerenders now restore the window view instead of leaving
+  the cursor on whatever row happens to survive the rebuild.
+- Hunk actions move to the nearest remaining unresolved hunk, preferring the
+  next hunk at or after the original row and falling back to the previous hunk.
+- File actions use the same post-action hunk targeting, so multi-file reviews
+  stay keyboard-driven after resolving a whole file.
 
 ## Phase 5 — Structured context provenance + trim controls
 
@@ -288,16 +342,95 @@ mentions are structured records; the transcript only renders them.
 - `:ZxzContextTrim` opens a toggle buffer for the next turn.
 - Track failed context resolution visibly instead of silently omitting it.
 
+Implemented in the structured context provenance seed slice:
+
+- User messages now persist structured context records alongside the compact
+  legacy summary: `{raw, type, label, source, resolved, error, start_byte,
+  end_byte}`.
+- The transcript renders context provenance from those stored records first,
+  so reloaded history does not need to re-parse old prompt text to show what
+  the user attached.
+- Unresolved `@tokens` are preserved as `unknown` records instead of silently
+  disappearing from the provenance line.
+- Unavailable first-class context sources, currently `@terminal`, render as
+  unresolved records with an explicit error.
+
+Implemented in the trim-controls slice:
+
+- `:ZxzContextTrim` opens a floating picker showing the records parsed from
+  the current chat input. `<Tab>`/`x`/`<Space>` toggles a record, `<CR>`
+  applies the decision, `q`/`<Esc>` cancels.
+- Applied decisions are stored on the Chat as `pending_trim: { [raw]=true }`
+  and consumed at submit time. Suppressed records are dropped from the
+  provider blocks and marked `trimmed = true` on the persisted user message.
+- The transcript renders trimmed records as `@token (trimmed)` so the user
+  can see what was withheld without re-parsing the prompt.
+- `pending_trim` is cleared after each submit, so a trim decision applies
+  only to the next turn.
+
+Implemented in the records-driven prompt builder slice:
+
+- Context records now embed the full parsed mention payload, so provider
+  prompt blocks are derived from the same record list that drives transcript
+  rendering instead of being re-parsed from raw prompt text.
+- `ReferenceMentions.to_prompt_blocks_from_records(input, records, cwd)`
+  builds blocks from a record list; `to_prompt_blocks` is now a thin wrapper
+  over `records() → to_prompt_blocks_from_records`.
+- `_submit_prompt` recomputes records once at send time and passes them into
+  the block builder, so context selection used by the transcript and by the
+  provider always agree.
+- Queued message edits recompute context records and the compact summary, so
+  swapping `@a.txt` for `@b.txt` in a queued prompt no longer leaves stale
+  provenance attached to the user message.
+- Unresolved/unknown records remain visible in the transcript but contribute
+  no provider block, except for explicit fallback types like `@terminal` whose
+  formatter already emits a "not available" message.
+
+Implemented in the Phase 5 wrap-up slice:
+
+- The transcript can now expand per-user-message context detail in place with
+  `<localleader>o` on the user/context row. Detail lines show each record's
+  label, type, source, byte range, trim/unresolved state, and error.
+- Queued prompts carry their own trim map and context record snapshot, so
+  multiple queued messages can preserve different suppress/keep choices.
+- Editing a queued prompt filters the prior trim map against the edited
+  records, preserving suppressions for unchanged `@tokens` and dropping stale
+  ones.
+- `:ZxzContextTrim 2` opens the trim picker for queued message 2, and the
+  queue picker exposes the same trim action from the queued-message menu.
+
+Implemented in the Phase 5 hardening slice:
+
+- Active prompts apply trim before the first transcript render, so the context
+  line matches what the provider will receive even while the session is still
+  starting.
+- Session reset/new/load clears pending trim state, preventing stale
+  suppressions from leaking into a later prompt.
+- Transcript reset clears context-detail expansion state, so user-message ids
+  from a previous thread do not expand unrelated context records.
+- Focused tests cover active-trim rendering, queued trim preservation, and
+  reset hygiene.
+- Automatic queue drain preserves each queued prompt's stored context records
+  and trim map, so a queued prompt sends the same context that the transcript
+  shows.
+
 Acceptance criteria:
 
 - Chat history can show what context was requested even after reload.
 - Failed context loads are visible and do not silently degrade prompts.
 - The prompt builder consumes structured context records, not re-parsed
   transcript strings.
+- Context decisions remain inspectable and adjustable for queued turns before
+  the provider receives them.
+- Queued prompts preserve context decisions whether they are sent manually or
+  drained automatically.
+- Trim/detail UI state is scoped to the current turn or current transcript and
+  does not leak across sessions.
 
-## Phase 6 — Rules + prompts library
+## Deferred — Rules + prompts library
 
-Disk-backed, no DB.
+Disk-backed configuration work. Useful later, but not part of the core
+AI-first IDE loop right now.
 
 - `~/.config/0x0/rules/*.md` (global) merged with `.0x0/rules.md`
   (project). Injected into the system prompt; visible in chat header.
@@ -307,23 +440,75 @@ Disk-backed, no DB.
 
 ## Next slice
 
-**Finish Phase 4: saved-run hunk actions and protocol attribution.**
+**Code-anchored co-working navigation.**
 
-The review surface is now event-backed for normal host-mediated writes, bounded
-for large/binary edits, and conservative for same-file event ordering. The next
-gap versus Zed's final experience is history correctness: saved-run reviews
-should support real hunk actions, and write attribution should use protocol ids
-instead of active-tool inference where possible.
+Phase 5 now covers durable context provenance, records-driven provider prompts,
+trim controls, queued-message trim, in-transcript context details, and trim
+state hygiene. The next AI-first IDE slice should make the chat/review surface
+feel directly attached to the codebase:
 
-Concrete scope:
+Implemented in the context-navigation seed slice:
 
-1. Make saved-run hunk actions event-backed instead of file-scoped.
-2. Replace `active_tool_call_id` fallback attribution with stricter
-   protocol-level correlation where available.
-3. Promote blocked same-file event rows into a merged unresolved projection
-   where independent hunks can be resolved out of order safely.
-4. Add event lifecycle/GC for long-lived sessions.
-5. Add diagnostics for dropped best-effort edit events.
+- Expanded context details render as real transcript rows, not virtual-only
+  decoration, so cursor actions can target individual records.
+- `<CR>` on a resolved file or range context detail row opens the source file
+  in a code window and jumps to the referenced line/range.
+- Trimmed, unresolved, and non-file context rows remain visible but inert, so
+  withheld or unavailable context does not accidentally navigate.
+
+Implemented in the tool-navigation seed slice:
+
+- Tool edit-event rows render as real transcript rows with one row per touched
+  file and one child row per recorded hunk.
+- `<CR>` on a tool edit file row opens the touched file, preferring the first
+  recorded hunk when available.
+- `<CR>` on a tool hunk row opens the touched file at that hunk's new-side
+  line, so tool output can take the user directly to code.
+- Rendered tool calls rerender when asynchronous edit-event bookkeeping later
+  attaches touched-file rows.
+
+Implemented in the hunk co-working action slice:
+
+- Transcript hunk rows now support `<localleader>a` to open inline ask against
+  that exact hunk range.
+- Transcript hunk rows now support `<localleader>e` to open inline edit against
+  that exact hunk range.
+- Inline ask accepts an explicit range, so hunk-scoped questions send focused
+  code instead of only generic surrounding cursor context.
+
+Implemented in the review-refresh stability slice:
+
+- Open review buffers preserve the logical selected file/hunk across checkpoint
+  refreshes, so streaming edits do not move the cursor to a different hunk when
+  rows are inserted above it.
+- Streaming inline-diff refreshes notify the review surface after the debounced
+  overlay update, keeping review and source overlays in sync while the agent is
+  still writing.
+
+Implemented in the compact work-state slice:
+
+- The existing transcript footer now shows compact live run state while the
+  agent is working: running tool, touched files, pending review count, conflicts,
+  and blocked/diagnostic review items.
+- The footer uses cheap in-memory run state instead of polling Git on the
+  spinner timer, so the status stays live without making the chat UI heavy.
+
+Implemented in the final stabilization pass:
+
+- The compact work-state footer is width-aware, so long tool titles or touched
+  paths do not push noisy virtual text across the chat split.
+- If the tracked active tool id is stale or already terminal, the footer falls
+  back to the latest non-terminal tool call instead of losing the running-tool
+  signal.
+
+Remaining scope:
+
+- The core co-working navigation plan is implemented. Keep the next slice to
+  cleanup, correctness, and UX tightening unless a real missing workflow shows
+  up in daily use.
+
+Rules/prompts remain deferred configuration work; revisit only after the core
+co-working loop feels complete.
 
 ## Deferred / not on the roadmap
 
