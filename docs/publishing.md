@@ -47,6 +47,7 @@ Neovim plugin (chat + completion):
     -- inline ghost-text completion config
     complete = {
       enabled = true,
+      provider = "codex-acp",
     },
   },
 }

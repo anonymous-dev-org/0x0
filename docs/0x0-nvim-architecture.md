@@ -98,10 +98,11 @@ Two flavors of ACP session share one `core/acp_client`:
   providers don't need it).
 - **Inline completion** — lightweight wrapper at
   `acp_client.stream_completion(provider, request, on_chunk, on_done)`.
-  Maintains a per-provider singleton client, auto-approves permission
-  requests on completion sessions only, and calls `authenticate` once
+  Maintains a per-provider singleton client, calls `authenticate` once
   per client when `provider.auth_method` is set (e.g. `codex-acp` with
-  `chatgpt` auth).
+  `chatgpt` auth), and keeps sessions read-only: no host fs bridge, no
+  write/shell/edit permission approval, and cancellation drops pending
+  prompt callbacks so late chunks cannot repaint ghost text.
 
 Chat sessions and completion sessions do **not** share a process —
 completion's client is keyed by `provider.command + args` and runs
@@ -115,11 +116,13 @@ keys: `provider`, `width`, `input_height`, `request_timeout_ms`,
 `idle_kill_ms`, `tool_policy`, `repo_map`, `auto_prelude`, `code_actions`,
 `detached_runs_max`, `providers`, `complete`.
 
-`complete` is its own block (`enabled`, `model`, `debounce_ms`,
-`max_tokens`, `temperature`, `keymaps`, `filetypes.exclude`, `cache`,
-`telemetry`, `acp = {provider, command, args, auth_method}`). It is
-distinct from the chat `provider`, so completion can target a different
-provider / model than chat.
+`complete` is its own block (`enabled`, `provider`, `model`,
+`debounce_ms`, `max_tokens`, `temperature`, `keymaps`,
+`filetypes.exclude`, `cache`, `telemetry`). `complete.provider` resolves
+through the shared `providers` table and is distinct from the chat
+`provider`, so completion can target a different provider / model than
+chat. Advanced setups can use `complete.acp = { command, args,
+auth_method }` as an explicit command override.
 
 ## Events
 
