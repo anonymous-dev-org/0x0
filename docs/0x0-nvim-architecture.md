@@ -17,19 +17,21 @@ apps/0x0.nvim/
     │   ├── acp_client.lua               # ACP client + M.stream_completion helper
     │   ├── acp_transport.lua            # subprocess + idle watchdog
     │   ├── checkpoint.lua               # git snapshot primitive (refs/0x0/checkpoints/)
+    │   ├── chat_db.lua                  # SQLite-backed chat/message/run store
     │   ├── config.lua                   # merged schema (config.current.*, config.current.complete.*)
-    │   ├── events.lua                   # tiny on/off/emit pub-sub (consumers land in later phases)
+    │   ├── events.lua                   # tiny on/off/emit pub-sub
     │   ├── history.lua                  # in-memory message buffer
-    │   ├── history_store.lua            # disk persistence (uses paths)
+    │   ├── history_store.lua            # chat_db compatibility wrapper
     │   ├── log.lua                      # rotating debug log (uses paths)
     │   ├── notify.lua                   # bell/notification helper
-    │   ├── paths.lua                    # state_dir/history_dir/runs_dir/log_path + migrate_legacy
+    │   ├── paths.lua                    # state_dir/chat_db_path/log_path + migrate_legacy
     │   ├── reconcile.lua                # agent-view vs disk conflict detection
     │   ├── run_registry.lua             # detached autonomous runs
-    │   ├── runs_store.lua               # disk persistence for runs
+    │   ├── runs_store.lua               # chat_db compatibility wrapper for runs
     │   └── settings.lua                 # provider/model/mode picker
     ├── chat/                            # chat thread UI + mixins
     │   ├── chat.lua                     # orchestrator; mixes the modules below
+    │   ├── runtime.lua                  # in-process live chat registry
     │   ├── widget.lua                   # tab-split input/transcript UI
     │   ├── line.lua                     # render primitive
     │   ├── session.lua / turn.lua       # ACP session + turn lifecycle
@@ -79,9 +81,8 @@ All disk state lives under `stdpath('state') .. "/0x0/"`:
 
 | Path                              | Purpose                            |
 |-----------------------------------|------------------------------------|
+| `0x0/chat.sqlite`                 | chats, messages, queues, permissions, tool calls, and run records |
 | `0x0/debug.log`                   | rotating log (5 MB)                |
-| `0x0/history/<id>.json`           | persisted chat threads             |
-| `0x0/runs/<id>.json`              | persisted run records              |
 | `0x0/complete/telemetry.jsonl`    | completion accept/dismiss telemetry|
 
 `core/paths.migrate_legacy()` runs once at `setup()` and renames
@@ -127,8 +128,19 @@ auth_method }` as an explicit command override.
 ## Events
 
 `core/events` exposes `on(event, fn)`, `off(event, fn)`, `emit(event, ...)`.
-No consumers wired yet — the module exists so Phase 1+ can attach
-verb-dispatch and run-lifecycle hooks without another reorg.
+The chat store emits `zxz_chat_updated` after DB writes; the visible chat
+panel subscribes to the selected chat id so reopening a background chat can
+reload accumulated DB rows and keep tailing live updates.
+
+`chat/runtime.lua` owns live in-process chat objects and the active chat per
+tab. The DB remains the durable source of truth; runtime is only the manager for
+currently running agents, cancellation, stop, and headless submit dispatch.
+
+## Runtime dependency
+
+Chat persistence uses the `sqlite3` executable. Missing SQLite does not break
+startup, but chat persistence logs a clear error and chat history/run listing
+will be unavailable until `sqlite3` is installed.
 
 ## What this plugin explicitly does **not** ship
 
