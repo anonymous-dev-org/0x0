@@ -487,10 +487,7 @@ function Chat:queue_remove(index)
   self:_persist_now()
   self:_delete_queue_item(item)
   self:_persist_queue_order()
-  self:_set_turn_activity(
-    self.widget.activity_state,
-    self.widget.activity_label
-  )
+  self:_set_turn_activity(self.widget.activity_state, self.widget.activity_label)
   self:_rerender_transcript()
   return true
 end
@@ -502,10 +499,7 @@ function Chat:queue_clear()
     self:_persist_now()
     self:_delete_queue_item(item)
   end
-  self:_set_turn_activity(
-    self.widget.activity_state,
-    self.widget.activity_label
-  )
+  self:_set_turn_activity(self.widget.activity_state, self.widget.activity_label)
   self:_rerender_transcript()
 end
 
@@ -537,34 +531,17 @@ function Chat:trim_queued(index)
   if type(records) ~= "table" then
     records = self:_context_for_prompt(item.text, self:_session_cwd())
   end
-  require("zxz.chat.context_trim").open_picker(
-    records,
-    item.trim or {},
-    function(trim)
-      item.trim = self:_filter_context_trim(trim, records)
-      self:_apply_context_trim(records, item.trim)
-      item.context_records = records
-      item.context_summary =
-        require("zxz.context.reference_mentions").summary_from_records(records)
-      self:_update_queued_history_text(
-        item.id,
-        item.text,
-        item.context_summary,
-        records
-      )
-      self:_persist_queue_item(item, index)
-      local kept, suppressed = self:_context_trim_counts(records, item.trim)
-      vim.notify(
-        ("0x0 trim: queued %d has %d kept, %d suppressed"):format(
-          index,
-          kept,
-          suppressed
-        ),
-        vim.log.levels.INFO
-      )
-      self:_rerender_transcript()
-    end
-  )
+  require("zxz.chat.context_trim").open_picker(records, item.trim or {}, function(trim)
+    item.trim = self:_filter_context_trim(trim, records)
+    self:_apply_context_trim(records, item.trim)
+    item.context_records = records
+    item.context_summary = require("zxz.context.reference_mentions").summary_from_records(records)
+    self:_update_queued_history_text(item.id, item.text, item.context_summary, records)
+    self:_persist_queue_item(item, index)
+    local kept, suppressed = self:_context_trim_counts(records, item.trim)
+    vim.notify(("0x0 trim: queued %d has %d kept, %d suppressed"):format(index, kept, suppressed), vim.log.levels.INFO)
+    self:_rerender_transcript()
+  end)
   return true
 end
 
@@ -581,41 +558,22 @@ function Chat:trim_open(index)
     end
     return ok, err
   end
-  if
-    not self.widget
-    or not self.widget.input_buf
-    or not api.nvim_buf_is_valid(self.widget.input_buf)
-  then
+  if not self.widget or not self.widget.input_buf or not api.nvim_buf_is_valid(self.widget.input_buf) then
     vim.notify("0x0: chat input not open", vim.log.levels.WARN)
     return
   end
-  local text = vim.trim(
-    table.concat(
-      api.nvim_buf_get_lines(self.widget.input_buf, 0, -1, false),
-      "\n"
-    )
-  )
+  local text = vim.trim(table.concat(api.nvim_buf_get_lines(self.widget.input_buf, 0, -1, false), "\n"))
   if text == "" then
-    vim.notify(
-      "0x0: input is empty — type a prompt first",
-      vim.log.levels.INFO
-    )
+    vim.notify("0x0: input is empty — type a prompt first", vim.log.levels.INFO)
     return
   end
   local cwd = self:_session_cwd() or vim.fn.getcwd()
   local records = self:_context_for_prompt(text, cwd)
-  require("zxz.chat.context_trim").open_picker(
-    records,
-    self.pending_trim or {},
-    function(trim)
-      self.pending_trim = self:_filter_context_trim(trim, records)
-      local on, off = self:_context_trim_counts(records, self.pending_trim)
-      vim.notify(
-        ("0x0 trim: %d kept, %d suppressed for next turn"):format(on, off),
-        vim.log.levels.INFO
-      )
-    end
-  )
+  require("zxz.chat.context_trim").open_picker(records, self.pending_trim or {}, function(trim)
+    self.pending_trim = self:_filter_context_trim(trim, records)
+    local on, off = self:_context_trim_counts(records, self.pending_trim)
+    vim.notify(("0x0 trim: %d kept, %d suppressed for next turn"):format(on, off), vim.log.levels.INFO)
+  end)
 end
 
 function Chat:trim_clear()
@@ -655,17 +613,10 @@ end
 ---@param start_line integer|nil
 ---@param end_line integer|nil
 function Chat:_input_mentions(rel, start_line, end_line)
-  if
-    not self.widget
-    or not self.widget.input_buf
-    or not api.nvim_buf_is_valid(self.widget.input_buf)
-  then
+  if not self.widget or not self.widget.input_buf or not api.nvim_buf_is_valid(self.widget.input_buf) then
     return false
   end
-  local text = table.concat(
-    api.nvim_buf_get_lines(self.widget.input_buf, 0, -1, false),
-    "\n"
-  )
+  local text = table.concat(api.nvim_buf_get_lines(self.widget.input_buf, 0, -1, false), "\n")
   local cwd = self.repo_root or vim.fn.getcwd()
   local mentions = require("zxz.context.reference_mentions").parse(text, cwd)
   for _, m in ipairs(mentions) do
@@ -728,10 +679,7 @@ function Chat:add_visual_selection_from_prev()
     end
   end
   if not target_win then
-    vim.notify(
-      "0x0: no source window to pull a selection from",
-      vim.log.levels.INFO
-    )
+    vim.notify("0x0: no source window to pull a selection from", vim.log.levels.INFO)
     return
   end
   local buf = api.nvim_win_get_buf(target_win)
@@ -743,10 +691,7 @@ function Chat:add_visual_selection_from_prev()
   local s = api.nvim_buf_get_mark(buf, "<")
   local e = api.nvim_buf_get_mark(buf, ">")
   if not s or s[1] == 0 or not e or e[1] == 0 then
-    vim.notify(
-      "0x0: no recent visual selection in source buffer",
-      vim.log.levels.INFO
-    )
+    vim.notify("0x0: no recent visual selection in source buffer", vim.log.levels.INFO)
     return
   end
   local sl, el = math.min(s[1], e[1]), math.max(s[1], e[1])
@@ -756,10 +701,7 @@ function Chat:add_visual_selection_from_prev()
     rel = path:sub(#root + 2)
   end
   if self:_input_mentions(rel, sl, el) then
-    vim.notify(
-      ("0x0: %s#L%d-L%d already attached"):format(rel, sl, el),
-      vim.log.levels.INFO
-    )
+    vim.notify(("0x0: %s#L%d-L%d already attached"):format(rel, sl, el), vim.log.levels.INFO)
     return
   end
   self:_add_prompt_block({ ("@%s#L%d-L%d"):format(rel, sl, el), "" })
@@ -1001,10 +943,7 @@ function M.chats_picker()
     format_item = function(e)
       local current = e.current and "* " or "  "
       local scope = e.live and "live" or "saved"
-      local when = e.updated_at
-          and e.updated_at > 0
-          and os.date("%Y-%m-%d %H:%M", e.updated_at)
-        or "---- -- -- --:--"
+      local when = e.updated_at and e.updated_at > 0 and os.date("%Y-%m-%d %H:%M", e.updated_at) or "---- -- -- --:--"
       return ("%s%-7s  %-16s  %-5s  %-16s  %s  %s  (%d msgs)"):format(
         current,
         e.group_label or "open",

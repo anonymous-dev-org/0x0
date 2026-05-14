@@ -253,13 +253,7 @@ local function file_label(state, file)
     end
     return ("%s %s %s (file-level, %s)"):format(prefix, kind, file.path, reason)
   end
-  return ("%s %s %s (%d hunk%s)"):format(
-    prefix,
-    kind,
-    file.path,
-    hunks,
-    hunks == 1 and "" or "s"
-  )
+  return ("%s %s %s (%d hunk%s)"):format(prefix, kind, file.path, hunks, hunks == 1 and "" or "s")
 end
 
 local function file_header(_state, file)
@@ -273,12 +267,7 @@ local function file_header(_state, file)
     local suffix = parsed.blocked_by_event_id and ", blocked" or ""
     return ("%s %s (file-level%s)"):format(kind, file.path, suffix)
   end
-  return ("%s %s (%d hunk%s)"):format(
-    kind,
-    file.path,
-    hunks,
-    hunks == 1 and "" or "s"
-  )
+  return ("%s %s (%d hunk%s)"):format(kind, file.path, hunks, hunks == 1 and "" or "s")
 end
 
 local function hunk_label(state, file, hunk, idx, total)
@@ -330,15 +319,13 @@ local function render(bufnr)
         local n = #lines + 1
         lines[n] = hunk_label(state, file, hunk, idx, #hunks)
         line_file[n] = file
-        line_item[n] =
-          { kind = "hunk_header", file = file, hunk = hunk, hunk_index = idx }
+        line_item[n] = { kind = "hunk_header", file = file, hunk = hunk, hunk_index = idx }
         for _, line in ipairs(hunk.diff_lines or {}) do
           if not line:match("^@@") then
             local diff_row = #lines + 1
             lines[diff_row] = line
             line_file[diff_row] = file
-            line_item[diff_row] =
-              { kind = "hunk_line", file = file, hunk = hunk, hunk_index = idx }
+            line_item[diff_row] = { kind = "hunk_line", file = file, hunk = hunk, hunk_index = idx }
           end
         end
         lines[#lines + 1] = ""
@@ -352,35 +339,16 @@ local function render(bufnr)
   for row, item in pairs(line_item) do
     local file = item.file
     if item.kind == "hunk_header" then
-      vim.api.nvim_buf_set_extmark(
-        bufnr,
-        NS,
-        row - 1,
-        0,
-        { line_hl_group = "CursorLine" }
-      )
+      vim.api.nvim_buf_set_extmark(bufnr, NS, row - 1, 0, { line_hl_group = "CursorLine" })
     elseif item.kind == "file" then
-      vim.api.nvim_buf_set_extmark(
-        bufnr,
-        NS,
-        row - 1,
-        0,
-        { line_hl_group = "Title" }
-      )
+      vim.api.nvim_buf_set_extmark(bufnr, NS, row - 1, 0, { line_hl_group = "Title" })
     elseif file then
       local line = lines[row] or ""
       local content = line:match("^%s*(.-)$") or line
       local first = content:sub(1, 1)
-      local hl = first == "+" and "DiffAdd"
-        or (first == "-" and "DiffDelete" or nil)
+      local hl = first == "+" and "DiffAdd" or (first == "-" and "DiffDelete" or nil)
       if hl then
-        vim.api.nvim_buf_set_extmark(
-          bufnr,
-          NS,
-          row - 1,
-          0,
-          { line_hl_group = hl }
-        )
+        vim.api.nvim_buf_set_extmark(bufnr, NS, row - 1, 0, { line_hl_group = hl })
       end
     end
   end
@@ -471,10 +439,7 @@ local function row_for_selection(state, selection)
   end
   if selection.kind == "hunk" and selection.hunk_key then
     for row, item in pairs(state.line_item or {}) do
-      if
-        item.kind == "hunk_header"
-        and hunk_key(item.file, item.hunk) == selection.hunk_key
-      then
+      if item.kind == "hunk_header" and hunk_key(item.file, item.hunk) == selection.hunk_key then
         return row
       end
     end
@@ -488,10 +453,7 @@ local function row_for_selection(state, selection)
           first_file_row = row
         end
         if selection.kind == "hunk" and item.kind == "hunk_header" then
-          if
-            selection.old_start
-            and hunk_old_start(item.hunk) == selection.old_start
-          then
+          if selection.old_start and hunk_old_start(item.hunk) == selection.old_start then
             return row
           end
           if not nearest_hunk_row_in_file or row < nearest_hunk_row_in_file then
@@ -509,11 +471,7 @@ local function row_for_selection(state, selection)
 end
 
 local function refresh_path_without_review(state, file)
-  InlineDiff.refresh_path(
-    state.checkpoint,
-    state.root .. "/" .. file.path,
-    { refresh_review = false }
-  )
+  InlineDiff.refresh_path(state.checkpoint, state.root .. "/" .. file.path, { refresh_review = false })
 end
 
 local function save_review_views(bufnr, state)
@@ -551,13 +509,9 @@ end
 
 local function restore_review_views(bufnr, state, views)
   for _, item in ipairs(views or {}) do
-    if
-      vim.api.nvim_win_is_valid(item.winid)
-      and vim.api.nvim_win_get_buf(item.winid) == bufnr
-    then
+    if vim.api.nvim_win_is_valid(item.winid) and vim.api.nvim_win_get_buf(item.winid) == bufnr then
       pcall(vim.api.nvim_win_call, item.winid, function()
-        local target_row = row_for_selection(state, item.selection)
-          or item.view.lnum
+        local target_row = row_for_selection(state, item.selection) or item.view.lnum
         restore_review_view(bufnr, item.view, target_row)
       end)
     end
@@ -583,8 +537,7 @@ local function render_after_action(bufnr, opts)
   local view = vim.fn.winsaveview()
   local anchor_row = opts.anchor_row or view.lnum
   render(bufnr)
-  local target_row = opts.prefer_hunk and nearest_hunk_row(state, anchor_row)
-    or anchor_row
+  local target_row = opts.prefer_hunk and nearest_hunk_row(state, anchor_row) or anchor_row
   restore_review_view(bufnr, view, target_row)
 end
 
@@ -661,8 +614,7 @@ local function apply_run_hunk(state, file, hunk, action)
     return false, "run missing"
   end
   if source_buffer_modified(state.root, file.path) then
-    return false,
-      "source buffer has unsaved edits; save or revert it before applying run hunk"
+    return false, "source buffer has unsaved edits; save or revert it before applying run hunk"
   end
   local abs = state.root .. "/" .. file.path
   local current = read_disk_file(abs) or ""
@@ -688,13 +640,8 @@ local function apply_run_hunk(state, file, hunk, action)
   end
   replace_block(current_lines, match_start, match_count, replacement)
   local content = join_lines(current_lines, had_newline)
-  local target_sha = action == "accept" and state.run.end_sha
-    or state.run.start_sha
-  if
-    target_sha
-    and not exists_in_ref(state.root, target_sha, file.path)
-    and #current_lines == 0
-  then
+  local target_sha = action == "accept" and state.run.end_sha or state.run.start_sha
+  if target_sha and not exists_in_ref(state.root, target_sha, file.path) and #current_lines == 0 then
     os.remove(abs)
   elseif not write_disk_file(abs, content) then
     return false, "write failed for " .. file.path
@@ -1081,11 +1028,7 @@ local function bind(bufnr)
   end, vim.tbl_extend("force", opts, { desc = "0x0 review: reject hunk" }))
   vim.keymap.set("n", "u", function()
     require("zxz.edit.verbs").undo_reject()
-  end, vim.tbl_extend(
-    "force",
-    opts,
-    { desc = "0x0 review: undo last reject" }
-  ))
+  end, vim.tbl_extend("force", opts, { desc = "0x0 review: undo last reject" }))
   vim.keymap.set("n", "A", function()
     require("zxz.edit.verbs").accept_file()
   end, vim.tbl_extend("force", opts, { desc = "0x0 review: accept file" }))
@@ -1110,32 +1053,18 @@ local function bind(bufnr)
   vim.keymap.set("n", "[h", function()
     require("zxz.edit.verbs").prev_hunk()
   end, vim.tbl_extend("force", opts, { desc = "0x0 review: previous hunk" }))
-  vim.keymap.set(
-    "n",
-    "<Tab>",
-    function()
-      local state = states[bufnr]
-      if state then
-        toggle_expand(state, bufnr)
-      end
-    end,
-    vim.tbl_extend("force", opts, { desc = "0x0 review: toggle file hunks" })
-  )
-  vim.keymap.set(
-    "n",
-    "dd",
-    function()
-      local state = states[bufnr]
-      if state then
-        open_diffsplit(state)
-      end
-    end,
-    vim.tbl_extend(
-      "force",
-      opts,
-      { desc = "0x0 review: diffsplit current file" }
-    )
-  )
+  vim.keymap.set("n", "<Tab>", function()
+    local state = states[bufnr]
+    if state then
+      toggle_expand(state, bufnr)
+    end
+  end, vim.tbl_extend("force", opts, { desc = "0x0 review: toggle file hunks" }))
+  vim.keymap.set("n", "dd", function()
+    local state = states[bufnr]
+    if state then
+      open_diffsplit(state)
+    end
+  end, vim.tbl_extend("force", opts, { desc = "0x0 review: diffsplit current file" }))
   vim.keymap.set("n", "q", function()
     pcall(vim.cmd, "bdelete")
   end, vim.tbl_extend("force", opts, { desc = "0x0 review: close" }))
@@ -1199,11 +1128,7 @@ function M.refresh_checkpoint(checkpoint)
     return
   end
   for bufnr, state in pairs(states) do
-    if
-      vim.api.nvim_buf_is_valid(bufnr)
-      and state.kind == "checkpoint"
-      and state.checkpoint == checkpoint
-    then
+    if vim.api.nvim_buf_is_valid(bufnr) and state.kind == "checkpoint" and state.checkpoint == checkpoint then
       refresh_checkpoint_state(state)
       render_preserving_selection(bufnr)
     end

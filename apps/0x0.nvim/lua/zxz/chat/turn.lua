@@ -125,10 +125,7 @@ function M:_handle_update(update)
       vim.schedule(function()
         self:_snapshot_for_tool(tool_call_id)
         if self.tool_checkpoints and self.tool_checkpoints[tool_call_id] then
-          self:_run_record_tool_ref(
-            tool_call_id,
-            self.tool_checkpoints[tool_call_id]
-          )
+          self:_run_record_tool_ref(tool_call_id, self.tool_checkpoints[tool_call_id])
         end
         InlineDiff.refresh_all(self.checkpoint)
       end)
@@ -159,15 +156,8 @@ local SLASH_HELP = [[Slash commands:
   /cancel       cancel the in-flight turn
   /stop         reset the session]]
 
-local function enqueue_prompt(
-  chat,
-  prompt,
-  context_summary,
-  context_records,
-  trim
-)
-  local id =
-    chat.history:add_user(prompt, "queued", context_summary, context_records)
+local function enqueue_prompt(chat, prompt, context_summary, context_records, trim)
+  local id = chat.history:add_user(prompt, "queued", context_summary, context_records)
   table.insert(chat.queued_prompts, {
     id = id,
     text = prompt,
@@ -176,10 +166,7 @@ local function enqueue_prompt(
     context_summary = context_summary,
   })
   if chat._persist_queue_item then
-    chat:_persist_queue_item(
-      chat.queued_prompts[#chat.queued_prompts],
-      #chat.queued_prompts
-    )
+    chat:_persist_queue_item(chat.queued_prompts[#chat.queued_prompts], #chat.queued_prompts)
   end
 end
 
@@ -218,8 +205,7 @@ function M:submit()
   if self:_dispatch_slash(prompt) then
     return
   end
-  local context_records, context_summary =
-    context_for_prompt(prompt, self:_session_cwd())
+  local context_records, context_summary = context_for_prompt(prompt, self:_session_cwd())
   local trim = filter_trim_map(self.pending_trim, context_records)
   local queue_records = vim.deepcopy(context_records)
   apply_context_trim(queue_records, trim)
@@ -227,10 +213,7 @@ function M:submit()
     enqueue_prompt(self, prompt, context_summary, queue_records, trim)
     self.pending_trim = {}
     self.widget:clear_input()
-    self:_set_turn_activity(
-      self.widget.activity_state or "waiting",
-      "Interrupting"
-    )
+    self:_set_turn_activity(self.widget.activity_state or "waiting", "Interrupting")
     self.widget:render()
     -- Interrupt the in-flight turn so _notify_or_continue picks up the queued
     -- prompt (or earlier queued prompts in FIFO order) immediately, instead
@@ -238,8 +221,7 @@ function M:submit()
     self:cancel()
     return
   end
-  local id =
-    self.history:add_user(prompt, "active", context_summary, queue_records)
+  local id = self.history:add_user(prompt, "active", context_summary, queue_records)
   self.pending_trim = {}
   self:_maybe_generate_title(prompt)
   self:_submit_prompt(prompt, id, nil, {
@@ -285,8 +267,7 @@ function M:_submit_prompt(prompt, user_id, retried_session, opts)
   self:_ensure_session(function(client, session_id, sess_err)
     if sess_err or not client or not session_id then
       vim.schedule(function()
-        local msg = sess_err and (sess_err.message or vim.inspect(sess_err))
-          or "failed to start session"
+        local msg = sess_err and (sess_err.message or vim.inspect(sess_err)) or "failed to start session"
         self.history:add_agent_chunk("agent", "_error: " .. msg .. "_")
         self:_set_activity(nil)
         self.widget:render()
@@ -306,22 +287,11 @@ function M:_submit_prompt(prompt, user_id, retried_session, opts)
     local trim = filter_trim_map(opts.trim, records)
     local provider_records, trimmed_any = apply_context_trim(records, trim)
     if trimmed_any or opts.context_records then
-      self.history:set_user_context(
-        user_id,
-        ReferenceMentions.summary_from_records(records),
-        records
-      )
+      self.history:set_user_context(user_id, ReferenceMentions.summary_from_records(records), records)
     end
-    local prompt_blocks = ReferenceMentions.to_prompt_blocks_from_records(
-      prompt,
-      provider_records,
-      cwd
-    )
+    local prompt_blocks = ReferenceMentions.to_prompt_blocks_from_records(prompt, provider_records, cwd)
     do
-      local prelude_text = require("zxz.context.auto_prelude").build(
-        config.current.auto_prelude,
-        self:_session_cwd()
-      )
+      local prelude_text = require("zxz.context.auto_prelude").build(config.current.auto_prelude, self:_session_cwd())
       if prelude_text then
         table.insert(prompt_blocks, 1, { type = "text", text = prelude_text })
       end
@@ -339,8 +309,7 @@ function M:_submit_prompt(prompt, user_id, retried_session, opts)
           end
           return
         end
-        local was_cancelled = self.cancel_requested
-          or util.is_cancel_result(result)
+        local was_cancelled = self.cancel_requested or util.is_cancel_result(result)
         if err and util.is_session_missing(err) and not retried_session then
           self.client = nil
           self.session_id = nil
@@ -352,9 +321,7 @@ function M:_submit_prompt(prompt, user_id, retried_session, opts)
           })
           return
         end
-        if
-          err and not (was_cancelled and util.is_transport_disconnected(err))
-        then
+        if err and not (was_cancelled and util.is_transport_disconnected(err)) then
           local m = util.error_message(err)
           self.history:add_agent_chunk("agent", "\n_error: " .. m .. "_")
         elseif
@@ -363,10 +330,7 @@ function M:_submit_prompt(prompt, user_id, retried_session, opts)
           and result.stopReason ~= "end_turn"
           and result.stopReason ~= "cancelled"
         then
-          self.history:add_agent_chunk(
-            "agent",
-            "\n_stopped: " .. tostring(result.stopReason) .. "_"
-          )
+          self.history:add_agent_chunk("agent", "\n_stopped: " .. tostring(result.stopReason) .. "_")
         end
         if err and util.is_transport_disconnected(err) then
           self.client = nil
@@ -447,8 +411,7 @@ function M:submit_prompt(prompt, opts)
   if opts.headless then
     self.headless = true
   end
-  local context_records, context_summary =
-    context_for_prompt(prompt, self:_session_cwd())
+  local context_records, context_summary = context_for_prompt(prompt, self:_session_cwd())
   local trim = filter_trim_map(self.pending_trim, context_records)
   local queue_records = vim.deepcopy(context_records)
   apply_context_trim(queue_records, trim)
@@ -458,8 +421,7 @@ function M:submit_prompt(prompt, opts)
     self:cancel()
     return
   end
-  local id =
-    self.history:add_user(prompt, "active", context_summary, queue_records)
+  local id = self.history:add_user(prompt, "active", context_summary, queue_records)
   self.pending_trim = {}
   self:_maybe_generate_title(prompt)
   self:_submit_prompt(prompt, id, nil, {
