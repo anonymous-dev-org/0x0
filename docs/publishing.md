@@ -23,6 +23,11 @@ It requires a repository secret named `PLUGIN_SYNC_TOKEN`. The token must be abl
 
 Keep the Lua module name as `zxz` for compatibility unless a breaking release intentionally changes it.
 
+The sync also builds `apps/claude-agent-server` into a bundled `dist/index.js`
+and copies that runtime to `anonymous-dev-org/0x0.nvim/claude-agent-server`.
+That keeps the default `claude-acp` provider runnable from a normal Neovim
+plugin checkout without requiring `claude-code-acp` or a local monorepo.
+
 ## User Install Shape
 
 Server:
@@ -43,7 +48,7 @@ Neovim plugin (chat + completion):
 {
   "anonymous-dev-org/0x0.nvim",
   opts = {
-    server_url = "http://localhost:4096",
+    provider = "claude-acp",
     -- inline ghost-text completion config
     complete = {
       enabled = true,

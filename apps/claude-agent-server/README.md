@@ -22,7 +22,7 @@ documented in the 0x0.nvim `acp_client.lua`:
 
 ```sh
 bun install
-bun run build          # tsc → dist/
+bun run build          # typecheck + bundled dist/index.js
 ./bin/run              # spawns the server on stdio
 ```
 
@@ -34,6 +34,8 @@ bun test               # transport + server unit tests
 
 ## Configuration in 0x0.nvim
 
-`config.lua` already detects this binary if installed at
-`stdpath("data")/0x0/claude-agent-server/bin/run`; otherwise it falls
-back to the external `claude-code-acp` command.
+`config.lua` detects this binary when installed at
+`stdpath("data")/0x0/claude-agent-server/bin/run`, when published inside the
+public `0x0.nvim` plugin repo at `claude-agent-server/bin/run`, and when running
+from this monorepo checkout. If none of those paths exists, it tries
+`claude-agent-server`, `claude-agent-acp`, then `claude-code-acp` from `PATH`.

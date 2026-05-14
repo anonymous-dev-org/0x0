@@ -7,7 +7,7 @@
     "claude-agent-server": "./bin/run"
   },
   "scripts": {
-    "build": "tsc -p .",
+    "build": "tsc -p . && bun build src/index.ts --target=node --outfile=dist/index.js",
     "dev": "tsc -p . --watch",
     "test": "bun test",
     "typecheck": "tsc -p . --noEmit",

@@ -34,4 +34,4 @@ logs/
 apps/*/.cache/
 
 # Generated nvim runtime logs from tests
-apps/chat-nvim/nvim.log
+nvim.log
