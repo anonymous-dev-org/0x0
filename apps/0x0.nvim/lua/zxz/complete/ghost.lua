@@ -17,7 +17,11 @@ local _state = nil
 
 --- Set up highlight groups.
 local function setup_highlights()
-  vim.api.nvim_set_hl(0, "ZxzCompleteGhost", { link = "Comment", default = true })
+  vim.api.nvim_set_hl(
+    0,
+    "ZxzCompleteGhost",
+    { link = "Comment", default = true }
+  )
 end
 
 --- Strip control characters and unwrap markdown code fences. The provider
@@ -79,11 +83,12 @@ function M.show(bufnr, row, col, text)
       virt_lines[#virt_lines + 1] = { { lines[i], "ZxzCompleteGhost" } }
     end
 
-    local lines_ok, lines_id = pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, row, 0, {
-      virt_lines = virt_lines,
-      virt_lines_above = false,
-      priority = 999,
-    })
+    local lines_ok, lines_id =
+      pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, row, 0, {
+        virt_lines = virt_lines,
+        virt_lines_above = false,
+        priority = 999,
+      })
     if lines_ok then
       table.insert(_state.extmark_ids, lines_id)
     end

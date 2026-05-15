@@ -2,7 +2,8 @@
 -- per-checkout cache so CI and local runs are reproducible without a
 -- global plugin manager.
 
-local plugin_root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
+local plugin_root =
+  vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
 local cache_dir = plugin_root .. "/.cache"
 local plenary_path = cache_dir .. "/plenary.nvim"
 

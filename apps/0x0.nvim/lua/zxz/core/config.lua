@@ -12,7 +12,9 @@ local function normalize(path)
 end
 
 local function executable(command)
-  return type(command) == "string" and command ~= "" and vim.fn.executable(command) == 1
+  return type(command) == "string"
+    and command ~= ""
+    and vim.fn.executable(command) == 1
 end
 
 local function plugin_root()
@@ -28,7 +30,8 @@ function M.resolve_claude_acp_command(opts)
   local root = opts.plugin_root or plugin_root()
   local is_executable = opts.executable or executable
 
-  local data_bin = join(vim.fn.stdpath("data"), "0x0", "claude-agent-server", "bin", "run")
+  local data_bin =
+    join(vim.fn.stdpath("data"), "0x0", "claude-agent-server", "bin", "run")
   if is_executable(data_bin) then
     return data_bin
   end
@@ -38,7 +41,8 @@ function M.resolve_claude_acp_command(opts)
     return plugin_bin
   end
 
-  local monorepo_bin = normalize(join(root, "..", "claude-agent-server", "bin", "run"))
+  local monorepo_bin =
+    normalize(join(root, "..", "claude-agent-server", "bin", "run"))
   if is_executable(monorepo_bin) then
     return monorepo_bin
   end
@@ -268,7 +272,11 @@ function M.setup(opts)
   M.current.profile = M.current.profile or M.current.default_profile
   local profile = M.current.profiles and M.current.profiles[M.current.profile]
   if profile and profile.tool_policy and not (opts and opts.tool_policy) then
-    M.current.tool_policy = vim.tbl_deep_extend("force", vim.deepcopy(M.current.tool_policy or {}), profile.tool_policy)
+    M.current.tool_policy = vim.tbl_deep_extend(
+      "force",
+      vim.deepcopy(M.current.tool_policy or {}),
+      profile.tool_policy
+    )
   end
 end
 
@@ -287,14 +295,20 @@ end
 function M.resolve_completion_provider()
   local complete = M.current.complete or {}
   local override = complete.acp
-  if type(override) == "table" and override.command and override.command ~= "" then
+  if
+    type(override) == "table"
+    and override.command
+    and override.command ~= ""
+  then
     local provider = vim.deepcopy(override)
     provider.name = provider.name or provider.provider or "completion"
     return provider, nil
   end
 
   local provider_name = complete.provider
-  if (not provider_name or provider_name == "") and type(override) == "table" then
+  if
+    (not provider_name or provider_name == "") and type(override) == "table"
+  then
     provider_name = override.provider
   end
   provider_name = provider_name or M.current.provider

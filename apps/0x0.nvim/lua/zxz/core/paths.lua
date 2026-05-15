@@ -54,7 +54,10 @@ function M.migrate_legacy()
   vim.fn.mkdir(parent, "p")
   local ok, err = pcall(vim.fn.rename, legacy, target)
   if not ok then
-    vim.notify("0x0: state migration failed: " .. tostring(err), vim.log.levels.WARN)
+    vim.notify(
+      "0x0: state migration failed: " .. tostring(err),
+      vim.log.levels.WARN
+    )
   end
 end
 

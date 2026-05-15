@@ -54,7 +54,12 @@ local function start_sleep_guard(pid, name)
   end)
 
   if not ok or not handle then
-    log.warn(("acp[%s]: failed to start caffeinate: %s"):format(name, tostring(handle or err)))
+    log.warn(
+      ("acp[%s]: failed to start caffeinate: %s"):format(
+        name,
+        tostring(handle or err)
+      )
+    )
     return nil
   end
 
@@ -113,7 +118,10 @@ function M.create(config, callbacks, opts)
       0,
       vim.schedule_wrap(function()
         log.warn(
-          ("acp[%s]: no I/O for %d ms — killing subprocess"):format(config.name or config.command, idle_kill_ms)
+          ("acp[%s]: no I/O for %d ms — killing subprocess"):format(
+            config.name or config.command,
+            idle_kill_ms
+          )
         )
         if callbacks.on_idle then
           callbacks.on_idle(idle_kill_ms)
@@ -132,8 +140,12 @@ function M.create(config, callbacks, opts)
       stop_idle_timer()
       stop_sleep_guard()
     else
-      if (not self.sleep_guard or self.sleep_guard:is_closing()) and self.process_pid then
-        self.sleep_guard = start_sleep_guard(self.process_pid, config.name or config.command)
+      if
+        (not self.sleep_guard or self.sleep_guard:is_closing())
+        and self.process_pid
+      then
+        self.sleep_guard =
+          start_sleep_guard(self.process_pid, config.name or config.command)
       end
       bump_idle()
     end
@@ -189,10 +201,18 @@ function M.create(config, callbacks, opts)
       stdout:close()
       stderr:close()
       callbacks.on_state("error")
-      log.error(("acp: spawn failed for '%s': %s"):format(config.command, tostring(handle or pid_or_err)))
+      log.error(
+        ("acp: spawn failed for '%s': %s"):format(
+          config.command,
+          tostring(handle or pid_or_err)
+        )
+      )
       vim.schedule(function()
         vim.notify(
-          ("acp: failed to spawn '%s': %s"):format(config.command, tostring(handle or pid_or_err)),
+          ("acp: failed to spawn '%s': %s"):format(
+            config.command,
+            tostring(handle or pid_or_err)
+          ),
           vim.log.levels.ERROR
         )
       end)
@@ -232,7 +252,10 @@ function M.create(config, callbacks, opts)
           else
             log.warn("acp: failed to decode JSON line: " .. line)
             vim.schedule(function()
-              vim.notify("acp: failed to decode JSON line: " .. line, vim.log.levels.WARN)
+              vim.notify(
+                "acp: failed to decode JSON line: " .. line,
+                vim.log.levels.WARN
+              )
             end)
           end
         end

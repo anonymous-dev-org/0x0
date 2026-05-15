@@ -4,7 +4,10 @@ local M = {}
 
 local function system(cmd)
   local out = vim.fn.system(cmd)
-  assert(vim.v.shell_error == 0, "command failed: " .. vim.inspect(cmd) .. "\n" .. out)
+  assert(
+    vim.v.shell_error == 0,
+    "command failed: " .. vim.inspect(cmd) .. "\n" .. out
+  )
   return out
 end
 
