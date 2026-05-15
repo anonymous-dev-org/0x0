@@ -95,39 +95,30 @@ describe("zxz.terminal", function()
         break
       end
     end
-    assert.is_true(
-      ok,
-      "echobot did not echo within timeout: " .. vim.inspect(lines)
-    )
+    assert.is_true(ok, "echobot did not echo within timeout: " .. vim.inspect(lines))
   end)
 
-  it(
-    "list() returns started terms; current() returns the buffer-matched term",
-    function()
-      local t1 = assert(Terminal.start("echobot"))
-      local t2 = assert(Terminal.start("echobot"))
-      assert.equals(2, #Terminal.list())
-      -- Focus t1's buffer; current() should resolve to it.
-      vim.api.nvim_set_current_buf(t1.bufnr)
-      assert.equals(t1.id, Terminal.current().id)
-      vim.api.nvim_set_current_buf(t2.bufnr)
-      assert.equals(t2.id, Terminal.current().id)
-    end
-  )
+  it("list() returns started terms; current() returns the buffer-matched term", function()
+    local t1 = assert(Terminal.start("echobot"))
+    local t2 = assert(Terminal.start("echobot"))
+    assert.equals(2, #Terminal.list())
+    -- Focus t1's buffer; current() should resolve to it.
+    vim.api.nvim_set_current_buf(t1.bufnr)
+    assert.equals(t1.id, Terminal.current().id)
+    vim.api.nvim_set_current_buf(t2.bufnr)
+    assert.equals(t2.id, Terminal.current().id)
+  end)
 
-  it(
-    "stop() removes the term, its buffer, and its worktree by default",
-    function()
-      local term = assert(Terminal.start("echobot"))
-      local wt_path = term.worktree.path
-      Terminal.stop(term)
-      assert.is_nil(Terminal.get(term.id))
-      -- buffer gone
-      assert.is_false(vim.api.nvim_buf_is_valid(term.bufnr))
-      -- worktree gone
-      assert.is_truthy(vim.fn.isdirectory(wt_path) == 0)
-    end
-  )
+  it("stop() removes the term, its buffer, and its worktree by default", function()
+    local term = assert(Terminal.start("echobot"))
+    local wt_path = term.worktree.path
+    Terminal.stop(term)
+    assert.is_nil(Terminal.get(term.id))
+    -- buffer gone
+    assert.is_false(vim.api.nvim_buf_is_valid(term.bufnr))
+    -- worktree gone
+    assert.is_truthy(vim.fn.isdirectory(wt_path) == 0)
+  end)
 
   it("stop() with keep_worktree leaves the worktree on disk", function()
     local term = assert(Terminal.start("echobot"))

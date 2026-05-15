@@ -3,10 +3,7 @@ local Worktree = require("zxz.worktree")
 
 local function run(cmd)
   local out = vim.fn.system(cmd)
-  assert(
-    vim.v.shell_error == 0,
-    "command failed: " .. vim.inspect(cmd) .. "\n" .. out
-  )
+  assert(vim.v.shell_error == 0, "command failed: " .. vim.inspect(cmd) .. "\n" .. out)
   return out
 end
 
@@ -87,10 +84,7 @@ describe("zxz.worktree", function()
     run({ "git", "-C", wt.path, "add", "-A" })
     run({ "git", "-C", wt.path, "commit", "-q", "-m", "rewrite" })
     assert(Worktree.checkout_file(wt, "README.md"))
-    assert.equals(
-      "completely rewritten\n",
-      helpers.read_file(repo .. "/README.md")
-    )
+    assert.equals("completely rewritten\n", helpers.read_file(repo .. "/README.md"))
   end)
 
   it("show_file returns the content on the agent branch", function()

@@ -28,10 +28,7 @@ local _request_id = 0
 local function resolve_provider()
   local provider, err = config.resolve_completion_provider()
   if not provider then
-    vim.notify(
-      "0x0 completion: " .. tostring(err or "provider not configured"),
-      vim.log.levels.ERROR
-    )
+    vim.notify("0x0 completion: " .. tostring(err or "provider not configured"), vim.log.levels.ERROR)
     return nil
   end
   return provider
@@ -58,8 +55,7 @@ end
 ---@param opts? table
 function M.setup(opts)
   if opts then
-    config.current.complete =
-      vim.tbl_deep_extend("force", vim.deepcopy(config.current.complete), opts)
+    config.current.complete = vim.tbl_deep_extend("force", vim.deepcopy(config.current.complete), opts)
   end
   local cfg = config.current.complete
 
@@ -137,20 +133,12 @@ function M._on_text_changed()
   -- Treesitter-gated suppression: skip completion inside comments and string
   -- literals. Best-effort — only runs when a parser is attached.
   if cfg.suppress_in_strings_and_comments ~= false then
-    local ok, node = pcall(
-      vim.treesitter.get_node,
-      { bufnr = bufnr, pos = { row - 1, math.max(col - 1, 0) } }
-    )
+    local ok, node = pcall(vim.treesitter.get_node, { bufnr = bufnr, pos = { row - 1, math.max(col - 1, 0) } })
     if ok and node then
       local n = node
       while n do
         local t = n:type()
-        if
-          t:match("comment")
-          or t == "string"
-          or t:match("string_")
-          or t:match("_string")
-        then
+        if t:match("comment") or t == "string" or t:match("string_") or t:match("_string") then
           M.dismiss()
           return
         end
@@ -374,10 +362,7 @@ local function choose_provider()
     prompt = "0x0 completion provider",
     format_item = function(id)
       local provider = config.current.providers[id] or {}
-      return (provider.name and provider.name ~= "" and provider.name or id)
-        .. " ("
-        .. id
-        .. ")"
+      return (provider.name and provider.name ~= "" and provider.name or id) .. " (" .. id .. ")"
     end,
   }, function(choice)
     if not choice then
@@ -392,16 +377,10 @@ end
 local function provider_label()
   local complete = config.current.complete or {}
   local override = complete.acp
-  if
-    type(override) == "table"
-    and override.command
-    and override.command ~= ""
-  then
+  if type(override) == "table" and override.command and override.command ~= "" then
     return tostring(override.command)
   end
-  return tostring(
-    complete.provider or config.current.provider or "provider default"
-  )
+  return tostring(complete.provider or config.current.provider or "provider default")
 end
 
 function M.settings()
@@ -415,8 +394,7 @@ function M.settings()
       run = choose_provider,
     },
     {
-      label = "Model: "
-        .. tostring(config.current.complete.model or "provider default"),
+      label = "Model: " .. tostring(config.current.complete.model or "provider default"),
       run = choose_model,
     },
     {
@@ -447,11 +425,7 @@ function M._setup_keymaps()
   local km = cfg.keymaps
 
   local function fall_through(key)
-    vim.api.nvim_feedkeys(
-      vim.api.nvim_replace_termcodes(key, true, false, true),
-      "n",
-      false
-    )
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), "n", false)
   end
 
   if km.accept and km.accept ~= "" then

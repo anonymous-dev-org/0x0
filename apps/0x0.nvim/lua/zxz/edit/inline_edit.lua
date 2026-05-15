@@ -39,10 +39,7 @@ function M.build_prompt(ctx)
       ctx.filetype ~= "" and ctx.filetype or "plain"
     ),
     "",
-    ("Region to edit (lines %d-%d):"):format(
-      ctx.range.start_line,
-      ctx.range.end_line
-    ),
+    ("Region to edit (lines %d-%d):"):format(ctx.range.start_line, ctx.range.end_line),
     "```" .. (ctx.filetype or ""),
     ctx.region,
     "```",
@@ -110,13 +107,7 @@ function M.invoke_agent(agent, prompt, cb)
     on_exit = function(_, code)
       vim.schedule(function()
         if code ~= 0 then
-          cb(
-            nil,
-            ("agent exited with %d: %s"):format(
-              code,
-              table.concat(stderr_chunks, "\n")
-            )
-          )
+          cb(nil, ("agent exited with %d: %s"):format(code, table.concat(stderr_chunks, "\n")))
           return
         end
         local raw = table.concat(stdout_chunks, "\n")
@@ -157,12 +148,7 @@ function M.start(opts)
     if not instruction or instruction == "" then
       return
     end
-    local lines = vim.api.nvim_buf_get_lines(
-      bufnr,
-      range.start_line - 1,
-      range.end_line,
-      false
-    )
+    local lines = vim.api.nvim_buf_get_lines(bufnr, range.start_line - 1, range.end_line, false)
     local prompt = M.build_prompt({
       filename = vim.api.nvim_buf_get_name(bufnr),
       filetype = vim.bo[bufnr].filetype,

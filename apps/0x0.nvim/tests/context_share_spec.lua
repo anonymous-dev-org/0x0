@@ -73,22 +73,14 @@ describe("zxz.context_share", function()
 
   it("send_paths joins multiple @refs into one chansend", function()
     local term = assert(Terminal.start("echobot"))
-    local ok = Share.send_paths(
-      { repo .. "/README.md", repo .. "/src/foo.lua" },
-      { term = term }
-    )
+    local ok = Share.send_paths({ repo .. "/README.md", repo .. "/src/foo.lua" }, { term = term })
     assert.is_true(ok)
     vim.wait(800, function()
-      local joined =
-        table.concat(vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false), "")
+      local joined = table.concat(vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false), "")
       return joined:match("got:@README%.md @src/foo%.lua") ~= nil
     end)
-    local joined =
-      table.concat(vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false), "")
-    assert.is_truthy(
-      joined:match("got:@README%.md @src/foo%.lua"),
-      "joined buffer was: " .. joined
-    )
+    local joined = table.concat(vim.api.nvim_buf_get_lines(term.bufnr, 0, -1, false), "")
+    assert.is_truthy(joined:match("got:@README%.md @src/foo%.lua"), "joined buffer was: " .. joined)
   end)
 
   it("send_selection formats with L<a>-<b> and fenced selection", function()

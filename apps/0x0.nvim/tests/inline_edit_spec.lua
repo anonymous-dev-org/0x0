@@ -2,24 +2,21 @@ local InlineEdit = require("zxz.edit.inline_edit")
 local Agents = require("zxz.agents")
 
 describe("zxz.edit.inline_edit.build_prompt", function()
-  it(
-    "emits a single-string prompt with fenced region and instruction",
-    function()
-      local p = InlineEdit.build_prompt({
-        filename = "/tmp/foo.lua",
-        filetype = "lua",
-        region = "local x = 1",
-        range = { start_line = 5, end_line = 5 },
-        instruction = "rename x to count",
-      })
-      assert.is_truthy(p:match("/tmp/foo%.lua"))
-      assert.is_truthy(p:match("lua"))
-      assert.is_truthy(p:match("Region to edit %(lines 5%-5%)"))
-      assert.is_truthy(p:match("rename x to count"))
-      assert.is_truthy(p:match("```lua\nlocal x = 1\n```"))
-      assert.is_truthy(p:match("ONLY"))
-    end
-  )
+  it("emits a single-string prompt with fenced region and instruction", function()
+    local p = InlineEdit.build_prompt({
+      filename = "/tmp/foo.lua",
+      filetype = "lua",
+      region = "local x = 1",
+      range = { start_line = 5, end_line = 5 },
+      instruction = "rename x to count",
+    })
+    assert.is_truthy(p:match("/tmp/foo%.lua"))
+    assert.is_truthy(p:match("lua"))
+    assert.is_truthy(p:match("Region to edit %(lines 5%-5%)"))
+    assert.is_truthy(p:match("rename x to count"))
+    assert.is_truthy(p:match("```lua\nlocal x = 1\n```"))
+    assert.is_truthy(p:match("ONLY"))
+  end)
 
   it("handles missing filetype/filename gracefully", function()
     local p = InlineEdit.build_prompt({
@@ -36,8 +33,7 @@ end)
 
 describe("zxz.edit.inline_edit.clean_response", function()
   it("strips a wrapping ```lang ... ``` fence", function()
-    local cleaned =
-      InlineEdit.clean_response("```lua\nlocal x = 2\nreturn x\n```\n")
+    local cleaned = InlineEdit.clean_response("```lua\nlocal x = 2\nreturn x\n```\n")
     assert.equals("local x = 2\nreturn x", cleaned)
   end)
 

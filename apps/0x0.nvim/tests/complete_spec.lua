@@ -23,10 +23,7 @@ describe("inline completion", function()
 
     assert.are.equal("42", ghost.get_text())
     assert.is_true(ghost.accept())
-    assert.are.equal(
-      "local value = 42",
-      vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
-    )
+    assert.are.equal("local value = 42", vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1])
   end)
 
   it("renders and accepts multiline ghost text", function()
@@ -40,8 +37,7 @@ describe("inline completion", function()
     assert.are.equal("function()\n  return 42\nend", ghost.get_text())
 
     local ns = vim.api.nvim_get_namespaces().zxz_complete
-    local marks =
-      vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
+    local marks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
     local has_inline = false
     local has_virtual_lines = false
     for _, mark in ipairs(marks) do
@@ -106,12 +102,7 @@ describe("inline completion", function()
     local acp_client = require("zxz.core.acp_client")
     local original = acp_client.stream_completion
     local captured
-    acp_client.stream_completion = function(
-      provider,
-      request,
-      on_chunk,
-      on_done
-    )
+    acp_client.stream_completion = function(provider, request, on_chunk, on_done)
       captured = { provider = provider, request = request }
       on_chunk((request.prefix or "") .. "42" .. string.char(14))
       on_done()
@@ -171,12 +162,7 @@ describe("inline completion", function()
   it("keeps multiline streamed completions displayable", function()
     local acp_client = require("zxz.core.acp_client")
     local original = acp_client.stream_completion
-    acp_client.stream_completion = function(
-      provider,
-      request,
-      on_chunk,
-      on_done
-    )
+    acp_client.stream_completion = function(provider, request, on_chunk, on_done)
       on_chunk((request.prefix or "") .. "function()\n  return 42\nend")
       on_done()
       return function() end

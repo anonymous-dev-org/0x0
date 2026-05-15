@@ -113,11 +113,7 @@ function M.start(agent_name, opts)
   active[wt.id] = term
 
   -- Friendly buffer name so :ls and tab-line read well.
-  pcall(
-    vim.api.nvim_buf_set_name,
-    bufnr,
-    ("zxz://%s/%s"):format(agent_name, wt.id)
-  )
+  pcall(vim.api.nvim_buf_set_name, bufnr, ("zxz://%s/%s"):format(agent_name, wt.id))
 
   vim.cmd("startinsert")
   return term, nil

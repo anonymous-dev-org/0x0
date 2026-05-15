@@ -48,10 +48,7 @@ end
 function M.review()
   local state = Review.open_current()
   if not state then
-    vim.notify(
-      "zxz: no active agent terminal — :ZxzWtStart first",
-      vim.log.levels.WARN
-    )
+    vim.notify("zxz: no active agent terminal — :ZxzWtStart first", vim.log.levels.WARN)
   end
 end
 
@@ -100,10 +97,7 @@ function M.cleanup(opts)
       if ok then
         removed = removed + 1
       else
-        vim.notify(
-          ("zxz: remove %s failed: %s"):format(wt.id, err or "?"),
-          vim.log.levels.WARN
-        )
+        vim.notify(("zxz: remove %s failed: %s"):format(wt.id, err or "?"), vim.log.levels.WARN)
       end
     end
   end

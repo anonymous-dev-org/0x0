@@ -37,8 +37,7 @@ function M.compute_hunks(old_text, new_text, range)
   local new_lines_arr = vim.split(new_text, "\n", { plain = true })
   local hunks = {}
   for _, d in ipairs(indices) do
-    local old_start_rel, old_count, new_start_rel, new_count =
-      d[1], d[2], d[3], d[4]
+    local old_start_rel, old_count, new_start_rel, new_count = d[1], d[2], d[3], d[4]
     local abs_old_start
     if old_count == 0 then
       -- Pure insertion: old_start_rel is the 1-based line AFTER which the
@@ -145,13 +144,7 @@ local function apply_hunk(state, idx)
     return
   end
   local end_line_excl = h.old_start - 1 + h.old_count -- 0-based exclusive end for nvim_buf_set_lines
-  vim.api.nvim_buf_set_lines(
-    state.bufnr,
-    h.old_start - 1,
-    end_line_excl,
-    false,
-    h.new_lines
-  )
+  vim.api.nvim_buf_set_lines(state.bufnr, h.old_start - 1, end_line_excl, false, h.new_lines)
   clear_hunk(state.bufnr, h)
   h.state = "accepted"
   local delta = #h.new_lines - h.old_count
@@ -276,12 +269,7 @@ function M.render(bufnr, range, new_text)
   if states_by_buf[bufnr] then
     M.close(states_by_buf[bufnr])
   end
-  local old_lines = vim.api.nvim_buf_get_lines(
-    bufnr,
-    range.start_line - 1,
-    range.end_line,
-    false
-  )
+  local old_lines = vim.api.nvim_buf_get_lines(bufnr, range.start_line - 1, range.end_line, false)
   local old_text = table.concat(old_lines, "\n")
   local hunks = M.compute_hunks(old_text, new_text, range)
 

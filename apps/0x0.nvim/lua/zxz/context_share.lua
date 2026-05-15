@@ -101,12 +101,7 @@ function M.send_selection(opts)
   local lines = vim.api.nvim_buf_get_lines(bufnr, lstart - 1, lend, false)
   local ft = vim.bo[bufnr].filetype or ""
   local header = ("@%s:L%d-%d"):format(relpath(name), lstart, lend)
-  local payload = header
-    .. "\n```"
-    .. ft
-    .. "\n"
-    .. table.concat(lines, "\n")
-    .. "\n```\n"
+  local payload = header .. "\n```" .. ft .. "\n" .. table.concat(lines, "\n") .. "\n```\n"
   local term = opts.term or Terminal.current()
   return send(term, payload)
 end

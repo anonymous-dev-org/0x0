@@ -4,10 +4,7 @@ local Review = require("zxz.review")
 
 local function run(cmd)
   local out = vim.fn.system(cmd)
-  assert(
-    vim.v.shell_error == 0,
-    "command failed: " .. vim.inspect(cmd) .. "\n" .. out
-  )
+  assert(vim.v.shell_error == 0, "command failed: " .. vim.inspect(cmd) .. "\n" .. out)
   return out
 end
 
@@ -116,21 +113,18 @@ describe("zxz.review hunk apply", function()
     assert.equals("line1\nline2\nline3\n", helpers.read_file(repo .. "/a.txt"))
   end)
 
-  it(
-    "file patch (reverse) lands an added file in the user's worktree",
-    function()
-      wt = setup_agent_change(repo, { ["new.txt"] = "fresh\n" })
-      local diff = Worktree.pending_diff(wt)
-      local files = Review._parse_diff(diff)
-      assert.equals(1, #files)
-      -- For an added file, status is "deleted" from the worktree's POV since
-      -- the worktree lacks it; the agent's branch has it.
-      assert.equals("deleted", files[1].status)
-      local patch = Review._build_file_patch(files[1])
-      assert(Worktree.apply_patch(wt, patch, { reverse = true }))
-      assert.equals("fresh\n", helpers.read_file(repo .. "/new.txt"))
-    end
-  )
+  it("file patch (reverse) lands an added file in the user's worktree", function()
+    wt = setup_agent_change(repo, { ["new.txt"] = "fresh\n" })
+    local diff = Worktree.pending_diff(wt)
+    local files = Review._parse_diff(diff)
+    assert.equals(1, #files)
+    -- For an added file, status is "deleted" from the worktree's POV since
+    -- the worktree lacks it; the agent's branch has it.
+    assert.equals("deleted", files[1].status)
+    local patch = Review._build_file_patch(files[1])
+    assert(Worktree.apply_patch(wt, patch, { reverse = true }))
+    assert.equals("fresh\n", helpers.read_file(repo .. "/new.txt"))
+  end)
 end)
 
 describe("zxz.review open()", function()
@@ -139,8 +133,7 @@ describe("zxz.review open()", function()
   before_each(function()
     repo = helpers.make_repo({ ["a.txt"] = "one\ntwo\n" })
     vim.fn.chdir(repo)
-    wt =
-      setup_agent_change(repo, { ["a.txt"] = "one\nTWO\n", ["b.txt"] = "b\n" })
+    wt = setup_agent_change(repo, { ["a.txt"] = "one\nTWO\n", ["b.txt"] = "b\n" })
   end)
 
   after_each(function()
@@ -179,8 +172,7 @@ describe("zxz.review open()", function()
       end
     end
     Review.toggle(state)
-    local joined =
-      table.concat(vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false), "\n")
+    local joined = table.concat(vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false), "\n")
     assert.is_truthy(joined:match("@@"))
     -- Diff is branch -> worktree, so branch's TWO appears as '-' and the
     -- worktree's two as '+' in the raw hunk body.
@@ -188,42 +180,30 @@ describe("zxz.review open()", function()
     assert.is_truthy(joined:match("%+two"))
   end)
 
-  it(
-    "accept on a file header lands the file and removes it from the diff",
-    function()
-      local state = Review.open(wt, { split = "current" })
-      for row, target in pairs(state.row_map) do
-        if target and target.path == "b.txt" and not target.hunk_idx then
-          vim.api.nvim_win_set_cursor(0, { row, 0 })
-          break
-        end
+  it("accept on a file header lands the file and removes it from the diff", function()
+    local state = Review.open(wt, { split = "current" })
+    for row, target in pairs(state.row_map) do
+      if target and target.path == "b.txt" and not target.hunk_idx then
+        vim.api.nvim_win_set_cursor(0, { row, 0 })
+        break
       end
-      Review.accept(state)
-      -- b.txt should now exist in the worktree.
-      assert.equals("b\n", helpers.read_file(repo .. "/b.txt"))
-      -- And `Added` count should drop to 0.
-      local joined = table.concat(
-        vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false),
-        "\n"
-      )
-      assert.is_truthy(joined:match("Added %(0%)"))
-      assert.is_true(state.touched["b.txt"])
     end
-  )
+    Review.accept(state)
+    -- b.txt should now exist in the worktree.
+    assert.equals("b\n", helpers.read_file(repo .. "/b.txt"))
+    -- And `Added` count should drop to 0.
+    local joined = table.concat(vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false), "\n")
+    assert.is_truthy(joined:match("Added %(0%)"))
+    assert.is_true(state.touched["b.txt"])
+  end)
 
-  it(
-    "conflict is detected when the user's worktree edits the same line",
-    function()
-      helpers.write_file(repo .. "/a.txt", "one\nLOCAL_TWO\n")
-      run({ "git", "-C", repo, "commit", "-am", "user edit" })
-      local state = Review.open(wt, { split = "current" })
-      local joined = table.concat(
-        vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false),
-        "\n"
-      )
-      assert.is_truthy(joined:match("Conflicts %(1%)"))
-    end
-  )
+  it("conflict is detected when the user's worktree edits the same line", function()
+    helpers.write_file(repo .. "/a.txt", "one\nLOCAL_TWO\n")
+    run({ "git", "-C", repo, "commit", "-am", "user edit" })
+    local state = Review.open(wt, { split = "current" })
+    local joined = table.concat(vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false), "\n")
+    assert.is_truthy(joined:match("Conflicts %(1%)"))
+  end)
 
   it("re-opening reuses the same buffer", function()
     local s1 = Review.open(wt, { split = "current" })

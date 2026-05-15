@@ -237,10 +237,7 @@ local function render(state)
   end
 
   add("", nil)
-  add(
-    "[s=stage X=reject = toggle hunk dv=3-way cc=commit R=refresh q=close]",
-    nil
-  )
+  add("[s=stage X=reject = toggle hunk dv=3-way cc=commit R=refresh q=close]", nil)
 
   vim.bo[state.bufnr].modifiable = true
   vim.api.nvim_buf_set_lines(state.bufnr, 0, -1, false, lines)
@@ -347,13 +344,9 @@ local function dispatch_apply(state, mode)
   end
 
   local function apply_patch(patch, label)
-    local ok, err =
-      Worktree.apply_patch(state.worktree, patch, { reverse = reverse })
+    local ok, err = Worktree.apply_patch(state.worktree, patch, { reverse = reverse })
     if not ok then
-      vim.notify(
-        ("zxz.review: %s %s failed: %s"):format(mode, label, err or "?"),
-        vim.log.levels.ERROR
-      )
+      vim.notify(("zxz.review: %s %s failed: %s"):format(mode, label, err or "?"), vim.log.levels.ERROR)
       return false
     end
     return true
@@ -395,10 +388,7 @@ local function dispatch_apply(state, mode)
       return
     end
     if f.conflict then
-      vim.notify(
-        "zxz.review: file in conflict — resolve via dv first",
-        vim.log.levels.WARN
-      )
+      vim.notify("zxz.review: file in conflict — resolve via dv first", vim.log.levels.WARN)
       return
     end
     if apply_patch(build_file_patch(f), f.path) then
@@ -444,21 +434,11 @@ function M.diffview(state)
   -- Right-hand scratch: agent's version on the branch.
   vim.cmd("tabnew")
   local right = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(
-    right,
-    0,
-    -1,
-    false,
-    vim.split(branch_content, "\n")
-  )
+  vim.api.nvim_buf_set_lines(right, 0, -1, false, vim.split(branch_content, "\n"))
   vim.bo[right].buftype = "nofile"
   vim.bo[right].bufhidden = "wipe"
   vim.bo[right].filetype = vim.filetype.match({ filename = rel }) or ""
-  pcall(
-    vim.api.nvim_buf_set_name,
-    right,
-    ("zxz-branch://%s/%s"):format(state.worktree.id, rel)
-  )
+  pcall(vim.api.nvim_buf_set_name, right, ("zxz-branch://%s/%s"):format(state.worktree.id, rel))
   vim.api.nvim_win_set_buf(0, right)
   vim.cmd("diffthis")
 
@@ -533,9 +513,7 @@ end
 local function find_existing(wt)
   local name = buffer_name(wt)
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
-    if
-      vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == name
-    then
+    if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_get_name(b) == name then
       return b
     end
   end
@@ -545,12 +523,7 @@ end
 ---@param state zxz.review.State
 local function install_keymaps(state)
   local function map(lhs, fn, desc)
-    vim.keymap.set(
-      "n",
-      lhs,
-      fn,
-      { buffer = state.bufnr, desc = desc, nowait = true }
-    )
+    vim.keymap.set("n", lhs, fn, { buffer = state.bufnr, desc = desc, nowait = true })
   end
   map("=", function()
     M.toggle(state)

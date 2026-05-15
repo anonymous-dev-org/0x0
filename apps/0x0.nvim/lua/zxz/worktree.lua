@@ -15,12 +15,7 @@ local function run(cmd, opts)
   local out = vim.fn.system(cmd)
   local code = vim.v.shell_error
   if code ~= 0 then
-    local err = opts.silent and (out or "")
-      or ("command failed (%d): %s\n%s"):format(
-        code,
-        table.concat(cmd, " "),
-        out
-      )
+    local err = opts.silent and (out or "") or ("command failed (%d): %s\n%s"):format(code, table.concat(cmd, " "), out)
     return nil, err
   end
   return out, nil
@@ -88,8 +83,7 @@ function M.create(opts)
   local branch = "zxz/agent-" .. id
   local path = worktree_dir(repo, id)
   vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
-  local _, werr =
-    run({ "git", "-C", repo, "worktree", "add", "-b", branch, path, sha })
+  local _, werr = run({ "git", "-C", repo, "worktree", "add", "-b", branch, path, sha })
   if werr then
     return nil, werr
   end
@@ -111,8 +105,7 @@ function M.list(cwd)
   if not repo then
     return {}
   end
-  local out = run({ "git", "-C", repo, "worktree", "list", "--porcelain" })
-    or ""
+  local out = run({ "git", "-C", repo, "worktree", "list", "--porcelain" }) or ""
   local results = {}
   local cur = {}
   local function flush()
@@ -155,8 +148,7 @@ end
 ---@return boolean ok
 ---@return string? err
 function M.remove(wt)
-  local _, err =
-    run({ "git", "-C", wt.repo, "worktree", "remove", "--force", wt.path })
+  local _, err = run({ "git", "-C", wt.repo, "worktree", "remove", "--force", wt.path })
   if err then
     return false, err
   end
@@ -170,8 +162,7 @@ end
 ---@return string? err
 function M.diff(wt)
   -- Three-dot: diff against the merge base, so unrelated advances on main don't pollute.
-  local out, err =
-    run({ "git", "-C", wt.repo, "diff", wt.base_ref .. "..." .. wt.branch })
+  local out, err = run({ "git", "-C", wt.repo, "diff", wt.base_ref .. "..." .. wt.branch })
   if err then
     return "", err
   end
@@ -264,10 +255,7 @@ end
 ---@param path string relative
 ---@return string|nil content nil if path absent on that branch
 function M.show_file(wt, path)
-  local out, err = run(
-    { "git", "-C", wt.repo, "show", wt.branch .. ":" .. path },
-    { silent = true }
-  )
+  local out, err = run({ "git", "-C", wt.repo, "show", wt.branch .. ":" .. path }, { silent = true })
   if err then
     return nil
   end
