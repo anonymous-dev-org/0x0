@@ -1,5 +1,7 @@
 # 0x0.nvim
 
+Small editing-tool smoke test.
+
 Workflow plugin for Agentic chat sessions in isolated git worktrees, with
 Fugitive-based review back into the main worktree.
 
