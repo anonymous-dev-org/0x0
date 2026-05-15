@@ -35,3 +35,12 @@ apps/*/.cache/
 
 # Generated nvim runtime logs from tests
 nvim.log
+
+# Local reference clones (read-only, not part of this monorepo)
+/agentic.nvim/
+/vim-fugitive/
+
+# Local scratch / smoke-test artefacts
+/codex-tool-smoke-test.md
+/tool-smoke-test.md
+/technical-debt.html
